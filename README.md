@@ -24,31 +24,44 @@ Guardian v0.1 is the **Daily Homelab Doctor**: a simple CLI that collects option
 - Every integration is optional
 - Collectors degrade gracefully when unavailable or unconfigured
 
-## Quick start
+## First-run steps
+
+```bash
+git clone <repo-url>
+cd homelab-guardian
+cp config.example.yaml config.yaml
+mkdir -p data reports
+```
+
+Edit `config.yaml` locally. Do not commit it.
+
+For Docker inventory, enable the Docker collector in `config.yaml` only on a Docker host or when using the socket proxy overlay:
+
+```yaml
+collectors:
+  docker:
+    enabled: true
+    socket_url: unix://var/run/docker.sock
+```
+
+## Direct Python run
+
+Use this mode for development or for hosts where Python already has access to the paths and services you want to inspect.
 
 ```bash
 python -m venv .venv
 . .venv/bin/activate
 pip install -r requirements.txt
-cp config.example.yaml config.yaml
 python -m app.main --config config.yaml
 ```
 
-The report is written to:
-
-```text
-reports/latest.md
-```
-
-For a safe first run without real services configured:
+Safe example run without private services:
 
 ```bash
 python -m app.main --config config.example.yaml
 ```
 
-## Preflight / doctor
-
-Use the doctor command to see whether the current machine is a good place to run Guardian:
+Preflight check:
 
 ```bash
 python -m app.main doctor --config config.yaml
@@ -60,16 +73,70 @@ Equivalent form:
 python -m app.main --config config.yaml --doctor
 ```
 
-The doctor checks:
+## Docker Compose run
 
-- Python version
-- config file loading
-- reports directory writability
-- data directory writability
-- Docker socket availability when Docker collection is enabled
-- Home Assistant URL and token environment variable when enabled
-- backup path configuration when enabled
-- network check configuration when enabled
+Preferred MVP install path on a Docker host:
+
+```bash
+cp config.example.yaml config.yaml
+mkdir -p data reports
+docker compose run --rm homelab-guardian
+```
+
+The default Compose file mounts:
+
+- `./config.yaml:/app/config.yaml:ro`
+- `./data:/app/data`
+- `./reports:/app/reports`
+- `/var/run/docker.sock:/var/run/docker.sock:ro`
+
+Guardian writes:
+
+- report: `./reports/latest.md`
+- SQLite snapshots: `./data/guardian.sqlite`
+
+Inspect the latest report:
+
+```bash
+sed -n '1,220p' reports/latest.md
+```
+
+Or open `reports/latest.md` in your editor.
+
+## Docker socket warning
+
+Mounting `/var/run/docker.sock` matters because the Docker collector must ask the Docker daemon for container metadata: status, health, restart count, ports, mounts, volumes, and Compose labels.
+
+The Docker socket is powerful. Even when mounted `:ro`, the Docker API can expose sensitive host/container metadata, and socket access is often equivalent to broad control of Docker. Guardian only performs read-oriented SDK calls, but the socket itself should still be treated as privileged.
+
+If `/var/run/docker.sock` is missing:
+
+- You are probably not on a Docker host, or
+- Guardian is running in a container without the socket mounted, or
+- Docker Desktop / rootless Docker uses a different socket path.
+
+Safest next step:
+
+1. Run `python -m app.main doctor --config config.yaml`.
+2. Confirm the host actually runs Docker.
+3. If running in Docker Compose, confirm the socket mount exists.
+4. If you do not want Docker inventory on this machine, disable `collectors.docker.enabled`.
+
+## Safer socket proxy mode
+
+A safer alternative to direct socket mounting is the optional socket proxy Compose file:
+
+```bash
+docker compose -f docker-compose.socket-proxy.yml run --rm homelab-guardian
+```
+
+This starts `docker-socket-proxy` and sets:
+
+```text
+DOCKER_HOST=tcp://docker-socket-proxy:2375
+```
+
+The proxy exposes only selected read-oriented Docker API areas where possible and keeps write methods disabled. This reduces blast radius compared with mounting the raw socket directly into Guardian. It is still Docker daemon access, so use it intentionally.
 
 ## Configuration
 
@@ -87,23 +154,13 @@ export HOME_ASSISTANT_TOKEN="your-token-here"
 
 Install Python and run Guardian on the same host that runs Docker. Enable the Docker collector only if `/var/run/docker.sock` exists and the user running Guardian can read Docker metadata.
 
-```yaml
-collectors:
-  docker:
-    enabled: true
-    socket_url: unix://var/run/docker.sock
-```
-
 ### Run via Docker Compose with Docker socket mounted
 
-Guardian can run in a container, but Docker inspection only works if the socket is intentionally mounted:
+Run Guardian as a one-shot container with local `config.yaml`, `data`, and `reports` bind mounts. This is the preferred MVP install path for Docker hosts.
 
-```yaml
-volumes:
-  - /var/run/docker.sock:/var/run/docker.sock:ro
-```
+### Run via Docker Compose with socket proxy
 
-The Docker socket is sensitive. Even read-only mounting can expose powerful Docker API access. Mount it only on machines where you understand and accept that risk.
+Use `docker-compose.socket-proxy.yml` to route Docker SDK calls through `docker-socket-proxy` instead of giving Guardian the raw socket.
 
 ### Run without Docker
 
@@ -114,8 +171,6 @@ Guardian is still useful without Docker. Leave the Docker collector disabled and
 - HTTP checks
 - local backup path checks
 - Home Assistant API checks
-
-This mode is useful on a small monitoring VM, a NAS shell, or any host that can see the services you care about.
 
 ### Future: remote collectors
 
@@ -178,7 +233,5 @@ The Markdown report includes:
 - recommended actions and JSON evidence for each non-collapsed check
 
 ## Safety notes
-
-Docker socket access is powerful even for read-only inspection. Mount it only when you understand the risk.
 
 Homelab Guardian does not modify services, containers, files outside its configured output/database paths, DNS records, Home Assistant entities, or backup contents.

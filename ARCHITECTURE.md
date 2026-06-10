@@ -43,6 +43,41 @@ Collectors are optional. Missing configuration, missing dependencies, unavailabl
 
 SQLite is used for local scan snapshots. The first implementation stores raw JSON snapshots so the schema stays boring while the checks evolve.
 
+## Deployment modes
+
+### Direct Python mode
+
+Guardian runs directly on the host with Python. Local paths in `config.yaml` are host paths. Docker inspection works only when the configured Docker socket or endpoint is reachable from that host user.
+
+### Containerized local collector mode
+
+Guardian runs as a one-shot Docker Compose service on the Docker host. This is the preferred MVP install path:
+
+```text
+repo checkout
+  config.yaml      private, mounted read-only into /app/config.yaml
+  data/            mounted writable into /app/data for SQLite snapshots
+  reports/         mounted writable into /app/reports for latest.md
+```
+
+The container runs the same CLI entry point:
+
+```text
+python -m app.main --config /app/config.yaml
+```
+
+### Direct socket mode
+
+`docker-compose.yml` mounts `/var/run/docker.sock:/var/run/docker.sock:ro` into the Guardian container. The collector uses the Docker SDK against `unix://var/run/docker.sock`. Guardian makes read-oriented calls only, but direct socket access is still privileged and should be treated carefully.
+
+### Socket proxy mode
+
+`docker-compose.socket-proxy.yml` defines Guardian plus `docker-socket-proxy` and sets `DOCKER_HOST=tcp://docker-socket-proxy:2375` for Guardian. The Docker collector prefers `DOCKER_HOST` over `socket_url`, so the same private `config.yaml` can be used while this Compose file routes Docker API access through the proxy. The proxy enables only selected read-oriented API areas where possible and keeps write methods disabled.
+
+### Future remote collector mode
+
+Future versions may collect from remote Docker hosts, NAS systems, Home Assistant instances, or backup locations through explicit least-privilege APIs. Remote collectors should remain optional, read-only by default, and should not give Guardian broad shell access.
+
 ## Security posture
 
 - No secrets committed

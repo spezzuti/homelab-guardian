@@ -1,0 +1,65 @@
+# Safer Docker API access example for Homelab Guardian.
+#
+# Run this file instead of the default direct-socket Compose file:
+#
+#   docker compose -f docker-compose.socket-proxy.yml run --rm homelab-guardian
+#
+# The docker-socket-proxy exposes selected Docker API areas over the internal
+# Compose network. Guardian connects with DOCKER_HOST=tcp://docker-socket-proxy:2375.
+# This is safer than direct socket mounting because the proxy can deny broad API
+# areas and write-oriented requests. It is still powerful. Run it only on hosts
+# where you intentionally want local Docker inventory collection.
+
+services:
+  homelab-guardian:
+    build: .
+    image: homelab-guardian:local
+    command: python -m app.main --config /app/config.yaml
+    environment:
+      TZ: America/New_York
+      HOME_ASSISTANT_TOKEN: ${HOME_ASSISTANT_TOKEN:-}
+      DOCKER_HOST: tcp://docker-socket-proxy:2375
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./data:/app/data
+      - ./reports:/app/reports
+    depends_on:
+      - docker-socket-proxy
+    restart: "no"
+
+  docker-socket-proxy:
+    image: tecnativa/docker-socket-proxy:latest
+    environment:
+      # Keep write methods disabled. Guardian does not need to create, start,
+      # stop, restart, delete, or exec into anything.
+      POST: 0
+
+      # Minimal read-oriented areas used by the Docker SDK for ping/version/info
+      # and container inventory/inspection.
+      PING: 1
+      VERSION: 1
+      INFO: 1
+      CONTAINERS: 1
+
+      # Explicitly keep unrelated Docker API areas disabled.
+      AUTH: 0
+      BUILD: 0
+      COMMIT: 0
+      CONFIGS: 0
+      DISTRIBUTION: 0
+      EVENTS: 0
+      EXEC: 0
+      IMAGES: 0
+      NETWORKS: 0
+      NODES: 0
+      PLUGINS: 0
+      SECRETS: 0
+      SERVICES: 0
+      SESSION: 0
+      SWARM: 0
+      SYSTEM: 0
+      TASKS: 0
+      VOLUMES: 0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    restart: "no"

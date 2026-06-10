@@ -11,6 +11,8 @@ collectors:
     # This collector only works where the Docker socket is available.
     # Direct host mode: run on a Docker host with /var/run/docker.sock.
     # Container mode: intentionally mount /var/run/docker.sock into the Guardian container.
+    # Socket-proxy mode: docker-compose.socket-proxy.yml sets DOCKER_HOST,
+    # which takes precedence over socket_url.
     enabled: false
     socket_url: unix://var/run/docker.sock
 

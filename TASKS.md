@@ -35,15 +35,28 @@
 - [x] Check backup and network check configuration
 - [x] Document deployment modes
 
+## Sprint 1.7 Docker Compose packaging
+
+- [x] Add Dockerfile for the Python app
+- [x] Update Docker Compose service for one-shot Guardian runs
+- [x] Mount private config, data, reports, and Docker socket paths
+- [x] Add safer docker-socket-proxy Compose overlay
+- [x] Document direct Python, direct socket, socket proxy, and missing-socket guidance
+
 ## v0.1 next tasks
 
+- [ ] Real Docker host test with direct socket mode
+- [ ] Real Docker host test with socket proxy mode
+- [ ] Home Assistant collector dogfood
+- [ ] Report polish for containerized runs
+- [ ] Snapshot comparison improvements
 - [ ] Add previous-scan comparison output
 - [ ] Add robust SQLite snapshot read/write tests
 - [ ] Add unit tests for config loading
 - [ ] Add unit tests for each collector failure mode
 - [ ] Add report golden-file test
-- [ ] Add optional Telegram notification adapter
-- [ ] Add Docker image build verification
+- [ ] Add optional Telegram notification adapter later
+- [ ] Add Docker image build verification on a Docker host
 - [ ] Add CI
 
 ## Future remote-collector support

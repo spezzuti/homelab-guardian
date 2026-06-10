@@ -94,7 +94,7 @@ def _check_docker(config: dict[str, Any]) -> HealthCheck | None:
     docker_config = config.get("collectors", {}).get("docker", {})
     if not docker_config.get("enabled", False):
         return None
-    socket_url = docker_config.get("socket_url") or "unix://var/run/docker.sock"
+    socket_url = os.environ.get("DOCKER_HOST") or docker_config.get("socket_url") or "unix://var/run/docker.sock"
     socket_path = _socket_path(socket_url)
     if socket_path and not socket_path.exists():
         return HealthCheck(
@@ -114,12 +114,21 @@ def _check_docker(config: dict[str, Any]) -> HealthCheck | None:
             {"socket_url": socket_url, "socket_path": str(socket_path), "exists": True},
             "Check Docker socket permissions or run Guardian where Docker inspection is allowed.",
         )
+    if socket_path is None:
+        return HealthCheck(
+            "preflight_docker_socket",
+            "Docker endpoint",
+            "ok",
+            "Docker collector is enabled and a non-unix Docker endpoint is configured.",
+            {"socket_url": socket_url, "socket_path": None, "source": "DOCKER_HOST" if os.environ.get("DOCKER_HOST") else "config"},
+            "No action required if this endpoint is reachable from the running container.",
+        )
     return HealthCheck(
         "preflight_docker_socket",
         "Docker socket",
         "ok",
         "Docker collector is enabled and the configured socket path exists.",
-        {"socket_url": socket_url, "socket_path": str(socket_path) if socket_path else None},
+        {"socket_url": socket_url, "socket_path": str(socket_path)},
         "No action required.",
     )
 
