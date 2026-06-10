@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Local config and secrets
+.env
+.env.*
+!.env.example
+config.yaml
+*.local.yaml
+*.secret.yaml
+
+# Runtime output
+reports/*.md
+!reports/.gitkeep
+data/*.sqlite
+*.db
+
+# OS/editor
+.DS_Store
+.vscode/
+.idea/
+
+# Keys and credentials
+*.pem
+*.key
+id_rsa*
+id_ed25519*

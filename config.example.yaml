@@ -1,0 +1,26 @@
+app:
+  name: Homelab Guardian
+  report_path: reports/latest.md
+  database_path: data/guardian.sqlite
+
+collectors:
+  docker:
+    enabled: false
+    socket_url: unix://var/run/docker.sock
+
+  homeassistant:
+    enabled: false
+    url: http://homeassistant.local:8123
+    token_env: HOME_ASSISTANT_TOKEN
+
+  network:
+    enabled: true
+    dns_checks:
+      - id: dns_example
+        name: Example DNS resolution
+        hostname: example.com
+    tcp_checks: []
+
+  backups:
+    enabled: true
+    paths: []

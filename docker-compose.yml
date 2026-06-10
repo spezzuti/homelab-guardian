@@ -1,0 +1,14 @@
+services:
+  guardian:
+    build: .
+    image: homelab-guardian:local
+    command: python -m app.main --config /app/config.yaml
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./reports:/app/reports
+      - ./data:/app/data
+      # Docker socket is optional and sensitive. Enable only if you accept the risk.
+      # - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - HOME_ASSISTANT_TOKEN=${HOME_ASSISTANT_TOKEN:-}
+    restart: "no"
