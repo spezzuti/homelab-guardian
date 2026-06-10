@@ -21,11 +21,20 @@ COLLECTORS: dict[str, CollectorFn] = {
 
 def run_collector(name: str, collector: CollectorFn, config: dict[str, Any]) -> list[HealthCheck]:
     if not config.get("enabled", False):
-        return [HealthCheck(f"{name}_disabled", name.title(), "unknown", f"{name.title()} collector is disabled.", {}, f"Enable collectors.{name}.enabled if this integration should be checked.")]
+        return []
     try:
         return collector(config)
     except Exception as exc:
-        return [HealthCheck(f"{name}_collector_failed", name.title(), "unknown", f"{name.title()} collector failed without completing.", {"error": str(exc)}, "Check collector configuration and local permissions.")]
+        return [
+            HealthCheck(
+                f"{name}_collector_failed",
+                name.title(),
+                "unknown",
+                f"{name.title()} collector failed without completing.",
+                {"error": str(exc)},
+                "Check collector configuration and local permissions.",
+            )
+        ]
 
 
 def main() -> int:

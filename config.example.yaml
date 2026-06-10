@@ -5,10 +5,13 @@ app:
 
 collectors:
   docker:
+    # Disabled by default because Docker socket access is sensitive.
+    # Enable only on a host where you intentionally allow read-only inspection.
     enabled: false
     socket_url: unix://var/run/docker.sock
 
   homeassistant:
+    # Read-only API collection. Token comes from the environment, not this file.
     enabled: false
     url: http://homeassistant.local:8123
     token_env: HOME_ASSISTANT_TOKEN
@@ -16,11 +19,31 @@ collectors:
   network:
     enabled: true
     dns_checks:
-      - id: dns_example
-        name: Example DNS resolution
+      - id: dns_example_public
+        name: Public DNS sanity check
         hostname: example.com
-    tcp_checks: []
+        record_type: A/AAAA
+    tcp_checks:
+      - id: tcp_example_https
+        name: Example HTTPS TCP reachability
+        host: example.com
+        port: 443
+        timeout: 3
+    http_checks:
+      - id: http_example
+        name: Example HTTP status check
+        url: https://example.com
+        expected_status: [200]
+        timeout: 5
 
   backups:
     enabled: true
+    # Add local backup destinations here. Paths are read-only inspected.
+    # Example:
+    # paths:
+    #   - id: nightly_nas_backup
+    #     name: Nightly NAS backup
+    #     path: /mnt/backups/nightly
+    #     max_age_days: 2
+    #     required: true
     paths: []

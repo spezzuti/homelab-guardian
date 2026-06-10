@@ -48,7 +48,7 @@ python -m app.main --config config.example.yaml
 
 ## Configuration
 
-Start from `config.example.yaml`. Do not commit `config.yaml`, `.env`, API tokens, SSH keys, or machine-specific credentials.
+Start from `config.example.yaml`. Do not commit `config.yaml`, `.env`, API tokens, SSH keys, databases, generated reports, or machine-specific credentials.
 
 Home Assistant access is read-only and uses an environment variable for the token:
 
@@ -58,10 +58,57 @@ export HOME_ASSISTANT_TOKEN="your-token-here"
 
 ## Current collectors
 
-- Docker collector: optional, read-only Docker socket inspection when enabled
-- Home Assistant collector: optional, read-only API status/entity inspection when configured
-- Network collector: optional DNS/TCP checks from local config
-- Backup collector: optional freshness checks for configured local paths
+### Docker collector
+
+Disabled by default because Docker socket access is sensitive. When enabled, it reads container metadata and reports:
+
+- container name
+- image
+- status
+- health status
+- restart count
+- exposed/published ports
+- mounts, bind paths, and named volumes
+- Docker Compose project/service labels
+
+Exited, unhealthy, restarting, or dead containers are surfaced as warnings or critical checks. If Docker is enabled but unavailable, the report shows `unknown` instead of crashing.
+
+### Home Assistant collector
+
+Disabled by default. When configured with a URL and token environment variable, it reads `/api/states` and reports unavailable or unknown entities. It does not modify Home Assistant.
+
+### Network collector
+
+Supports:
+
+- DNS resolution checks
+- TCP port checks
+- HTTP status checks
+
+Failures include clear evidence such as hostname, port, expected status, actual status, timeout, and error text.
+
+### Backup freshness collector
+
+Checks configured local paths without modifying them. It reports:
+
+- whether the path exists
+- latest modified file or folder timestamp
+- backup age in hours and days
+- warning if older than `max_age_days`
+- critical if a required path is missing
+- unknown if no backup paths are configured
+
+## Report layout
+
+The Markdown report includes:
+
+- overall status
+- summary counts
+- critical issues first
+- warnings second
+- unknowns third
+- OK checks last, collapsed to names when there are many
+- recommended actions and JSON evidence for each non-collapsed check
 
 ## Safety notes
 

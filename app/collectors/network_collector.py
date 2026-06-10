@@ -3,7 +3,16 @@ from __future__ import annotations
 import socket
 from typing import Any
 
+import requests
+
 from app.models import HealthCheck
+
+
+def _expected_status(item: dict[str, Any]) -> set[int]:
+    expected = item.get("expected_status", item.get("expected_statuses", [200]))
+    if isinstance(expected, int):
+        return {expected}
+    return {int(code) for code in expected}
 
 
 def collect(config: dict[str, Any]) -> list[HealthCheck]:
@@ -13,14 +22,33 @@ def collect(config: dict[str, Any]) -> list[HealthCheck]:
         check_id = item.get("id") or f"dns_{item.get('hostname', 'unknown')}"
         name = item.get("name") or f"DNS check: {item.get('hostname', 'unknown')}"
         hostname = item.get("hostname")
+        record_type = item.get("record_type", "A/AAAA")
         if not hostname:
             checks.append(HealthCheck(check_id, name, "unknown", "DNS check is missing a hostname.", item, "Add a hostname or remove this check."))
             continue
         try:
             addresses = sorted({result[4][0] for result in socket.getaddrinfo(hostname, None)})
-            checks.append(HealthCheck(check_id, name, "ok", f"{hostname} resolves.", {"hostname": hostname, "addresses": addresses}, "No action required."))
+            checks.append(
+                HealthCheck(
+                    check_id,
+                    name,
+                    "ok",
+                    f"{hostname} resolves to {len(addresses)} address(es).",
+                    {"hostname": hostname, "record_type": record_type, "addresses": addresses},
+                    "No action required.",
+                )
+            )
         except Exception as exc:
-            checks.append(HealthCheck(check_id, name, "warning", f"{hostname} did not resolve.", {"hostname": hostname, "error": str(exc)}, "Check DNS service, upstream resolver, or local network path."))
+            checks.append(
+                HealthCheck(
+                    check_id,
+                    name,
+                    "warning",
+                    f"{hostname} did not resolve.",
+                    {"hostname": hostname, "record_type": record_type, "error": str(exc)},
+                    "Check DNS service, upstream resolver, or local network path.",
+                )
+            )
 
     for item in config.get("tcp_checks", []) or []:
         check_id = item.get("id") or f"tcp_{item.get('host', 'unknown')}_{item.get('port', 'unknown')}"
@@ -33,11 +61,65 @@ def collect(config: dict[str, Any]) -> list[HealthCheck]:
             continue
         try:
             with socket.create_connection((host, int(port)), timeout=timeout):
-                checks.append(HealthCheck(check_id, name, "ok", f"{host}:{port} is reachable.", {"host": host, "port": port}, "No action required."))
+                checks.append(
+                    HealthCheck(
+                        check_id,
+                        name,
+                        "ok",
+                        f"{host}:{port} accepted a TCP connection.",
+                        {"host": host, "port": int(port), "timeout_seconds": timeout},
+                        "No action required.",
+                    )
+                )
         except Exception as exc:
-            checks.append(HealthCheck(check_id, name, "warning", f"{host}:{port} is not reachable.", {"host": host, "port": port, "error": str(exc)}, "Check whether the service, host, or firewall changed."))
+            checks.append(
+                HealthCheck(
+                    check_id,
+                    name,
+                    "warning",
+                    f"{host}:{port} is not reachable.",
+                    {"host": host, "port": port, "timeout_seconds": timeout, "error": str(exc)},
+                    "Check whether the service, host, route, or firewall changed.",
+                )
+            )
+
+    for item in config.get("http_checks", []) or []:
+        check_id = item.get("id") or f"http_{item.get('url', 'unknown')}"
+        name = item.get("name") or f"HTTP check: {item.get('url', 'unknown')}"
+        url = item.get("url")
+        timeout = float(item.get("timeout", 5))
+        method = str(item.get("method", "GET")).upper()
+        expected = _expected_status(item)
+        if not url:
+            checks.append(HealthCheck(check_id, name, "unknown", "HTTP check is missing a URL.", item, "Add a URL or remove this check."))
+            continue
+        try:
+            response = requests.request(method, url, timeout=timeout, allow_redirects=True)
+            evidence = {
+                "url": url,
+                "method": method,
+                "status_code": response.status_code,
+                "expected_status": sorted(expected),
+                "final_url": response.url,
+                "elapsed_seconds": round(response.elapsed.total_seconds(), 3),
+            }
+            if response.status_code in expected:
+                checks.append(HealthCheck(check_id, name, "ok", f"{url} returned HTTP {response.status_code}.", evidence, "No action required."))
+            else:
+                checks.append(HealthCheck(check_id, name, "warning", f"{url} returned HTTP {response.status_code}; expected {sorted(expected)}.", evidence, "Check the service, reverse proxy, certificate, or expected status configuration."))
+        except Exception as exc:
+            checks.append(
+                HealthCheck(
+                    check_id,
+                    name,
+                    "warning",
+                    f"{url} did not return an HTTP response.",
+                    {"url": url, "method": method, "timeout_seconds": timeout, "expected_status": sorted(expected), "error": str(exc)},
+                    "Check network path, DNS, TLS, reverse proxy, or service health.",
+                )
+            )
 
     if not checks:
-        checks.append(HealthCheck("network_not_configured", "Network checks", "unknown", "No network checks are configured.", {}, "Add dns_checks or tcp_checks to config.yaml if desired."))
+        checks.append(HealthCheck("network_not_configured", "Network checks", "unknown", "No network checks are configured.", {}, "Add dns_checks, tcp_checks, or http_checks to config.yaml if desired."))
 
     return checks
