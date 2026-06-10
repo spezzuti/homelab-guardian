@@ -144,10 +144,11 @@ The proxy exposes only selected read-oriented Docker API areas where possible an
 
 Start from `config.example.yaml`. Do not commit `config.yaml`, `.env`, API tokens, SSH keys, databases, generated reports, or machine-specific credentials.
 
-Home Assistant access is read-only and uses an environment variable for the token:
+Home Assistant access is read-only and uses an environment variable for the token. The example Compose files load local `.env` values into the container and pass `HOMEASSISTANT_TOKEN` through to Guardian.
 
 ```bash
-export HOME_ASSISTANT_TOKEN="your-token-here"
+cp .env.example .env
+# Edit .env locally. Never commit it.
 ```
 
 ## Deployment modes
@@ -208,7 +209,40 @@ Docker Compose container names in this setup normally use hyphens, not underscor
 
 ### Home Assistant collector
 
-Disabled by default. When configured with a URL and token environment variable, it reads `/api/states` and reports unavailable or unknown entities. It does not modify Home Assistant.
+Disabled by default. When configured with a URL and token environment variable, it performs a read-only `GET /api/states` request and reports unavailable or unknown entities. It does not call services and does not modify Home Assistant.
+
+Safe setup for local dogfood:
+
+1. In Home Assistant, create a long-lived access token from your user profile.
+2. Copy `.env.example` to `.env` and put the token there:
+
+   ```env
+   HOMEASSISTANT_TOKEN=your-token-here
+   ```
+
+3. In the ignored local `config.yaml`, set the Home Assistant URL and enable the collector:
+
+   ```yaml
+   collectors:
+     homeassistant:
+       enabled: true
+       url: "http://homeassistant.local:8123"
+       token_env: "HOMEASSISTANT_TOKEN"
+   ```
+
+4. Run a report:
+
+   ```bash
+   python -m app.main --config config.yaml
+   ```
+
+5. If running through Docker Compose, use the same ignored `.env` file and `config.yaml`:
+
+   ```bash
+   docker compose run --rm homelab-guardian
+   ```
+
+Never commit `.env`, `config.yaml`, reports, databases, tokens, or machine-specific credentials.
 
 ### Network collector
 

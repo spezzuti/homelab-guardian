@@ -5,31 +5,142 @@ from typing import Any
 
 import requests
 
-from app.models import HealthCheck
+from app.models import HealthCheck, HealthStatus
+
+READ_ONLY_STATES_ENDPOINT = "/api/states"
+DEFAULT_TOKEN_ENV = "HOMEASSISTANT_TOKEN"
+
+
+def _check(
+    check_id: str,
+    status: HealthStatus,
+    summary: str,
+    evidence: dict[str, Any],
+    recommended_action: str,
+    name: str = "Home Assistant",
+) -> HealthCheck:
+    return HealthCheck(check_id, name, status, summary, evidence, recommended_action)
 
 
 def collect(config: dict[str, Any]) -> list[HealthCheck]:
     url = (config.get("url") or "").rstrip("/")
-    token_env = config.get("token_env") or "HOME_ASSISTANT_TOKEN"
+    token_env = config.get("token_env") or DEFAULT_TOKEN_ENV
     token = os.getenv(token_env, "")
+    timeout = float(config.get("timeout", 10))
 
     if not url:
-        return [HealthCheck("ha_missing_url", "Home Assistant", "unknown", "Home Assistant collector is enabled, but no URL is configured.", {}, "Set collectors.homeassistant.url or disable this collector.")]
+        return [
+            _check(
+                "ha_missing_url",
+                "unknown",
+                "Home Assistant collector is enabled, but no URL is configured.",
+                {"token_env": token_env, "endpoint": READ_ONLY_STATES_ENDPOINT},
+                "Set collectors.homeassistant.url in config.yaml or disable this collector.",
+            )
+        ]
+
+    base_evidence = {"url": url, "endpoint": READ_ONLY_STATES_ENDPOINT, "token_env": token_env}
     if not token:
-        return [HealthCheck("ha_missing_token", "Home Assistant", "unknown", f"Home Assistant token environment variable is not set: {token_env}", {"url": url, "token_env": token_env}, "Set the token in the local environment or disable this collector.")]
+        return [
+            _check(
+                "ha_missing_token",
+                "unknown",
+                f"Home Assistant token environment variable is not set: {token_env}",
+                {**base_evidence, "token_present": False},
+                "Create a Home Assistant long-lived access token, put it in local .env or the shell environment, and keep token_env pointed at that variable. Do not put tokens in config.yaml.",
+            )
+        ]
 
     headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
     try:
-        response = requests.get(f"{url}/api/states", headers=headers, timeout=10)
+        response = requests.get(f"{url}{READ_ONLY_STATES_ENDPOINT}", headers=headers, timeout=timeout)
+        if response.status_code in {401, 403}:
+            return [
+                _check(
+                    "ha_invalid_token",
+                    "unknown",
+                    "Home Assistant rejected the configured token.",
+                    {**base_evidence, "status_code": response.status_code, "token_present": True},
+                    "Create a new long-lived access token, update only the local .env value, and retry. Do not commit the token.",
+                )
+            ]
         response.raise_for_status()
         states = response.json()
-    except Exception as exc:
-        return [HealthCheck("ha_unavailable", "Home Assistant", "unknown", "Could not read Home Assistant states.", {"url": url, "error": str(exc)}, "Check Home Assistant URL, token, and network path.")]
+    except requests.exceptions.Timeout:
+        return [
+            _check(
+                "ha_timeout",
+                "unknown",
+                "Timed out while reading Home Assistant states.",
+                {**base_evidence, "timeout_seconds": timeout, "token_present": True},
+                "Confirm the Home Assistant URL is reachable from this machine or container, then retry with the same read-only collector.",
+            )
+        ]
+    except requests.exceptions.ConnectionError as exc:
+        return [
+            _check(
+                "ha_unreachable",
+                "unknown",
+                "Could not reach Home Assistant at the configured URL.",
+                {**base_evidence, "error": str(exc), "token_present": True},
+                "Check the Home Assistant URL, DNS, port, container network path, or VPN/LAN reachability. Guardian did not call any services.",
+            )
+        ]
+    except requests.exceptions.RequestException as exc:
+        status_code = exc.response.status_code if exc.response is not None else None
+        return [
+            _check(
+                "ha_api_error",
+                "unknown",
+                "Home Assistant returned an error while reading states.",
+                {**base_evidence, "status_code": status_code, "error": str(exc), "token_present": True},
+                "Check the Home Assistant URL and API availability. Guardian only attempted a read-only GET /api/states request.",
+            )
+        ]
+    except ValueError as exc:
+        return [
+            _check(
+                "ha_invalid_response",
+                "unknown",
+                "Home Assistant returned a response that was not valid JSON.",
+                {**base_evidence, "error": str(exc), "token_present": True},
+                "Confirm the URL points at the Home Assistant HTTP API root, not a proxy error page or unrelated service.",
+            )
+        ]
+
+    if not isinstance(states, list):
+        return [
+            _check(
+                "ha_unexpected_response",
+                "unknown",
+                "Home Assistant states response did not have the expected list shape.",
+                {**base_evidence, "response_type": type(states).__name__, "token_present": True},
+                "Confirm the URL points at a normal Home Assistant instance and retry.",
+            )
+        ]
 
     unavailable = [s for s in states if s.get("state") in {"unavailable", "unknown"}]
     if not unavailable:
-        return [HealthCheck("ha_entities", "Home Assistant entities", "ok", f"Read {len(states)} entities; none are unavailable or unknown.", {"entity_count": len(states)}, "No action required.")]
+        return [
+            _check(
+                "ha_entities",
+                "ok",
+                f"Read {len(states)} entities with read-only GET /api/states; none are unavailable or unknown.",
+                {"entity_count": len(states), "endpoint": READ_ONLY_STATES_ENDPOINT},
+                "No action required.",
+                name="Home Assistant entities",
+            )
+        ]
 
     sample = [{"entity_id": s.get("entity_id"), "state": s.get("state")} for s in unavailable[:25]]
-    status = "warning" if len(unavailable) < 10 else "critical"
-    return [HealthCheck("ha_unavailable_entities", "Home Assistant unavailable entities", status, f"{len(unavailable)} Home Assistant entities are unavailable or unknown.", {"entity_count": len(states), "affected_count": len(unavailable), "sample": sample}, "Check recently changed integrations, batteries, network devices, or Home Assistant logs.")]
+    status: HealthStatus = "warning" if len(unavailable) < 10 else "critical"
+    return [
+        _check(
+            "ha_unavailable_entities",
+            status,
+            f"{len(unavailable)} Home Assistant entities are unavailable or unknown.",
+            {"entity_count": len(states), "affected_count": len(unavailable), "sample": sample, "endpoint": READ_ONLY_STATES_ENDPOINT},
+            "Check recently changed integrations, batteries, network devices, or Home Assistant logs. Guardian did not modify Home Assistant.",
+            name="Home Assistant unavailable entities",
+        )
+    ]

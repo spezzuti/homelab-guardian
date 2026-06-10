@@ -27,8 +27,8 @@ collectors:
     # 2. A long-lived access token exposed through token_env.
     # Do not put the token in this YAML file.
     enabled: false
-    url: http://homeassistant.local:8123
-    token_env: HOME_ASSISTANT_TOKEN
+    url: "http://homeassistant.local:8123"
+    token_env: "HOMEASSISTANT_TOKEN"
 
   network:
     enabled: true

@@ -139,7 +139,7 @@ def _check_homeassistant(config: dict[str, Any]) -> list[HealthCheck]:
         return []
     checks: list[HealthCheck] = []
     url = ha_config.get("url")
-    token_env = ha_config.get("token_env") or "HOME_ASSISTANT_TOKEN"
+    token_env = ha_config.get("token_env") or "HOMEASSISTANT_TOKEN"
     token_present = bool(os.getenv(token_env, ""))
     checks.append(
         HealthCheck(

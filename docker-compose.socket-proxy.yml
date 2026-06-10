@@ -15,9 +15,12 @@ services:
     build: .
     image: homelab-guardian:local
     command: python -m app.main --config /app/config.yaml
+    env_file:
+      - path: .env
+        required: false
     environment:
       TZ: America/New_York
-      HOME_ASSISTANT_TOKEN: ${HOME_ASSISTANT_TOKEN:-}
+      HOMEASSISTANT_TOKEN: ${HOMEASSISTANT_TOKEN:-}
       DOCKER_HOST: tcp://docker-socket-proxy:2375
     volumes:
       - ./config.yaml:/app/config.yaml:ro
