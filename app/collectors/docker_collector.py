@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from app.models import HealthCheck
@@ -89,6 +90,23 @@ def collect(config: dict[str, Any]) -> list[HealthCheck]:
         ]
 
     socket_url = config.get("socket_url") or "unix://var/run/docker.sock"
+    socket_path = None
+    if socket_url.startswith("unix://"):
+        raw_socket_path = socket_url.removeprefix("unix://")
+        if not raw_socket_path.startswith("/"):
+            raw_socket_path = f"/{raw_socket_path}"
+        socket_path = Path(raw_socket_path)
+    if socket_path and not socket_path.exists():
+        return [
+            HealthCheck(
+                "docker_socket_missing",
+                "Docker",
+                "unknown",
+                "Docker collector is enabled, but /var/run/docker.sock was not found. Run Guardian on a Docker host or mount the Docker socket into the container.",
+                {"socket_url": socket_url, "socket_path": str(socket_path), "exists": False},
+                "Run Guardian on a Docker host, mount /var/run/docker.sock intentionally, or disable the Docker collector for this machine.",
+            )
+        ]
     try:
         client = docker.DockerClient(base_url=socket_url)
         client.ping()
@@ -99,9 +117,9 @@ def collect(config: dict[str, Any]) -> list[HealthCheck]:
                 "docker_unavailable",
                 "Docker",
                 "unknown",
-                "Docker collector is enabled, but Docker is unavailable or permission was denied.",
-                {"socket_url": socket_url, "error": str(exc)},
-                "Check Docker socket path and permissions. Do not mount the Docker socket unless you accept the risk.",
+                "Docker collector is enabled, but Docker could not be reached through the configured socket. The likely cause is socket permissions, a missing Docker daemon, or a container without the socket mounted.",
+                {"socket_url": socket_url, "socket_path": str(socket_path) if socket_path else None, "error": str(exc)},
+                "Check Docker socket path and permissions. Do not mount the Docker socket unless you intentionally accept the risk.",
             )
         ]
 

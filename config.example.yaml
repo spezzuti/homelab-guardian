@@ -1,17 +1,24 @@
 app:
   name: Homelab Guardian
+  # Generated reports are runtime output and are ignored by Git.
   report_path: reports/latest.md
+  # Local SQLite snapshots are runtime output and are ignored by Git.
   database_path: data/guardian.sqlite
 
 collectors:
   docker:
     # Disabled by default because Docker socket access is sensitive.
-    # Enable only on a host where you intentionally allow read-only inspection.
+    # This collector only works where the Docker socket is available.
+    # Direct host mode: run on a Docker host with /var/run/docker.sock.
+    # Container mode: intentionally mount /var/run/docker.sock into the Guardian container.
     enabled: false
     socket_url: unix://var/run/docker.sock
 
   homeassistant:
-    # Read-only API collection. Token comes from the environment, not this file.
+    # Read-only API collection. Requires:
+    # 1. Home Assistant URL reachable from the machine/container running Guardian.
+    # 2. A long-lived access token exposed through token_env.
+    # Do not put the token in this YAML file.
     enabled: false
     url: http://homeassistant.local:8123
     token_env: HOME_ASSISTANT_TOKEN
@@ -38,7 +45,9 @@ collectors:
 
   backups:
     enabled: true
-    # Add local backup destinations here. Paths are read-only inspected.
+    # Backup paths are local to the machine/container running Guardian.
+    # If Guardian runs in Docker, mount backup locations into the container read-only.
+    # Add local backup destinations here. Paths are inspected but never modified.
     # Example:
     # paths:
     #   - id: nightly_nas_backup

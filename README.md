@@ -46,6 +46,31 @@ For a safe first run without real services configured:
 python -m app.main --config config.example.yaml
 ```
 
+## Preflight / doctor
+
+Use the doctor command to see whether the current machine is a good place to run Guardian:
+
+```bash
+python -m app.main doctor --config config.yaml
+```
+
+Equivalent form:
+
+```bash
+python -m app.main --config config.yaml --doctor
+```
+
+The doctor checks:
+
+- Python version
+- config file loading
+- reports directory writability
+- data directory writability
+- Docker socket availability when Docker collection is enabled
+- Home Assistant URL and token environment variable when enabled
+- backup path configuration when enabled
+- network check configuration when enabled
+
 ## Configuration
 
 Start from `config.example.yaml`. Do not commit `config.yaml`, `.env`, API tokens, SSH keys, databases, generated reports, or machine-specific credentials.
@@ -55,6 +80,46 @@ Home Assistant access is read-only and uses an environment variable for the toke
 ```bash
 export HOME_ASSISTANT_TOKEN="your-token-here"
 ```
+
+## Deployment modes
+
+### Run directly on a Docker host
+
+Install Python and run Guardian on the same host that runs Docker. Enable the Docker collector only if `/var/run/docker.sock` exists and the user running Guardian can read Docker metadata.
+
+```yaml
+collectors:
+  docker:
+    enabled: true
+    socket_url: unix://var/run/docker.sock
+```
+
+### Run via Docker Compose with Docker socket mounted
+
+Guardian can run in a container, but Docker inspection only works if the socket is intentionally mounted:
+
+```yaml
+volumes:
+  - /var/run/docker.sock:/var/run/docker.sock:ro
+```
+
+The Docker socket is sensitive. Even read-only mounting can expose powerful Docker API access. Mount it only on machines where you understand and accept that risk.
+
+### Run without Docker
+
+Guardian is still useful without Docker. Leave the Docker collector disabled and use any combination of:
+
+- DNS checks
+- TCP checks
+- HTTP checks
+- local backup path checks
+- Home Assistant API checks
+
+This mode is useful on a small monitoring VM, a NAS shell, or any host that can see the services you care about.
+
+### Future: remote collectors
+
+Future versions may support remote collectors for Docker hosts, NAS systems, Home Assistant, and backup locations. The current MVP is local-only: paths and sockets are evaluated from the machine or container running Guardian.
 
 ## Current collectors
 
@@ -71,7 +136,7 @@ Disabled by default because Docker socket access is sensitive. When enabled, it 
 - mounts, bind paths, and named volumes
 - Docker Compose project/service labels
 
-Exited, unhealthy, restarting, or dead containers are surfaced as warnings or critical checks. If Docker is enabled but unavailable, the report shows `unknown` instead of crashing.
+Exited, unhealthy, restarting, or dead containers are surfaced as warnings or critical checks. If Docker is enabled but unavailable, the report shows `unknown` with the likely cause and safest next step instead of crashing.
 
 ### Home Assistant collector
 
@@ -97,6 +162,8 @@ Checks configured local paths without modifying them. It reports:
 - warning if older than `max_age_days`
 - critical if a required path is missing
 - unknown if no backup paths are configured
+
+Backup paths are local to the machine or container running Guardian. If Guardian runs in Docker, mount backup locations read-only into the container first.
 
 ## Report layout
 

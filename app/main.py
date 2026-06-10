@@ -6,6 +6,7 @@ from typing import Any, Callable
 from app import db
 from app.collectors import backup_collector, docker_collector, homeassistant_collector, network_collector
 from app.config import load_config
+from app.doctor import run_doctor
 from app.models import HealthCheck
 from app.reports.markdown_report import write_report
 
@@ -37,12 +38,8 @@ def run_collector(name: str, collector: CollectorFn, config: dict[str, Any]) -> 
         ]
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description="Generate a Homelab Guardian health report.")
-    parser.add_argument("--config", default="config.yaml", help="Path to YAML config file")
-    args = parser.parse_args()
-
-    config = load_config(args.config)
+def run_scan(config_path: str) -> int:
+    config = load_config(config_path)
     collector_config = config.get("collectors", {})
 
     checks: list[HealthCheck] = []
@@ -66,6 +63,18 @@ def main() -> int:
     print(f"Wrote report: {written}")
     print(f"Checks: {len(checks)}")
     return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Generate a Homelab Guardian health report.")
+    parser.add_argument("command", nargs="?", choices=["scan", "doctor"], default="scan", help="Command to run")
+    parser.add_argument("--config", default="config.yaml", help="Path to YAML config file")
+    parser.add_argument("--doctor", action="store_true", help="Run preflight checks instead of a normal scan")
+    args = parser.parse_args()
+
+    if args.doctor or args.command == "doctor":
+        return run_doctor(args.config)
+    return run_scan(args.config)
 
 
 if __name__ == "__main__":
