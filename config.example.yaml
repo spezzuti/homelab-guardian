@@ -54,7 +54,8 @@ collectors:
     enabled: true
     # Backup paths are local to the machine/container running Guardian.
     # If Guardian runs in Docker, mount backup locations into the container read-only.
-    # Add local backup destinations here. Paths are inspected but never modified.
+    # Backup freshness for a directory is based on the newest file inside it.
+    # Directory modified times are ignored because they can be misleading.
     # Example:
     # paths:
     #   - id: nightly_nas_backup

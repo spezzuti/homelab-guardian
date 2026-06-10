@@ -225,15 +225,19 @@ Failures include clear evidence such as hostname, port, expected status, actual 
 Checks configured local paths without modifying them. It reports:
 
 - whether the path exists
-- latest modified file or folder timestamp
+- latest modified file timestamp
 - backup age in hours and days
-- warning if older than `max_age_days`
+- warning if the newest file is older than `max_age_days`
 - critical if a required path is missing
+- critical if a required directory exists but contains no files
+- unknown if an optional directory exists but contains no files
 - unknown if backup checks are enabled but no paths are configured yet
 
 If `backups.enabled` is true and `paths: []`, Guardian reports `unknown` because the check is not ready to evaluate anything. That means configuration is incomplete, not that a backup failed. Add backup paths when ready, or set `backups.enabled: false` until backup monitoring is part of your rollout.
 
 Backup paths are local to the machine or container running Guardian. If Guardian runs in Docker, mount backup locations read-only into the container first.
+
+When the configured path is a file, Guardian uses that file's modified time. When the configured path is a directory, Guardian recursively scans files inside the directory and uses the newest file modified time. Directory modified times are ignored because they can change for reasons that do not prove a backup file is fresh.
 
 ### Safe backup freshness dogfood
 
