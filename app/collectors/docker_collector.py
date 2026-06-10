@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import fnmatch
 import os
 from pathlib import Path
 from typing import Any
@@ -28,6 +29,19 @@ def _container_name(container: Any) -> str:
     except Exception:
         name = None
     return str(name) if name else "unknown"
+
+
+def _exclude_patterns(config: dict[str, Any]) -> list[str]:
+    patterns = config.get("exclude_containers", []) or []
+    if isinstance(patterns, str):
+        return [patterns]
+    if not isinstance(patterns, list):
+        return []
+    return [str(pattern) for pattern in patterns if pattern]
+
+
+def _is_excluded_container(container_name: str, patterns: list[str]) -> bool:
+    return any(fnmatch.fnmatchcase(container_name, pattern) for pattern in patterns)
 
 
 def _short_check_id(container: Any) -> str:
@@ -254,7 +268,13 @@ def collect(config: dict[str, Any]) -> list[HealthCheck]:
     checks: list[HealthCheck] = []
     readable_count = 0
     error_count = 0
+    excluded_count = 0
+    excluded_patterns = _exclude_patterns(config)
     for container in sorted(containers, key=_container_name):
+        container_name = _container_name(container)
+        if _is_excluded_container(container_name, excluded_patterns):
+            excluded_count += 1
+            continue
         try:
             checks.append(_container_check(container))
             readable_count += 1
@@ -262,19 +282,23 @@ def collect(config: dict[str, Any]) -> list[HealthCheck]:
             checks.append(_container_error_check(container, exc))
             error_count += 1
 
+    scanned_count = readable_count + error_count
     checks.insert(
         0,
         HealthCheck(
             "docker_inventory_summary",
             "Docker inventory",
             "warning" if error_count else "ok",
-            f"Docker API is reachable. Read {readable_count} of {len(containers)} container(s). Metadata errors: {error_count}.",
+            f"Docker API is reachable. Read {readable_count} of {scanned_count} non-excluded container(s). Excluded: {excluded_count}. Metadata errors: {error_count}.",
             {
                 "socket_url": socket_url,
                 "socket_path": str(socket_path) if socket_path else None,
                 "container_count": len(containers),
+                "scanned_containers": scanned_count,
                 "readable_containers": readable_count,
                 "metadata_errors": error_count,
+                "excluded_containers": excluded_count,
+                "excluded_patterns": excluded_patterns,
             },
             "Review container metadata warnings." if error_count else "No action required.",
         ),

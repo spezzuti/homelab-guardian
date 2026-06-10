@@ -12,7 +12,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "database_path": "data/guardian.sqlite",
     },
     "collectors": {
-        "docker": {"enabled": False, "socket_url": "unix://var/run/docker.sock"},
+        "docker": {"enabled": False, "socket_url": "unix://var/run/docker.sock", "exclude_containers": []},
         "homeassistant": {"enabled": False, "url": "", "token_env": "HOME_ASSISTANT_TOKEN"},
         "network": {"enabled": True, "dns_checks": [], "tcp_checks": []},
         "backups": {"enabled": True, "paths": []},

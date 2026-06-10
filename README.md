@@ -42,6 +42,8 @@ collectors:
   docker:
     enabled: true
     socket_url: unix://var/run/docker.sock
+    exclude_containers:
+      - "homelab-guardian*"
 ```
 
 ## Direct Python run
@@ -193,6 +195,17 @@ Disabled by default because Docker socket access is sensitive. When enabled, it 
 
 Exited, unhealthy, restarting, or dead containers are surfaced as warnings or critical checks. If Docker is enabled but unavailable, the report shows `unknown` with the likely cause and safest next step instead of crashing.
 
+Guardian can exclude containers by name pattern. This is useful for ignoring Guardian's own one-shot runtime containers and its socket proxy:
+
+```yaml
+collectors:
+  docker:
+    exclude_containers:
+      - "homelab-guardian*"
+```
+
+Excluded containers are skipped from normal container health checks. The Docker inventory summary still reports how many were excluded and which patterns were used.
+
 ### Home Assistant collector
 
 Disabled by default. When configured with a URL and token environment variable, it reads `/api/states` and reports unavailable or unknown entities. It does not modify Home Assistant.
@@ -216,7 +229,9 @@ Checks configured local paths without modifying them. It reports:
 - backup age in hours and days
 - warning if older than `max_age_days`
 - critical if a required path is missing
-- unknown if no backup paths are configured
+- unknown if backup checks are enabled but no paths are configured yet
+
+If `backups.enabled` is true and `paths: []`, Guardian reports `unknown` because the check is not ready to evaluate anything. That means configuration is incomplete, not that a backup failed. Add backup paths when ready, or set `backups.enabled: false` until backup monitoring is part of your rollout.
 
 Backup paths are local to the machine or container running Guardian. If Guardian runs in Docker, mount backup locations read-only into the container first.
 

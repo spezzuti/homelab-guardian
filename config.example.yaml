@@ -15,6 +15,10 @@ collectors:
     # which takes precedence over socket_url.
     enabled: false
     socket_url: unix://var/run/docker.sock
+    # Exclude Guardian's own short-lived runtime containers from health reports.
+    # This keeps one-shot Docker Compose runs from reporting themselves as extra workload.
+    exclude_containers:
+      - "homelab-guardian*"
 
   homeassistant:
     # Read-only API collection. Requires:

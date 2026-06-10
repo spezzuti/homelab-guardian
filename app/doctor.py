@@ -173,9 +173,9 @@ def _check_backup_config(config: dict[str, Any]) -> HealthCheck | None:
         "preflight_backup_paths",
         "Backup paths configured",
         "ok" if paths else "warning",
-        f"{len(paths)} backup path(s) configured." if paths else "Backup collector is enabled, but no backup paths are configured.",
-        {"configured_paths": len(paths)},
-        "No action required." if paths else "Add local paths that are visible to the machine or container running Guardian, or disable the backup collector.",
+        f"{len(paths)} backup path(s) configured." if paths else "Backup checks are enabled, but no backup paths are configured yet.",
+        {"configured_paths": len(paths), "configuration_complete": bool(paths)},
+        "No action required." if paths else "This is configuration incomplete, not a detected backup failure. Add backup paths, or disable backup checks until ready.",
     )
 
 

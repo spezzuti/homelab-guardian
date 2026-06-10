@@ -44,9 +44,9 @@ def collect(config: dict[str, Any]) -> list[HealthCheck]:
                 "backups_not_configured",
                 "Backup checks",
                 "unknown",
-                "No backup paths are configured.",
-                {"configured_paths": 0},
-                "Add backup paths to config.yaml if backup freshness should be checked.",
+                "Backup checks are enabled, but no backup paths are configured yet.",
+                {"configured_paths": 0, "configuration_complete": False},
+                "This is configuration incomplete, not a detected backup failure. Add backup paths to config.yaml, or disable backup checks until ready.",
             )
         ]
 

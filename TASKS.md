@@ -50,6 +50,8 @@
 - [x] Wrap per-container metadata collection so one malformed container becomes a warning
 - [x] Preserve partial Docker inventory results when some containers are readable
 - [x] Add Docker inventory summary check with readable/error counts
+- [x] Add Docker container exclusion patterns for Guardian runtime containers
+- [x] Clarify backup-not-configured as incomplete configuration, not a detected failure
 
 ## v0.1 next tasks
 
