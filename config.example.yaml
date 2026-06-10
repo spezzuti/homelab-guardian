@@ -17,6 +17,7 @@ collectors:
     socket_url: unix://var/run/docker.sock
     # Exclude Guardian's own short-lived runtime containers from health reports.
     # This keeps one-shot Docker Compose runs from reporting themselves as extra workload.
+    # Docker Compose container names in this setup normally use hyphens.
     exclude_containers:
       - "homelab-guardian*"
 

@@ -204,7 +204,7 @@ collectors:
       - "homelab-guardian*"
 ```
 
-Excluded containers are skipped from normal container health checks. The Docker inventory summary still reports how many were excluded and which patterns were used.
+Docker Compose container names in this setup normally use hyphens, not underscores, so prefer `homelab-guardian*` for Guardian runtime exclusions. Excluded containers are skipped from normal container health checks. The Docker inventory summary still reports how many were excluded and which patterns were used.
 
 ### Home Assistant collector
 
@@ -234,6 +234,38 @@ Checks configured local paths without modifying them. It reports:
 If `backups.enabled` is true and `paths: []`, Guardian reports `unknown` because the check is not ready to evaluate anything. That means configuration is incomplete, not that a backup failed. Add backup paths when ready, or set `backups.enabled: false` until backup monitoring is part of your rollout.
 
 Backup paths are local to the machine or container running Guardian. If Guardian runs in Docker, mount backup locations read-only into the container first.
+
+### Safe backup freshness dogfood
+
+Use a dummy local folder before pointing Guardian at real backup destinations. Do not test against production backup paths until the dummy procedure behaves as expected.
+
+```bash
+mkdir -p /tmp/homelab-guardian-backup-dogfood
+printf 'dummy backup marker\n' > /tmp/homelab-guardian-backup-dogfood/backup-marker.txt
+cp config.example.yaml config.yaml
+```
+
+In the ignored local `config.yaml`, set only the dummy path:
+
+```yaml
+collectors:
+  backups:
+    enabled: true
+    paths:
+      - id: dummy_backup_dogfood
+        name: Dummy backup dogfood path
+        path: /tmp/homelab-guardian-backup-dogfood
+        max_age_days: 1
+        required: true
+```
+
+Then run:
+
+```bash
+python -m app.main --config config.yaml
+```
+
+Expected result: the dummy backup check reports `ok` while the marker file is fresh. To test stale behavior safely, change `max_age_days` to `0` or adjust only files inside `/tmp/homelab-guardian-backup-dogfood`. Never commit `config.yaml`, generated reports, database files, or the dummy runtime folder.
 
 ## Report layout
 

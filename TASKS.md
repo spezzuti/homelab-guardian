@@ -53,6 +53,13 @@
 - [x] Add Docker container exclusion patterns for Guardian runtime containers
 - [x] Clarify backup-not-configured as incomplete configuration, not a detected failure
 
+## Backup checker dogfood
+
+- [ ] Test backup freshness using only a dummy local folder
+- [ ] Confirm fresh dummy marker reports `ok`
+- [ ] Confirm stale dummy marker reports warning without touching real backup paths
+- [ ] Confirm dummy runtime folder, `config.yaml`, reports, and SQLite files are not committed
+
 ## v0.1 next tasks
 
 - [ ] Real Docker host test with direct socket mode
