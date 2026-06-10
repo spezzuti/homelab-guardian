@@ -43,6 +43,14 @@
 - [x] Add safer docker-socket-proxy Compose overlay
 - [x] Document direct Python, direct socket, socket proxy, and missing-socket guidance
 
+## Sprint 1.7 dogfood hardening
+
+- [x] Harden Docker image name extraction for untagged images
+- [x] Avoid unsafe Docker SDK list indexing
+- [x] Wrap per-container metadata collection so one malformed container becomes a warning
+- [x] Preserve partial Docker inventory results when some containers are readable
+- [x] Add Docker inventory summary check with readable/error counts
+
 ## v0.1 next tasks
 
 - [ ] Real Docker host test with direct socket mode

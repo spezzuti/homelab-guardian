@@ -4,56 +4,119 @@ import os
 from pathlib import Path
 from typing import Any
 
-from app.models import HealthCheck
+from app.models import HealthCheck, HealthStatus
 
 
-def _image_name(attrs: dict[str, Any], fallback: str | None) -> str:
-    tags = attrs.get("Config", {}).get("Image")
-    if tags:
-        return str(tags)
-    return fallback or "unknown"
+def _as_mapping(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _container_id(container: Any) -> str:
+    for attr in ("id", "short_id"):
+        try:
+            value = getattr(container, attr, None)
+        except Exception:
+            value = None
+        if value:
+            return str(value)
+    return "unknown"
+
+
+def _container_name(container: Any) -> str:
+    try:
+        name = getattr(container, "name", None)
+    except Exception:
+        name = None
+    return str(name) if name else "unknown"
+
+
+def _short_check_id(container: Any) -> str:
+    container_id = _container_id(container)
+    if container_id == "unknown":
+        return "unknown"
+    return container_id[:12]
+
+
+def _safe_image_name(container: Any, attrs: dict[str, Any]) -> str:
+    """Return the best available image identifier without assuming tags exist."""
+    try:
+        image = getattr(container, "image", None)
+    except Exception:
+        image = None
+
+    if image is not None:
+        try:
+            tags = getattr(image, "tags", None)
+        except Exception:
+            tags = None
+        if isinstance(tags, list):
+            first_tag = next((tag for tag in tags if tag), None)
+            if first_tag:
+                return str(first_tag)
+
+    config_image = _as_mapping(attrs.get("Config")).get("Image")
+    if config_image:
+        return str(config_image)
+
+    if image is not None:
+        try:
+            short_id = getattr(image, "short_id", None)
+        except Exception:
+            short_id = None
+        if short_id:
+            return str(short_id)
+
+    container_short_id = _container_id(container)
+    if container_short_id != "unknown":
+        return container_short_id
+
+    return "unknown"
 
 
 def _ports(attrs: dict[str, Any]) -> list[dict[str, Any]]:
-    raw_ports = attrs.get("NetworkSettings", {}).get("Ports") or {}
+    raw_ports = _as_mapping(_as_mapping(attrs.get("NetworkSettings")).get("Ports"))
     ports: list[dict[str, Any]] = []
-    for container_port, bindings in sorted(raw_ports.items()):
-        if bindings is None:
+    for container_port, bindings in sorted(raw_ports.items(), key=lambda item: str(next(iter(item), ""))):
+        if not bindings:
             ports.append({"container_port": container_port, "published": []})
             continue
-        ports.append(
-            {
-                "container_port": container_port,
-                "published": [
+        published: list[dict[str, Any]] = []
+        if isinstance(bindings, list):
+            for binding in bindings:
+                binding_map = _as_mapping(binding)
+                published.append(
                     {
-                        "host_ip": binding.get("HostIp", ""),
-                        "host_port": binding.get("HostPort", ""),
+                        "host_ip": binding_map.get("HostIp", ""),
+                        "host_port": binding_map.get("HostPort", ""),
                     }
-                    for binding in bindings
-                ],
-            }
-        )
+                )
+        ports.append({"container_port": container_port, "published": published})
     return ports
 
 
 def _mounts(attrs: dict[str, Any]) -> list[dict[str, Any]]:
     mounts: list[dict[str, Any]] = []
-    for mount in attrs.get("Mounts") or []:
+    raw_mounts = attrs.get("Mounts") or []
+    if not isinstance(raw_mounts, list):
+        return mounts
+    for mount in raw_mounts:
+        mount_map = _as_mapping(mount)
         mounts.append(
             {
-                "type": mount.get("Type"),
-                "name": mount.get("Name"),
-                "source": mount.get("Source"),
-                "destination": mount.get("Destination"),
-                "mode": mount.get("Mode"),
-                "rw": mount.get("RW"),
-                "propagation": mount.get("Propagation"),
+                "type": mount_map.get("Type"),
+                "name": mount_map.get("Name"),
+                "source": mount_map.get("Source"),
+                "destination": mount_map.get("Destination"),
+                "mode": mount_map.get("Mode"),
+                "rw": mount_map.get("RW"),
+                "propagation": mount_map.get("Propagation"),
             }
         )
     return mounts
 
 
-def _compose_labels(labels: dict[str, str]) -> dict[str, str | None]:
+def _compose_labels(labels: dict[str, Any]) -> dict[str, str | None]:
+    labels = _as_mapping(labels)
     return {
         "project": labels.get("com.docker.compose.project"),
         "service": labels.get("com.docker.compose.service"),
@@ -63,7 +126,7 @@ def _compose_labels(labels: dict[str, str]) -> dict[str, str | None]:
     }
 
 
-def _status_for_container(status: str, health: str | None) -> tuple[str, str]:
+def _status_for_container(status: str, health: str | None) -> tuple[HealthStatus, str]:
     if health == "unhealthy" or status in {"restarting", "dead"}:
         return "critical", "Inspect logs and recent compose/image changes before restarting anything."
     if status in {"exited", "created", "paused", "removing"}:
@@ -73,6 +136,58 @@ def _status_for_container(status: str, health: str | None) -> tuple[str, str]:
             return "warning", "Container is running but healthcheck is still starting; check again soon."
         return "ok", "No action required."
     return "unknown", "Review Docker state and recent deployment activity."
+
+
+def _container_error_check(container: Any, exc: Exception) -> HealthCheck:
+    container_id = _container_id(container)
+    container_name = _container_name(container)
+    return HealthCheck(
+        f"docker_container_metadata_error_{container_id[:12] if container_id != 'unknown' else container_name}",
+        f"Docker container metadata unreadable: {container_name}",
+        "warning",
+        "Docker API is reachable, but Guardian could not read metadata for one container.",
+        {"container_id": container_id, "container_name": container_name, "error": str(exc)},
+        "Inspect this container's Docker metadata on the host with read-only Docker commands such as docker inspect.",
+    )
+
+
+def _container_check(container: Any) -> HealthCheck:
+    attrs = _as_mapping(getattr(container, "attrs", {}) or {})
+    state = _as_mapping(attrs.get("State"))
+    try:
+        fallback_status = getattr(container, "status", "unknown")
+    except Exception:
+        fallback_status = "unknown"
+    status = str(state.get("Status") or fallback_status or "unknown")
+    health_value = _as_mapping(state.get("Health")).get("Status")
+    health = str(health_value) if health_value else None
+    restart_count = attrs.get("RestartCount")
+    labels = _as_mapping(_as_mapping(attrs.get("Config")).get("Labels"))
+    name = _container_name(container)
+    image = _safe_image_name(container, attrs)
+    check_status, action = _status_for_container(status, health)
+    evidence = {
+        "id": _container_id(container),
+        "name": name,
+        "image": image,
+        "status": status,
+        "health_status": health,
+        "restart_count": restart_count,
+        "ports": _ports(attrs),
+        "mounts": _mounts(attrs),
+        "compose": _compose_labels(labels),
+    }
+    health_text = f", health={health}" if health else ""
+    restart_text = f", restart_count={restart_count}" if restart_count is not None else ""
+    summary = f"{name}: image={image}, status={status}{health_text}{restart_text}."
+    return HealthCheck(
+        f"docker_container_{_short_check_id(container)}",
+        f"Docker container: {name}",
+        check_status,
+        summary,
+        evidence,
+        action,
+    )
 
 
 def collect(config: dict[str, Any]) -> list[HealthCheck]:
@@ -137,37 +252,31 @@ def collect(config: dict[str, Any]) -> list[HealthCheck]:
         ]
 
     checks: list[HealthCheck] = []
-    for container in sorted(containers, key=lambda c: c.name):
-        attrs = container.attrs or {}
-        state = attrs.get("State", {}) or {}
-        status = state.get("Status") or getattr(container, "status", "unknown")
-        health = (state.get("Health") or {}).get("Status")
-        restart_count = attrs.get("RestartCount")
-        labels = attrs.get("Config", {}).get("Labels") or {}
-        image = _image_name(attrs, getattr(getattr(container, "image", None), "tags", [None])[0] if getattr(container, "image", None) else None)
-        check_status, action = _status_for_container(status, health)
-        evidence = {
-            "name": container.name,
-            "image": image,
-            "status": status,
-            "health_status": health,
-            "restart_count": restart_count,
-            "ports": _ports(attrs),
-            "mounts": _mounts(attrs),
-            "compose": _compose_labels(labels),
-        }
-        health_text = f", health={health}" if health else ""
-        restart_text = f", restart_count={restart_count}" if restart_count is not None else ""
-        summary = f"{container.name}: image={image}, status={status}{health_text}{restart_text}."
-        checks.append(
-            HealthCheck(
-                f"docker_container_{container.id[:12]}",
-                f"Docker container: {container.name}",
-                check_status,
-                summary,
-                evidence,
-                action,
-            )
-        )
+    readable_count = 0
+    error_count = 0
+    for container in sorted(containers, key=_container_name):
+        try:
+            checks.append(_container_check(container))
+            readable_count += 1
+        except Exception as exc:
+            checks.append(_container_error_check(container, exc))
+            error_count += 1
 
+    checks.insert(
+        0,
+        HealthCheck(
+            "docker_inventory_summary",
+            "Docker inventory",
+            "warning" if error_count else "ok",
+            f"Docker API is reachable. Read {readable_count} of {len(containers)} container(s). Metadata errors: {error_count}.",
+            {
+                "socket_url": socket_url,
+                "socket_path": str(socket_path) if socket_path else None,
+                "container_count": len(containers),
+                "readable_containers": readable_count,
+                "metadata_errors": error_count,
+            },
+            "Review container metadata warnings." if error_count else "No action required.",
+        ),
+    )
     return checks
