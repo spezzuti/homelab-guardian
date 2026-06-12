@@ -49,6 +49,10 @@ collectors:
         url: https://example.com
         expected_status: [200]
         timeout: 5
+        # Set verify_tls: false for services with self-signed certificates
+        # (Proxmox, TrueNAS, iDRAC, etc.). The check still proves the service
+        # answers HTTPS; it just skips certificate-chain validation.
+        # verify_tls: false
 
   backups:
     enabled: true

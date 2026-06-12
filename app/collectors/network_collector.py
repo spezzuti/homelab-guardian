@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import socket
+import warnings
 from typing import Any
 
 import requests
+import urllib3
 
 from app.models import HealthCheck
 
@@ -90,11 +92,17 @@ def collect(config: dict[str, Any]) -> list[HealthCheck]:
         timeout = float(item.get("timeout", 5))
         method = str(item.get("method", "GET")).upper()
         expected = _expected_status(item)
+        # Homelab services commonly use self-signed certificates. verify_tls: false
+        # keeps the reachability check useful without forcing users to install CAs.
+        verify_tls = bool(item.get("verify_tls", True))
         if not url:
             checks.append(HealthCheck(check_id, name, "unknown", "HTTP check is missing a URL.", item, "Add a URL or remove this check."))
             continue
         try:
-            response = requests.request(method, url, timeout=timeout, allow_redirects=True)
+            with warnings.catch_warnings():
+                if not verify_tls:
+                    warnings.simplefilter("ignore", urllib3.exceptions.InsecureRequestWarning)
+                response = requests.request(method, url, timeout=timeout, allow_redirects=True, verify=verify_tls)
             evidence = {
                 "url": url,
                 "method": method,
@@ -102,6 +110,7 @@ def collect(config: dict[str, Any]) -> list[HealthCheck]:
                 "expected_status": sorted(expected),
                 "final_url": response.url,
                 "elapsed_seconds": round(response.elapsed.total_seconds(), 3),
+                "verify_tls": verify_tls,
             }
             if response.status_code in expected:
                 checks.append(HealthCheck(check_id, name, "ok", f"{url} returned HTTP {response.status_code}.", evidence, "No action required."))
