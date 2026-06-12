@@ -17,7 +17,7 @@ def _expected_status(item: dict[str, Any]) -> set[int]:
     return {int(code) for code in expected}
 
 
-def collect(config: dict[str, Any]) -> list[HealthCheck]:
+def collect(config: dict[str, Any], secrets: Any = None) -> list[HealthCheck]:
     checks: list[HealthCheck] = []
 
     for item in config.get("dns_checks", []) or []:

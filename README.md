@@ -321,6 +321,39 @@ For a host install, `deploy/homelab-guardian.service` is a ready-to-edit
 systemd user service. For Docker Compose, run the service with `--interval`
 and `restart: unless-stopped` instead of one-shot `docker compose run`.
 
+## Secrets providers
+
+Every credential Guardian uses (Home Assistant token, Telegram bot token, AI
+API key) is referenced by name in `config.yaml` and resolved through a secrets
+provider. Tokens never live in the config file.
+
+- `provider: env` (default) — names are environment variables, typically from
+  a local `.env` file. No extra tooling required.
+- `provider: bitwarden` — names are secret keys in
+  [Bitwarden Secrets Manager](https://bitwarden.com/products/secrets-manager/),
+  fetched through the `bws` CLI with a single machine-account access token
+  (`BWS_ACCESS_TOKEN` in the environment). One token instead of a pile of
+  `.env` entries, secrets stay centrally managed and rotatable, and
+  environment variables still override when set. If the provider is
+  unavailable, Guardian warns once and degrades to environment-only — a
+  secrets backend outage never breaks a scan.
+
+```yaml
+secrets:
+  provider: bitwarden
+  bitwarden:
+    access_token_env: "BWS_ACCESS_TOKEN"
+    project_id: "" # optional: restrict to one project
+```
+
+`python -m app.main doctor` verifies the provider end-to-end and reports how
+many secrets are readable. The provider interface is intentionally small, so
+additional backends (Vault, 1Password, Infisical) can be added without
+touching collectors.
+
+Alternative: `bws run -- python -m app.main --config config.yaml` injects all
+secrets as process environment variables without any Guardian configuration.
+
 ## AI briefing — bring your own model
 
 Optional and disabled by default. When `ai.enabled` is true, Guardian sends

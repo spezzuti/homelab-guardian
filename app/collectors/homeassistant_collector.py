@@ -22,10 +22,11 @@ def _check(
     return HealthCheck(check_id, name, status, summary, evidence, recommended_action)
 
 
-def collect(config: dict[str, Any]) -> list[HealthCheck]:
+def collect(config: dict[str, Any], secrets: Any = None) -> list[HealthCheck]:
     url = (config.get("url") or "").rstrip("/")
     token_env = config.get("token_env") or DEFAULT_TOKEN_ENV
-    token = os.getenv(token_env, "")
+    token = secrets.get(token_env) if secrets is not None else os.getenv(token_env, "")
+    token = token or ""
     timeout = float(config.get("timeout", 10))
 
     if not url:
@@ -45,9 +46,9 @@ def collect(config: dict[str, Any]) -> list[HealthCheck]:
             _check(
                 "ha_missing_token",
                 "unknown",
-                f"Home Assistant token environment variable is not set: {token_env}",
+                f"Home Assistant token was not found under the name: {token_env}",
                 {**base_evidence, "token_present": False},
-                "Create a Home Assistant long-lived access token, put it in local .env or the shell environment, and keep token_env pointed at that variable. Do not put tokens in config.yaml.",
+                "Create a Home Assistant long-lived access token and expose it under that name through the environment or the configured secrets provider. Do not put tokens in config.yaml.",
             )
         ]
 

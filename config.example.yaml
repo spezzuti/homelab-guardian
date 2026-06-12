@@ -69,6 +69,28 @@ collectors:
     #     required: true
     paths: []
 
+secrets:
+  # Where Guardian looks up named secrets (tokens, API keys, chat ids).
+  # Every *_env setting in this file names a secret; the provider decides
+  # where that name is resolved.
+  #
+  #   env       (default) — read from environment variables only.
+  #   bitwarden — read from Bitwarden Secrets Manager via the bws CLI,
+  #               with environment variables still taking precedence.
+  #               One machine-account access token (BWS_ACCESS_TOKEN in the
+  #               environment) replaces every individual token env var, and
+  #               your secret keys in Bitwarden simply match the names below
+  #               (HASS_TOKEN, TELEGRAM_BOT_TOKEN, ...).
+  provider: env
+  bitwarden:
+    access_token_env: "BWS_ACCESS_TOKEN"
+    # Optional: restrict to one Secrets Manager project id.
+    project_id: ""
+    # Secrets are fetched once per cache window, not on every lookup.
+    cache_seconds: 300
+    # Path to the bws binary if it is not on PATH.
+    bws_path: "bws"
+
 ai:
   # Optional bring-your-own-model explanation layer. When enabled, Guardian
   # sends ONLY the structured check results and diff to one OpenAI-compatible

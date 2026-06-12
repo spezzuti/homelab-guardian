@@ -64,7 +64,7 @@ def _max_age_days(item: dict[str, Any]) -> float:
     return 1.0
 
 
-def collect(config: dict[str, Any]) -> list[HealthCheck]:
+def collect(config: dict[str, Any], secrets: Any = None) -> list[HealthCheck]:
     checks: list[HealthCheck] = []
     paths = config.get("paths", []) or []
 

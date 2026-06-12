@@ -17,6 +17,15 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "network": {"enabled": True, "dns_checks": [], "tcp_checks": []},
         "backups": {"enabled": True, "paths": []},
     },
+    "secrets": {
+        "provider": "env",
+        "bitwarden": {
+            "access_token_env": "BWS_ACCESS_TOKEN",
+            "project_id": "",
+            "cache_seconds": 300,
+            "bws_path": "bws",
+        },
+    },
     "ai": {
         "enabled": False,
         "base_url": "",

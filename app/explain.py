@@ -75,6 +75,7 @@ def explain(
     config: dict[str, Any],
     checks: list[HealthCheck],
     diff: ScanDiff | None,
+    secrets: Any = None,
 ) -> str | None:
     """Ask the configured OpenAI-compatible endpoint for a plain-English
     briefing. Returns None when disabled, unconfigured, or on any error —
@@ -89,7 +90,8 @@ def explain(
         return None
 
     headers = {"Content-Type": "application/json"}
-    api_key = os.getenv(config.get("api_key_env") or DEFAULT_API_KEY_ENV, "")
+    key_name = config.get("api_key_env") or DEFAULT_API_KEY_ENV
+    api_key = (secrets.get(key_name) if secrets is not None else os.getenv(key_name, "")) or ""
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
 

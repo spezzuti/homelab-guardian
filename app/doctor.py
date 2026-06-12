@@ -9,6 +9,7 @@ from typing import Any
 from app.config import load_config
 from app.models import HealthCheck
 from app.reports.markdown_report import render
+from app.secrets import SecretStore, build_store
 
 
 def _socket_path(socket_url: str) -> Path | None:
@@ -133,14 +134,41 @@ def _check_docker(config: dict[str, Any]) -> HealthCheck | None:
     )
 
 
-def _check_homeassistant(config: dict[str, Any]) -> list[HealthCheck]:
+def _check_secrets(config: dict[str, Any]) -> HealthCheck | None:
+    secrets_config = config.get("secrets", {}) or {}
+    provider = str(secrets_config.get("provider", "env")).lower()
+    if provider == "env":
+        return None
+    store = build_store(secrets_config)
+    count = store.preload()
+    evidence = {**store.describe(), "secrets_available": count}
+    if store.degraded:
+        return HealthCheck(
+            "preflight_secrets_provider",
+            "Secrets provider",
+            "warning",
+            f"Secrets provider '{provider}' is configured but not working; Guardian will use environment variables only.",
+            evidence,
+            "Check the access token environment variable, the bws CLI installation, and machine-account permissions.",
+        )
+    return HealthCheck(
+        "preflight_secrets_provider",
+        "Secrets provider",
+        "ok",
+        f"Secrets provider '{provider}' is working: {count} secret(s) readable.",
+        evidence,
+        "No action required.",
+    )
+
+
+def _check_homeassistant(config: dict[str, Any], secrets: SecretStore) -> list[HealthCheck]:
     ha_config = config.get("collectors", {}).get("homeassistant", {})
     if not ha_config.get("enabled", False):
         return []
     checks: list[HealthCheck] = []
     url = ha_config.get("url")
     token_env = ha_config.get("token_env") or "HOMEASSISTANT_TOKEN"
-    token_present = bool(os.getenv(token_env, ""))
+    token_present = bool(secrets.get(token_env))
     checks.append(
         HealthCheck(
             "preflight_homeassistant_url",
@@ -156,9 +184,9 @@ def _check_homeassistant(config: dict[str, Any]) -> list[HealthCheck]:
             "preflight_homeassistant_token",
             "Home Assistant token",
             "ok" if token_present else "warning",
-            f"Home Assistant token environment variable is {'set' if token_present else 'not set'}: {token_env}",
+            f"Home Assistant token is {'available' if token_present else 'not available'} under the name: {token_env}",
             {"token_env": token_env, "token_present": token_present},
-            "No action required." if token_present else "Create a long-lived token and expose it through the configured environment variable.",
+            "No action required." if token_present else "Create a long-lived token and expose it under that name through the environment or the configured secrets provider.",
         )
     )
     return checks
@@ -204,12 +232,13 @@ def run_doctor(config_path: str | Path) -> int:
     if config is not None:
         checks.extend(_check_output_paths(config))
         optional_checks = [
+            _check_secrets(config),
             _check_docker(config),
             _check_backup_config(config),
             _check_network_config(config),
         ]
         checks.extend(check for check in optional_checks if check is not None)
-        checks.extend(_check_homeassistant(config))
+        checks.extend(_check_homeassistant(config, build_store(config.get("secrets", {}))))
 
     print(render(checks))
     return 1 if any(check.status == "critical" for check in checks) else 0

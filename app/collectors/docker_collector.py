@@ -204,7 +204,7 @@ def _container_check(container: Any) -> HealthCheck:
     )
 
 
-def collect(config: dict[str, Any]) -> list[HealthCheck]:
+def collect(config: dict[str, Any], secrets: Any = None) -> list[HealthCheck]:
     try:
         import docker
     except Exception as exc:

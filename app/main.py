@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 import time
 import traceback
 from typing import Any, Callable
@@ -14,8 +15,9 @@ from app.explain import explain
 from app.models import HealthCheck
 from app.notifications import telegram_notifier
 from app.reports.markdown_report import write_report
+from app.secrets import SecretStore, build_store
 
-CollectorFn = Callable[[dict[str, Any]], list[HealthCheck]]
+CollectorFn = Callable[..., list[HealthCheck]]
 
 COLLECTORS: dict[str, CollectorFn] = {
     "docker": docker_collector.collect,
@@ -25,11 +27,13 @@ COLLECTORS: dict[str, CollectorFn] = {
 }
 
 
-def run_collector(name: str, collector: CollectorFn, config: dict[str, Any]) -> list[HealthCheck]:
+def run_collector(
+    name: str, collector: CollectorFn, config: dict[str, Any], secrets: SecretStore
+) -> list[HealthCheck]:
     if not config.get("enabled", False):
         return []
     try:
-        return collector(config)
+        return collector(config, secrets=secrets)
     except Exception as exc:
         return [
             HealthCheck(
@@ -46,10 +50,11 @@ def run_collector(name: str, collector: CollectorFn, config: dict[str, Any]) -> 
 def run_scan(config_path: str) -> int:
     config = load_config(config_path)
     collector_config = config.get("collectors", {})
+    secrets = build_store(config.get("secrets", {}))
 
     checks: list[HealthCheck] = []
     for name, collector in COLLECTORS.items():
-        checks.extend(run_collector(name, collector, collector_config.get(name, {})))
+        checks.extend(run_collector(name, collector, collector_config.get(name, {}), secrets))
 
     snapshot = {
         "app": config.get("app", {}).get("name", "Homelab Guardian"),
@@ -68,7 +73,7 @@ def run_scan(config_path: str) -> int:
     finally:
         conn.close()
 
-    narrative = explain(config.get("ai", {}), checks, diff)
+    narrative = explain(config.get("ai", {}), checks, diff, secrets=secrets)
 
     report_path = config.get("app", {}).get("report_path", "reports/latest.md")
     written = write_report(report_path, checks, scan_id=scan_id, diff=diff, narrative=narrative)
@@ -76,7 +81,7 @@ def run_scan(config_path: str) -> int:
     print(f"Checks: {len(checks)}")
 
     telegram_notifier.notify(
-        config.get("notifications", {}).get("telegram", {}), checks, diff, scan_id
+        config.get("notifications", {}).get("telegram", {}), checks, diff, scan_id, secrets=secrets
     )
     return 0
 
@@ -102,6 +107,12 @@ def run_scan_loop(config_path: str, interval_seconds: int) -> int:
 
 
 def main() -> int:
+    # Windows consoles often default to a legacy codepage that cannot encode
+    # the status emoji; degrade characters instead of crashing.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(errors="replace")
+
     parser = argparse.ArgumentParser(description="Generate a Homelab Guardian health report.")
     parser.add_argument("command", nargs="?", choices=["scan", "doctor"], default="scan", help="Command to run")
     parser.add_argument("--config", default="config.yaml", help="Path to YAML config file")

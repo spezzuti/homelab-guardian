@@ -94,6 +94,7 @@ def notify(
     checks: list[HealthCheck],
     diff: ScanDiff | None,
     scan_id: int | None,
+    secrets: Any = None,
 ) -> bool:
     """Send a Telegram summary if configured to. Never raises; a failed
     notification must not fail the scan that produced the report."""
@@ -108,10 +109,15 @@ def notify(
     if not should_notify(send_on, overall_status(checks), diff):
         return False
 
-    token = os.getenv(config.get("bot_token_env") or DEFAULT_BOT_TOKEN_ENV, "")
-    chat_id = str(config.get("chat_id") or os.getenv(config.get("chat_id_env") or DEFAULT_CHAT_ID_ENV, ""))
+    def _resolve(name: str) -> str:
+        if secrets is not None:
+            return secrets.get(name) or ""
+        return os.getenv(name, "")
+
+    token = _resolve(config.get("bot_token_env") or DEFAULT_BOT_TOKEN_ENV)
+    chat_id = str(config.get("chat_id") or _resolve(config.get("chat_id_env") or DEFAULT_CHAT_ID_ENV))
     if not token or not chat_id:
-        print("Telegram notifier: enabled but bot token or chat id is missing from the environment.")
+        print("Telegram notifier: enabled but bot token or chat id was not found in the environment or secrets provider.")
         return False
 
     try:
