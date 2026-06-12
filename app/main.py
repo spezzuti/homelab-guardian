@@ -9,6 +9,7 @@ from app.config import load_config
 from app.diff import diff_scans
 from app.doctor import run_doctor
 from app.models import HealthCheck
+from app.notifications import telegram_notifier
 from app.reports.markdown_report import write_report
 
 CollectorFn = Callable[[dict[str, Any]], list[HealthCheck]]
@@ -68,6 +69,10 @@ def run_scan(config_path: str) -> int:
     written = write_report(report_path, checks, scan_id=scan_id, diff=diff)
     print(f"Wrote report: {written}")
     print(f"Checks: {len(checks)}")
+
+    telegram_notifier.notify(
+        config.get("notifications", {}).get("telegram", {}), checks, diff, scan_id
+    )
     return 0
 
 

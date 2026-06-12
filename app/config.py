@@ -17,6 +17,14 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "network": {"enabled": True, "dns_checks": [], "tcp_checks": []},
         "backups": {"enabled": True, "paths": []},
     },
+    "notifications": {
+        "telegram": {
+            "enabled": False,
+            "bot_token_env": "TELEGRAM_BOT_TOKEN",
+            "chat_id_env": "TELEGRAM_CHAT_ID",
+            "send_on": "changes",
+        },
+    },
 }
 
 

@@ -68,3 +68,18 @@ collectors:
     #     max_age_days: 2
     #     required: true
     paths: []
+
+notifications:
+  telegram:
+    # Optional. Sends a short summary message after each scan.
+    # The bot token and chat id come from environment variables; never put
+    # them in this file. Create a bot with @BotFather, then message the bot
+    # once so it can reach your chat.
+    enabled: false
+    bot_token_env: "TELEGRAM_BOT_TOKEN"
+    chat_id_env: "TELEGRAM_CHAT_ID"
+    # When to send: always | changes | problems
+    #   always   — every scan
+    #   changes  — only when something changed since the previous scan
+    #   problems — only when overall status is warning or critical
+    send_on: changes

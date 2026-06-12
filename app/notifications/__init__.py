@@ -1,0 +1,1 @@
+"""Optional outbound notification adapters."""
