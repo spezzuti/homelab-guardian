@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "homelab-guardian"
+version = "0.2.0"
+description = "Local-first, read-only homelab health reports in plain English"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "PyYAML>=6.0.1",
+    "requests>=2.31.0",
+    "docker>=7.0.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0.0"]
+
+[project.scripts]
+guardian = "app.main:main"
+
+[tool.setuptools.packages.find]
+include = ["app*"]

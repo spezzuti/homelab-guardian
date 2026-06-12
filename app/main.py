@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 import time
 import traceback
+from pathlib import Path
 from typing import Any, Callable
 
 from app import db
@@ -86,6 +88,31 @@ def run_scan(config_path: str) -> int:
     return 0
 
 
+def load_dotenv(path: str | Path = ".env") -> int:
+    """Load KEY=VALUE lines from a local .env file into the environment
+    without overriding variables that are already set. Keeps the wizard's
+    'write tokens to .env' flow working for bare `guardian` runs, matching
+    what docker compose env_file and systemd EnvironmentFile already do."""
+    env_path = Path(path)
+    if not env_path.is_file():
+        return 0
+    loaded = 0
+    try:
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key = key.strip()
+            value = value.strip().strip("'\"")
+            if key and key not in os.environ:
+                os.environ[key] = value
+                loaded += 1
+    except OSError as exc:
+        print(f"Could not read {env_path}: {exc}")
+    return loaded
+
+
 def run_scan_loop(config_path: str, interval_seconds: int) -> int:
     """Run scans forever, every interval_seconds. A failed scan is reported
     and the loop continues — a transient collector error must not stop a
@@ -114,9 +141,15 @@ def main() -> int:
             stream.reconfigure(errors="replace")
 
     parser = argparse.ArgumentParser(description="Generate a Homelab Guardian health report.")
-    parser.add_argument("command", nargs="?", choices=["scan", "doctor"], default="scan", help="Command to run")
+    parser.add_argument(
+        "command", nargs="?", choices=["scan", "doctor", "init"], default="scan", help="Command to run"
+    )
     parser.add_argument("--config", default="config.yaml", help="Path to YAML config file")
     parser.add_argument("--doctor", action="store_true", help="Run preflight checks instead of a normal scan")
+    parser.add_argument("--force", action="store_true", help="init: overwrite an existing config file")
+    parser.add_argument(
+        "--no-discover", action="store_true", help="init: skip the local network service discovery step"
+    )
     parser.add_argument(
         "--interval",
         type=int,
@@ -127,6 +160,12 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    if args.command == "init":
+        from app.wizard import run_init
+
+        return run_init(args.config, force=args.force, discover_network=False if args.no_discover else None)
+
+    load_dotenv()
     if args.doctor or args.command == "doctor":
         return run_doctor(args.config)
     if args.interval > 0:

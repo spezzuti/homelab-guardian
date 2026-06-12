@@ -76,6 +76,21 @@
 - [ ] Add Docker image build verification on a Docker host
 - [x] Add CI
 
+## Sprint 3 — secrets, packaging, onboarding (2026-06-12)
+
+- [x] Pluggable secrets providers: env (default) + Bitwarden Secrets Manager
+      via bws CLI, env-first precedence, TTL cache, graceful degradation
+- [x] Doctor preflight for the secrets provider (counts readable secrets)
+- [x] pyproject.toml + `guardian` console command (pip install -e .)
+- [x] `guardian init` setup wizard: interactive config generation
+- [x] LAN auto-discovery (read-only TCP probes, reverse-DNS names,
+      Google Cast false-positive fingerprinting)
+- [x] .env autoloading for bare CLI runs (no python-dotenv dependency)
+- [x] Emoji-safe stdout on legacy Windows codepages
+- [ ] Rename `app` package to `homelab_guardian` before any PyPI release
+- [ ] Pick a license before publishing
+- [ ] Prebuilt Docker image (GHCR) via GitHub Actions
+
 ## Sprint 2 — diff, notify, schedule, explain (2026-06-12)
 
 - [x] Snapshot diffing with what-changed report section

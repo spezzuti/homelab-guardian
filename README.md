@@ -24,11 +24,30 @@ Guardian v0.1 is the **Daily Homelab Doctor**: a simple CLI that collects option
 - Every integration is optional
 - Collectors degrade gracefully when unavailable or unconfigured
 
-## First-run steps
+## Quick start
 
 ```bash
 git clone <repo-url>
 cd homelab-guardian
+python -m venv .venv
+. .venv/bin/activate
+pip install -e .
+
+guardian init      # answer a few questions; optionally scans your LAN
+guardian doctor    # preflight check
+guardian           # first scan -> reports/latest.md
+```
+
+`guardian init` can probe your local network (read-only TCP connects, nothing
+is sent to any device) and recognizes common homelab services — Home
+Assistant, Proxmox, Pi-hole/AdGuard, Portainer, Plex, Jellyfin, Synology,
+QNAP, Uptime Kuma, and more — then writes a working `config.yaml` for you.
+Smart-speaker false positives (Google Cast devices) are fingerprinted and
+filtered out automatically.
+
+## Manual first-run steps
+
+```bash
 cp config.example.yaml config.yaml
 mkdir -p data reports
 ```
