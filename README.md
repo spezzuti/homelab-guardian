@@ -305,12 +305,37 @@ python -m app.main --config config.yaml
 
 Expected result: the dummy backup check reports `ok` while the marker file is fresh. To test stale behavior safely, change `max_age_days` to `0` or adjust only files inside `/tmp/homelab-guardian-backup-dogfood`. Never commit `config.yaml`, generated reports, database files, or the dummy runtime folder.
 
+## Recurring scans
+
+Guardian runs once by default. For continuous monitoring, pass `--interval`:
+
+```bash
+python -m app.main --config config.yaml --interval 900
+```
+
+This repeats the scan every 900 seconds. A failed scan is logged and the loop
+continues. Each scan is compared against the previous snapshot, so the report
+and any notifications highlight what changed.
+
+For a host install, `deploy/homelab-guardian.service` is a ready-to-edit
+systemd user service. For Docker Compose, run the service with `--interval`
+and `restart: unless-stopped` instead of one-shot `docker compose run`.
+
+## Telegram notifications
+
+Optional and disabled by default. Configure under `notifications.telegram` in
+`config.yaml` with a bot token and chat id provided through environment
+variables (see `config.example.yaml`). `send_on: changes` is the recommended
+mode: you only get a message when something actually changed since the last
+scan.
+
 ## Report layout
 
 The Markdown report includes:
 
 - overall status
 - summary counts
+- what changed since the previous scan (regressions, improvements, new and removed checks)
 - critical issues first
 - warnings second
 - unknowns third
