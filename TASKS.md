@@ -64,17 +64,28 @@
 
 - [ ] Real Docker host test with direct socket mode
 - [ ] Real Docker host test with socket proxy mode
-- [ ] Home Assistant collector dogfood
+- [x] Home Assistant collector dogfood
 - [ ] Report polish for containerized runs
-- [ ] Snapshot comparison improvements
-- [ ] Add previous-scan comparison output
-- [ ] Add robust SQLite snapshot read/write tests
-- [ ] Add unit tests for config loading
-- [ ] Add unit tests for each collector failure mode
-- [ ] Add report golden-file test
-- [ ] Add optional Telegram notification adapter later
+- [x] Snapshot comparison improvements
+- [x] Add previous-scan comparison output
+- [x] Add robust SQLite snapshot read/write tests
+- [x] Add unit tests for config loading
+- [x] Add unit tests for each collector failure mode
+- [x] Add report golden-file test
+- [x] Add optional Telegram notification adapter later
 - [ ] Add Docker image build verification on a Docker host
-- [ ] Add CI
+- [x] Add CI
+
+## Sprint 2 — diff, notify, schedule, explain (2026-06-12)
+
+- [x] Snapshot diffing with what-changed report section
+- [x] verify_tls option for self-signed homelab HTTPS services
+- [x] Real homelab dogfood: 18 checks across Proxmox x2, TrueNAS, QNAP,
+      iDRAC, Pi-hole, Portainer, Authentik, Home Assistant, modem, SSH hosts
+- [x] Telegram notification adapter (send_on: always | changes | problems)
+- [x] --interval loop mode plus example systemd user service
+- [x] BYOM AI briefing layer over one OpenAI-compatible endpoint
+- [ ] Per-config database_path guidance enforcement (currently docs-only)
 
 ## Future remote-collector support
 
