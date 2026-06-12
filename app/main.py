@@ -10,6 +10,7 @@ from app.collectors import backup_collector, docker_collector, homeassistant_col
 from app.config import load_config
 from app.diff import diff_scans
 from app.doctor import run_doctor
+from app.explain import explain
 from app.models import HealthCheck
 from app.notifications import telegram_notifier
 from app.reports.markdown_report import write_report
@@ -67,8 +68,10 @@ def run_scan(config_path: str) -> int:
     finally:
         conn.close()
 
+    narrative = explain(config.get("ai", {}), checks, diff)
+
     report_path = config.get("app", {}).get("report_path", "reports/latest.md")
-    written = write_report(report_path, checks, scan_id=scan_id, diff=diff)
+    written = write_report(report_path, checks, scan_id=scan_id, diff=diff, narrative=narrative)
     print(f"Wrote report: {written}")
     print(f"Checks: {len(checks)}")
 

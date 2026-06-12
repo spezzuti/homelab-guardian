@@ -321,6 +321,33 @@ For a host install, `deploy/homelab-guardian.service` is a ready-to-edit
 systemd user service. For Docker Compose, run the service with `--interval`
 and `restart: unless-stopped` instead of one-shot `docker compose run`.
 
+## AI briefing — bring your own model
+
+Optional and disabled by default. When `ai.enabled` is true, Guardian sends
+only the structured check results and the what-changed diff to a single
+OpenAI-compatible chat completions endpoint and places the returned
+plain-English briefing at the top of the report.
+
+- Works with OpenRouter, a local Ollama/LM Studio endpoint, or any other
+  OpenAI-compatible server — your model, your key, your choice.
+- The model receives structured JSON only. It has no shell, no tools, and no
+  access to your systems, and the prompt forbids suggesting state-changing
+  commands.
+- Guardian remains fully functional with this disabled; a failed model call
+  never fails the scan.
+
+```yaml
+ai:
+  enabled: true
+  base_url: "http://localhost:11434/v1" # local Ollama example
+  model: "qwen3:14b"
+  api_key_env: "GUARDIAN_AI_API_KEY" # leave the env var unset for keyless local endpoints
+```
+
+Note: each config file should point at its own `database_path`. Scan diffing
+compares against the previous snapshot in that database, so two configs
+sharing one database will see each other's checks as added/removed noise.
+
 ## Telegram notifications
 
 Optional and disabled by default. Configure under `notifications.telegram` in

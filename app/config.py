@@ -17,6 +17,12 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "network": {"enabled": True, "dns_checks": [], "tcp_checks": []},
         "backups": {"enabled": True, "paths": []},
     },
+    "ai": {
+        "enabled": False,
+        "base_url": "",
+        "model": "",
+        "api_key_env": "GUARDIAN_AI_API_KEY",
+    },
     "notifications": {
         "telegram": {
             "enabled": False,

@@ -69,6 +69,25 @@ collectors:
     #     required: true
     paths: []
 
+ai:
+  # Optional bring-your-own-model explanation layer. When enabled, Guardian
+  # sends ONLY the structured check results and diff to one OpenAI-compatible
+  # chat completions endpoint and puts the returned plain-English briefing at
+  # the top of the report. The model has no shell, no tools, and no access to
+  # your systems. Guardian works fully with this disabled.
+  #
+  # Examples:
+  #   OpenRouter:  base_url: "https://openrouter.ai/api/v1"
+  #                model: "anthropic/claude-haiku-4.5"
+  #   Local Ollama: base_url: "http://localhost:11434/v1"
+  #                 model: "qwen3:14b"   # no API key needed
+  enabled: false
+  base_url: ""
+  model: ""
+  # Name of the environment variable holding the API key (leave the variable
+  # unset for local endpoints that need no key). Never put keys in this file.
+  api_key_env: "GUARDIAN_AI_API_KEY"
+
 notifications:
   telegram:
     # Optional. Sends a short summary message after each scan.
