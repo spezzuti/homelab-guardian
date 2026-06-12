@@ -6,6 +6,7 @@ from typing import Any, Callable
 from app import db
 from app.collectors import backup_collector, docker_collector, homeassistant_collector, network_collector
 from app.config import load_config
+from app.diff import diff_scans
 from app.doctor import run_doctor
 from app.models import HealthCheck
 from app.reports.markdown_report import write_report
@@ -54,12 +55,17 @@ def run_scan(config_path: str) -> int:
     database_path = config.get("app", {}).get("database_path", "data/guardian.sqlite")
     conn = db.connect(database_path)
     try:
+        previous = db.load_latest_scan(conn)
+        if previous is not None:
+            diff = diff_scans(previous[2], checks, previous_scan_id=previous[0], previous_created_at=previous[1])
+        else:
+            diff = diff_scans(None, checks)
         scan_id = db.save_scan(conn, snapshot)
     finally:
         conn.close()
 
     report_path = config.get("app", {}).get("report_path", "reports/latest.md")
-    written = write_report(report_path, checks, scan_id=scan_id)
+    written = write_report(report_path, checks, scan_id=scan_id, diff=diff)
     print(f"Wrote report: {written}")
     print(f"Checks: {len(checks)}")
     return 0

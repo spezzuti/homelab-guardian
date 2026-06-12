@@ -5,10 +5,44 @@ from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
+from app.diff import ScanDiff
 from app.models import HealthCheck
 
 STATUS_ORDER = {"critical": 0, "warning": 1, "unknown": 2, "ok": 3}
 STATUS_ICON = {"critical": "🚨", "warning": "⚠️", "unknown": "❔", "ok": "✅"}
+
+
+def _render_diff(diff: ScanDiff) -> list[str]:
+    lines = ["## What changed since last scan", ""]
+    if not diff.has_previous:
+        lines.extend(["First recorded scan — nothing to compare against yet.", ""])
+        return lines
+
+    lines.extend([f"Compared with scan `{diff.previous_scan_id}` from `{diff.previous_created_at}`.", ""])
+    if not diff.has_changes:
+        lines.extend([f"No changes. All {diff.unchanged_count} checks have the same status as before.", ""])
+        return lines
+
+    for change in diff.regressions:
+        lines.append(
+            f"- 📉 **{change['name']}**: {change['previous_status']} → **{change['current_status']}** — {change['summary']}"
+        )
+    for change in diff.improvements:
+        lines.append(
+            f"- 📈 **{change['name']}**: {change['previous_status']} → **{change['current_status']}** — {change['summary']}"
+        )
+    for check in diff.new_checks:
+        icon = STATUS_ICON.get(check["status"], "•")
+        lines.append(f"- 🆕 {icon} **{check['name']}**: new check, currently {check['status']} — {check['summary']}")
+    for check in diff.removed_checks:
+        lines.append(
+            f"- ➖ **{check['name']}**: no longer checked (was {check['previous_status']}). "
+            "If this was not a config change, a collector may have lost access."
+        )
+    lines.append("")
+    if diff.unchanged_count:
+        lines.extend([f"{diff.unchanged_count} other checks are unchanged.", ""])
+    return lines
 
 
 def overall_status(checks: list[HealthCheck]) -> str:
@@ -54,7 +88,7 @@ def _render_check(check: HealthCheck) -> list[str]:
     ]
 
 
-def render(checks: list[HealthCheck], scan_id: int | None = None) -> str:
+def render(checks: list[HealthCheck], scan_id: int | None = None, diff: ScanDiff | None = None) -> str:
     counts = Counter(check.status for check in checks)
     generated_at = datetime.now(timezone.utc).isoformat()
     overall = overall_status(checks)
@@ -82,6 +116,9 @@ def render(checks: list[HealthCheck], scan_id: int | None = None) -> str:
         ]
     )
 
+    if diff is not None:
+        lines.extend(_render_diff(diff))
+
     by_status: dict[str, list[HealthCheck]] = {"critical": [], "warning": [], "unknown": [], "ok": []}
     for check in _sorted_checks(checks):
         by_status.setdefault(check.status, []).append(check)
@@ -103,8 +140,13 @@ def render(checks: list[HealthCheck], scan_id: int | None = None) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
-def write_report(path: str | Path, checks: list[HealthCheck], scan_id: int | None = None) -> Path:
+def write_report(
+    path: str | Path,
+    checks: list[HealthCheck],
+    scan_id: int | None = None,
+    diff: ScanDiff | None = None,
+) -> Path:
     report_path = Path(path)
     report_path.parent.mkdir(parents=True, exist_ok=True)
-    report_path.write_text(render(checks, scan_id=scan_id), encoding="utf-8")
+    report_path.write_text(render(checks, scan_id=scan_id, diff=diff), encoding="utf-8")
     return report_path
