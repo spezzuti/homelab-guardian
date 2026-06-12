@@ -76,6 +76,15 @@
 - [ ] Add Docker image build verification on a Docker host
 - [x] Add CI
 
+## Sprint 4 — web report view (2026-06-12)
+
+- [x] `guardian serve`: read-only stdlib web view rendered from SQLite
+      snapshots (status banner, briefing, what-changed, check cards with
+      evidence, scan history with per-scan drill-down, /healthz)
+- [x] Appliance mode: `guardian serve --interval N` scans in the background
+- [x] Store the AI narrative in scan snapshots
+- [x] DB helpers: load_scan, load_scan_before, list_scans
+
 ## Sprint 3 — secrets, packaging, onboarding (2026-06-12)
 
 - [x] Pluggable secrets providers: env (default) + Bitwarden Secrets Manager

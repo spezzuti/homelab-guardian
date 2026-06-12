@@ -33,6 +33,10 @@ def load_latest_scan(conn: sqlite3.Connection) -> tuple[int, str, dict[str, Any]
     row = conn.execute(
         "SELECT id, created_at, snapshot_json FROM scans ORDER BY id DESC LIMIT 1"
     ).fetchone()
+    return _parse_row(row)
+
+
+def _parse_row(row: tuple[Any, ...] | None) -> tuple[int, str, dict[str, Any]] | None:
     if row is None:
         return None
     try:
@@ -42,6 +46,30 @@ def load_latest_scan(conn: sqlite3.Connection) -> tuple[int, str, dict[str, Any]
     if not isinstance(snapshot, dict):
         return None
     return int(row[0]), str(row[1]), snapshot
+
+
+def load_scan(conn: sqlite3.Connection, scan_id: int) -> tuple[int, str, dict[str, Any]] | None:
+    row = conn.execute(
+        "SELECT id, created_at, snapshot_json FROM scans WHERE id = ?", (scan_id,)
+    ).fetchone()
+    return _parse_row(row)
+
+
+def load_scan_before(conn: sqlite3.Connection, scan_id: int) -> tuple[int, str, dict[str, Any]] | None:
+    row = conn.execute(
+        "SELECT id, created_at, snapshot_json FROM scans WHERE id < ? ORDER BY id DESC LIMIT 1",
+        (scan_id,),
+    ).fetchone()
+    return _parse_row(row)
+
+
+def list_scans(conn: sqlite3.Connection, limit: int = 50) -> list[tuple[int, str, dict[str, Any]]]:
+    """Newest-first scan summaries. Corrupt rows are skipped."""
+    rows = conn.execute(
+        "SELECT id, created_at, snapshot_json FROM scans ORDER BY id DESC LIMIT ?", (int(limit),)
+    ).fetchall()
+    parsed = (_parse_row(row) for row in rows)
+    return [item for item in parsed if item is not None]
 
 
 def save_scan(conn: sqlite3.Connection, snapshot: dict[str, Any]) -> int:

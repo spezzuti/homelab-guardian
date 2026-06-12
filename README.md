@@ -324,6 +324,20 @@ python -m app.main --config config.yaml
 
 Expected result: the dummy backup check reports `ok` while the marker file is fresh. To test stale behavior safely, change `max_age_days` to `0` or adjust only files inside `/tmp/homelab-guardian-backup-dogfood`. Never commit `config.yaml`, generated reports, database files, or the dummy runtime folder.
 
+## Web view
+
+```bash
+guardian serve                          # http://localhost:8674
+guardian serve --interval 900           # appliance mode: scan + serve in one process
+guardian serve --host 0.0.0.0           # expose on your LAN (explicit choice)
+```
+
+A read-only page rendered from local scan history: overall status, the AI
+briefing when enabled, what changed, every check with its evidence, and
+recent scan history with per-scan drill-down. No web framework, no
+JavaScript, no write endpoints; binds to localhost unless you say otherwise.
+`/healthz` returns plain `ok` so other monitors can watch Guardian itself.
+
 ## Recurring scans
 
 Guardian runs once by default. For continuous monitoring, pass `--interval`:

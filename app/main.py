@@ -58,11 +58,6 @@ def run_scan(config_path: str) -> int:
     for name, collector in COLLECTORS.items():
         checks.extend(run_collector(name, collector, collector_config.get(name, {}), secrets))
 
-    snapshot = {
-        "app": config.get("app", {}).get("name", "Homelab Guardian"),
-        "checks": [check.to_dict() for check in checks],
-    }
-
     database_path = config.get("app", {}).get("database_path", "data/guardian.sqlite")
     conn = db.connect(database_path)
     try:
@@ -71,11 +66,17 @@ def run_scan(config_path: str) -> int:
             diff = diff_scans(previous[2], checks, previous_scan_id=previous[0], previous_created_at=previous[1])
         else:
             diff = diff_scans(None, checks)
+
+        narrative = explain(config.get("ai", {}), checks, diff, secrets=secrets)
+
+        snapshot = {
+            "app": config.get("app", {}).get("name", "Homelab Guardian"),
+            "checks": [check.to_dict() for check in checks],
+            "narrative": narrative,
+        }
         scan_id = db.save_scan(conn, snapshot)
     finally:
         conn.close()
-
-    narrative = explain(config.get("ai", {}), checks, diff, secrets=secrets)
 
     report_path = config.get("app", {}).get("report_path", "reports/latest.md")
     written = write_report(report_path, checks, scan_id=scan_id, diff=diff, narrative=narrative)
@@ -142,7 +143,7 @@ def main() -> int:
 
     parser = argparse.ArgumentParser(description="Generate a Homelab Guardian health report.")
     parser.add_argument(
-        "command", nargs="?", choices=["scan", "doctor", "init"], default="scan", help="Command to run"
+        "command", nargs="?", choices=["scan", "doctor", "init", "serve"], default="scan", help="Command to run"
     )
     parser.add_argument("--config", default="config.yaml", help="Path to YAML config file")
     parser.add_argument("--doctor", action="store_true", help="Run preflight checks instead of a normal scan")
@@ -150,13 +151,15 @@ def main() -> int:
     parser.add_argument(
         "--no-discover", action="store_true", help="init: skip the local network service discovery step"
     )
+    parser.add_argument("--host", default="127.0.0.1", help="serve: address to bind (default localhost only)")
+    parser.add_argument("--port", type=int, default=8674, help="serve: port for the web view")
     parser.add_argument(
         "--interval",
         type=int,
         default=0,
         metavar="SECONDS",
-        help="Repeat the scan every N seconds instead of running once. "
-        "Useful for systemd services and long-running containers.",
+        help="Repeat the scan every N seconds instead of running once. With "
+        "serve, runs scans in the background of the web view.",
     )
     args = parser.parse_args()
 
@@ -168,6 +171,16 @@ def main() -> int:
     load_dotenv()
     if args.doctor or args.command == "doctor":
         return run_doctor(args.config)
+    if args.command == "serve":
+        from app.web import serve
+
+        return serve(
+            load_config(args.config),
+            host=args.host,
+            port=args.port,
+            scan_interval=args.interval,
+            scan_loop=(lambda: run_scan_loop(args.config, args.interval)) if args.interval > 0 else None,
+        )
     if args.interval > 0:
         return run_scan_loop(args.config, args.interval)
     return run_scan(args.config)

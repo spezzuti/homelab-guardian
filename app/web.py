@@ -1,0 +1,366 @@
+from __future__ import annotations
+
+import html
+import json
+import threading
+from datetime import datetime
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from typing import Any
+from urllib.parse import urlparse
+
+from app import db
+from app.diff import ScanDiff, diff_scans
+from app.models import HealthCheck
+
+# Read-only web view rendered from SQLite snapshots. Stdlib http.server only:
+# no web framework dependency, no write endpoints, no JavaScript required.
+# Binds to localhost by default; exposing it wider is an explicit choice.
+
+STATUS_META = {
+    "critical": ("🚨", "Critical"),
+    "warning": ("⚠️", "Warning"),
+    "unknown": ("❔", "Unknown"),
+    "ok": ("✅", "OK"),
+}
+STATUS_ORDER = ["critical", "warning", "unknown", "ok"]
+
+PAGE_STYLE = """
+:root {
+  color-scheme: light dark;
+  --bg: #f5f6f8; --card: #ffffff; --text: #1c2330; --muted: #69707d;
+  --critical: #d4373e; --warning: #c77d00; --unknown: #6c7a93; --ok: #2c8a4b;
+  --border: #e3e6ea;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14171c; --card: #1d222a; --text: #e8eaee; --muted: #9aa3b0;
+    --critical: #ff5d64; --warning: #ffb454; --unknown: #8fa1bd; --ok: #4ecb71;
+    --border: #2a313b;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+main { max-width: 880px; margin: 0 auto; padding: 24px 16px 64px; }
+a { color: inherit; }
+header.overall {
+  border-radius: 12px; padding: 20px 24px; margin-bottom: 20px;
+  background: var(--card); border: 1px solid var(--border);
+  border-left: 8px solid var(--accent, var(--unknown));
+}
+header.overall h1 { margin: 0 0 2px; font-size: 1.15rem; font-weight: 600; }
+header.overall .status { font-size: 1.7rem; font-weight: 700; }
+header.overall .meta { color: var(--muted); font-size: 0.85rem; margin-top: 4px; }
+.counts { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+.pill {
+  border-radius: 999px; padding: 4px 14px; font-size: 0.9rem; font-weight: 600;
+  background: var(--card); border: 1px solid var(--border);
+}
+.pill b { font-size: 1.05rem; }
+.card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+  padding: 16px 20px; margin-bottom: 16px;
+}
+.card h2 { margin: 0 0 10px; font-size: 1.02rem; }
+.check { border-left: 5px solid var(--accent, var(--border)); padding-left: 14px; margin: 14px 0; }
+.check .name { font-weight: 650; }
+.check .summary { margin: 2px 0; }
+.check .action { color: var(--muted); font-size: 0.9rem; }
+.check details { margin-top: 6px; }
+.check summary { cursor: pointer; color: var(--muted); font-size: 0.85rem; }
+.check pre {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+  padding: 10px; overflow-x: auto; font-size: 0.8rem;
+}
+.crit { --accent: var(--critical); } .warn { --accent: var(--warning); }
+.unk { --accent: var(--unknown); } .okc { --accent: var(--ok); }
+ul.oklist { margin: 0; padding-left: 22px; }
+ul.oklist li { margin: 3px 0; }
+ul.changes { margin: 0; padding-left: 22px; }
+ul.changes li { margin: 5px 0; }
+.briefing p { margin: 8px 0; }
+table.history { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+table.history th, table.history td {
+  text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border);
+}
+table.history th { color: var(--muted); font-weight: 600; }
+table.history tr.current td { font-weight: 650; }
+footer { color: var(--muted); font-size: 0.8rem; margin-top: 28px; text-align: center; }
+"""
+
+_STATUS_CLASS = {"critical": "crit", "warning": "warn", "unknown": "unk", "ok": "okc"}
+
+
+def checks_from_snapshot(snapshot: dict[str, Any]) -> list[HealthCheck]:
+    checks: list[HealthCheck] = []
+    for item in snapshot.get("checks", []):
+        if not isinstance(item, dict):
+            continue
+        checks.append(
+            HealthCheck(
+                id=str(item.get("id", "")),
+                name=str(item.get("name", item.get("id", "unnamed"))),
+                status=item.get("status", "unknown"),
+                summary=str(item.get("summary", "")),
+                evidence=item.get("evidence") or {},
+                recommended_action=str(item.get("recommended_action", "")),
+            )
+        )
+    return checks
+
+
+def overall_of(checks: list[HealthCheck]) -> str:
+    statuses = {check.status for check in checks}
+    for status in STATUS_ORDER[:-1]:
+        if status in statuses:
+            return status
+    return "ok" if checks else "unknown"
+
+
+def _fmt_time(created_at: str) -> str:
+    try:
+        return datetime.fromisoformat(created_at).strftime("%Y-%m-%d %H:%M UTC")
+    except ValueError:
+        return html.escape(created_at)
+
+
+def _counts(checks: list[HealthCheck]) -> dict[str, int]:
+    return {status: sum(1 for c in checks if c.status == status) for status in STATUS_ORDER}
+
+
+def _render_check(check: HealthCheck) -> str:
+    evidence = html.escape(json.dumps(check.evidence, indent=2, sort_keys=True, default=str))
+    icon, _ = STATUS_META.get(check.status, ("•", check.status))
+    return (
+        f'<div class="check {_STATUS_CLASS.get(check.status, "unk")}">'
+        f'<div class="name">{icon} {html.escape(check.name)}</div>'
+        f'<div class="summary">{html.escape(check.summary)}</div>'
+        f'<div class="action">Safest next step: {html.escape(check.recommended_action)}</div>'
+        f"<details><summary>Evidence</summary><pre>{evidence}</pre></details>"
+        f"</div>"
+    )
+
+
+def _render_changes(diff: ScanDiff) -> str:
+    if not diff.has_previous:
+        return '<div class="card"><h2>What changed</h2><p>First recorded scan — nothing to compare against yet.</p></div>'
+    if not diff.has_changes:
+        return (
+            f'<div class="card"><h2>What changed</h2>'
+            f"<p>No changes since scan #{diff.previous_scan_id}. "
+            f"All {diff.unchanged_count} checks have the same status as before.</p></div>"
+        )
+    items: list[str] = []
+    for change in diff.regressions:
+        items.append(
+            f"<li>📉 <b>{html.escape(change['name'])}</b>: {change['previous_status']} → "
+            f"<b>{change['current_status']}</b> — {html.escape(change['summary'])}</li>"
+        )
+    for change in diff.improvements:
+        items.append(
+            f"<li>📈 <b>{html.escape(change['name'])}</b>: {change['previous_status']} → "
+            f"<b>{change['current_status']}</b></li>"
+        )
+    for check in diff.new_checks:
+        icon, _ = STATUS_META.get(check["status"], ("•", ""))
+        items.append(f"<li>🆕 {icon} <b>{html.escape(check['name'])}</b>: new check, currently {check['status']}</li>")
+    for check in diff.removed_checks:
+        items.append(f"<li>➖ <b>{html.escape(check['name'])}</b>: no longer checked</li>")
+    unchanged = (
+        f"<p>{diff.unchanged_count} other checks unchanged (vs scan #{diff.previous_scan_id}).</p>"
+        if diff.unchanged_count
+        else ""
+    )
+    return f'<div class="card"><h2>What changed</h2><ul class="changes">{"".join(items)}</ul>{unchanged}</div>'
+
+
+def _render_briefing(narrative: str) -> str:
+    paragraphs = "".join(f"<p>{html.escape(p.strip())}</p>" for p in narrative.split("\n\n") if p.strip())
+    return f'<div class="card briefing"><h2>Briefing</h2>{paragraphs}</div>'
+
+
+def _render_groups(checks: list[HealthCheck]) -> str:
+    sections: list[str] = []
+    titles = {
+        "critical": "Critical issues — check first",
+        "warning": "Warnings — likely needs attention",
+        "unknown": "Unknown — not enough signal",
+        "ok": "Healthy checks",
+    }
+    for status in STATUS_ORDER:
+        group = sorted((c for c in checks if c.status == status), key=lambda c: c.name.lower())
+        if not group:
+            continue
+        if status == "ok":
+            items = "".join(
+                f"<li>✅ <b>{html.escape(c.name)}</b>: {html.escape(c.summary)}</li>" for c in group
+            )
+            sections.append(f'<div class="card"><h2>{titles[status]} ({len(group)})</h2><ul class="oklist">{items}</ul></div>')
+        else:
+            body = "".join(_render_check(check) for check in group)
+            sections.append(f'<div class="card"><h2>{titles[status]} ({len(group)})</h2>{body}</div>')
+    return "".join(sections)
+
+
+def _render_history(history: list[tuple[int, str, dict[str, Any]]], current_id: int | None) -> str:
+    if not history:
+        return ""
+    rows: list[str] = []
+    for scan_id, created_at, snapshot in history:
+        checks = checks_from_snapshot(snapshot)
+        overall = overall_of(checks)
+        icon, label = STATUS_META.get(overall, ("•", overall))
+        counts = _counts(checks)
+        current = ' class="current"' if scan_id == current_id else ""
+        rows.append(
+            f"<tr{current}><td><a href=\"/scan/{scan_id}\">#{scan_id}</a></td>"
+            f"<td>{_fmt_time(created_at)}</td><td>{icon} {label}</td>"
+            f"<td>{counts['critical']} / {counts['warning']} / {counts['unknown']} / {counts['ok']}</td></tr>"
+        )
+    return (
+        '<div class="card"><h2>Scan history</h2><table class="history">'
+        "<tr><th>Scan</th><th>Time</th><th>Status</th><th>crit / warn / unk / ok</th></tr>"
+        f"{''.join(rows)}</table></div>"
+    )
+
+
+def render_scan_page(
+    scan: tuple[int, str, dict[str, Any]],
+    diff: ScanDiff,
+    history: list[tuple[int, str, dict[str, Any]]],
+    refresh_seconds: int = 60,
+) -> str:
+    scan_id, created_at, snapshot = scan
+    checks = checks_from_snapshot(snapshot)
+    overall = overall_of(checks)
+    icon, label = STATUS_META.get(overall, ("•", overall))
+    counts = _counts(checks)
+    narrative = snapshot.get("narrative") or ""
+    app_name = html.escape(str(snapshot.get("app", "Homelab Guardian")))
+
+    pills = "".join(
+        f'<span class="pill {_STATUS_CLASS[s]}">{STATUS_META[s][0]} <b>{counts[s]}</b> {STATUS_META[s][1].lower()}</span>'
+        for s in STATUS_ORDER
+    )
+    refresh = f'<meta http-equiv="refresh" content="{int(refresh_seconds)}">' if refresh_seconds else ""
+
+    return f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">{refresh}
+<title>{app_name} — {label}</title><style>{PAGE_STYLE}</style></head>
+<body><main>
+<header class="overall {_STATUS_CLASS.get(overall, 'unk')}">
+<h1>{app_name}</h1>
+<div class="status">{icon} {label.upper()}</div>
+<div class="meta">Scan #{scan_id} · {_fmt_time(created_at)}{' · auto-refreshes every %ds' % refresh_seconds if refresh_seconds else ''}</div>
+</header>
+<div class="counts">{pills}</div>
+{_render_briefing(narrative) if narrative else ''}
+{_render_changes(diff)}
+{_render_groups(checks)}
+{_render_history(history, scan_id)}
+<footer>Homelab Guardian — read-only view · <a href="/">latest</a></footer>
+</main></body></html>"""
+
+
+def render_empty_page() -> str:
+    return (
+        f"<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>Homelab Guardian</title>"
+        f"<style>{PAGE_STYLE}</style></head><body><main><div class=\"card\"><h2>No scans yet</h2>"
+        f"<p>Run <code>guardian --config config.yaml</code> to produce the first scan, "
+        f"or start the server with <code>--interval</code> to scan continuously.</p></div></main></body></html>"
+    )
+
+
+class GuardianRequestHandler(BaseHTTPRequestHandler):
+    database_path: str = "data/guardian.sqlite"
+    refresh_seconds: int = 60
+    history_limit: int = 30
+
+    # quiet default request logging; the scan loop output matters more
+    def log_message(self, format: str, *args: Any) -> None:  # noqa: A002
+        pass
+
+    def _send(self, body: str, status: int = 200, content_type: str = "text/html; charset=utf-8") -> None:
+        payload = body.encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(payload)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(payload)
+
+    def do_GET(self) -> None:  # noqa: N802
+        path = urlparse(self.path).path
+        if path == "/healthz":
+            self._send("ok", content_type="text/plain; charset=utf-8")
+            return
+        if path == "/":
+            self._render_scan(None)
+            return
+        if path.startswith("/scan/"):
+            try:
+                self._render_scan(int(path.removeprefix("/scan/")))
+            except ValueError:
+                self._send("not found", status=404, content_type="text/plain; charset=utf-8")
+            return
+        self._send("not found", status=404, content_type="text/plain; charset=utf-8")
+
+    def _render_scan(self, scan_id: int | None) -> None:
+        conn = db.connect(self.database_path)
+        try:
+            scan = db.load_latest_scan(conn) if scan_id is None else db.load_scan(conn, scan_id)
+            if scan is None:
+                if scan_id is None:
+                    self._send(render_empty_page())
+                else:
+                    self._send("scan not found", status=404, content_type="text/plain; charset=utf-8")
+                return
+            previous = db.load_scan_before(conn, scan[0])
+            checks = checks_from_snapshot(scan[2])
+            if previous is not None:
+                diff = diff_scans(previous[2], checks, previous_scan_id=previous[0], previous_created_at=previous[1])
+            else:
+                diff = diff_scans(None, checks)
+            history = db.list_scans(conn, limit=self.history_limit)
+        finally:
+            conn.close()
+        # only the live view auto-refreshes; historical scans are static
+        refresh = self.refresh_seconds if scan_id is None else 0
+        self._send(render_scan_page(scan, diff, history, refresh_seconds=refresh))
+
+
+def serve(
+    config: dict[str, Any],
+    host: str = "127.0.0.1",
+    port: int = 8674,
+    scan_interval: int = 0,
+    scan_loop: Any = None,
+) -> int:
+    database_path = config.get("app", {}).get("database_path", "data/guardian.sqlite")
+
+    handler = type(
+        "BoundGuardianHandler",
+        (GuardianRequestHandler,),
+        {"database_path": database_path},
+    )
+
+    if scan_interval > 0 and scan_loop is not None:
+        worker = threading.Thread(target=scan_loop, daemon=True, name="guardian-scan-loop")
+        worker.start()
+        print(f"Background scans every {scan_interval} seconds.")
+
+    server = ThreadingHTTPServer((host, port), handler)
+    shown_host = "localhost" if host in {"127.0.0.1", "::1"} else host
+    print(f"Guardian web view on http://{shown_host}:{port} (read-only). Press Ctrl+C to stop.")
+    if host == "0.0.0.0":
+        print("Listening on all interfaces — anyone on your network can view reports.")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("Stopped.")
+    finally:
+        server.server_close()
+    return 0

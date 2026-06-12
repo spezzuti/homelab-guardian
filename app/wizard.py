@@ -344,6 +344,6 @@ def run_init(output_path: str = "config.yaml", force: bool = False, discover_net
     print("Next steps:")
     print(f"  1. guardian doctor --config {output}    # preflight check")
     print(f"  2. guardian --config {output}           # first scan")
-    print(f"  3. guardian --config {output} --interval 900   # keep watching")
-    print("Reports land in reports/latest.md.")
+    print(f"  3. guardian serve --config {output} --interval 900   # web view + recurring scans")
+    print("Reports land in reports/latest.md and at http://localhost:8674 while serving.")
     return 0
