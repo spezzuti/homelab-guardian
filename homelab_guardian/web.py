@@ -325,13 +325,14 @@ def _render_groups(checks: list[HealthCheck]) -> str:
     for check in active:
         grouped.setdefault(effective_group(check), []).append(check)
 
-    ordered = sorted(
-        grouped.items(),
-        key=lambda kv: (_SEVERITY[_worst(kv[1])], kv[0].lower()),
-    )
+    problem_groups = [(n, m) for n, m in grouped.items() if _worst(m) != "ok"]
+    healthy_groups = [(n, m) for n, m in grouped.items() if _worst(m) == "ok"]
 
-    cards: list[str] = []
-    for name, members in ordered:
+    sections: list[str] = []
+
+    # Groups with something wrong: full-width roll-up cards, worst first, open.
+    problem_groups.sort(key=lambda kv: (_SEVERITY[_worst(kv[1])], kv[0].lower()))
+    for name, members in problem_groups:
         worst = _worst(members)
         counts: dict[str, int] = {}
         for check in members:
@@ -340,31 +341,43 @@ def _render_groups(checks: list[HealthCheck]) -> str:
             f"{counts[s]} {STATUS_META[s][1].lower()}" for s in STATUS_ORDER if counts.get(s)
         )
         icon, _ = STATUS_META.get(worst, ("•", worst))
-
         problems = sorted(
             (c for c in members if c.status != "ok"),
             key=lambda c: (_SEVERITY[c.status], c.name.lower()),
         )
         healthy = sorted((c for c in members if c.status == "ok"), key=lambda c: c.name.lower())
-
         body = "".join(_render_check(check) for check in problems)
         if healthy:
             items = "".join(
                 f'<li title="{html.escape(c.summary)}">✅ {html.escape(c.name)}</li>' for c in healthy
             )
             body += f'<ul class="oklist">{items}</ul>'
-
-        open_attr = " open" if worst != "ok" else ""
-        cards.append(
-            f'<details class="group {_STATUS_CLASS.get(worst, "unk")}"{open_attr}>'
+        sections.append(
+            f'<details class="group {_STATUS_CLASS.get(worst, "unk")}" open>'
             f'<summary>{icon} {html.escape(name)}'
             f'<span class="gcount">{summary_counts}</span></summary>'
             f'<div class="gbody">{body}</div></details>'
         )
 
+    # Fully-healthy groups: compact multi-column tile grid (calm + dense).
+    if healthy_groups:
+        total_ok = sum(len(m) for _, m in healthy_groups)
+        healthy_groups.sort(key=lambda kv: kv[0].lower())
+        tiles = []
+        for name, members in healthy_groups:
+            items = "".join(
+                f'<li title="{html.escape(c.summary)}">✅ {html.escape(c.name)}</li>'
+                for c in sorted(members, key=lambda c: c.name.lower())
+            )
+            tiles.append(f'<div class="tile"><h3>{html.escape(name)} ({len(members)})</h3><ul>{items}</ul></div>')
+        sections.append(
+            f'<div class="card"><h2>Healthy ({total_ok})</h2>'
+            f'<div class="tilegrid">{"".join(tiles)}</div></div>'
+        )
+
     if acked:
-        cards.append(_render_acknowledged(acked))
-    return "".join(cards)
+        sections.append(_render_acknowledged(acked))
+    return "".join(sections)
 
 
 HISTORY_VISIBLE_ROWS = 5

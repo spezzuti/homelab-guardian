@@ -79,30 +79,31 @@ def test_history_collapses_after_visible_rows():
     assert 'href="/scan/1"' in page
 
 
-def test_healthy_groups_collapse_by_default():
-    # All-ok groups render as collapsed cards (no `open` attribute) so a calm
-    # dashboard is the default; the summary still names the group.
+def test_healthy_groups_render_as_dense_tiles():
+    # All-ok groups render as compact tiles in the multi-column grid, not as
+    # full-width cards — dense and calm.
     checks = [
         HealthCheck("http_a", "Web A", "ok", "answers 200", group="Core services"),
         HealthCheck("tls_a", "Web A cert", "ok", "valid 80 days", group="Core services"),
     ]
     page = render_scan_page(_scan(1, *checks), ScanDiff(), history=[], refresh_seconds=0)
-    assert '<details class="group okc">' in page  # collapsed, not `open`
-    assert "Core services" in page
+    assert "tilegrid" in page
+    assert "Core services (2)" in page
     assert 'title="answers 200"' in page
 
 
-def test_problem_group_opens_and_sorts_first():
-    # A group with a worse check rolls up to that status, opens, and sorts
-    # ahead of a healthy group.
+def test_problem_group_card_renders_before_healthy_tiles():
+    # A group with a problem becomes a full-width open card and sorts above the
+    # healthy tile grid.
     checks = [
         HealthCheck("disk_root", "Root disk", "ok", "26% full", group="Storage"),
         HealthCheck("firewall_host", "Host firewall", "critical", "no firewall", group="Security"),
     ]
     page = render_scan_page(_scan(1, *checks), ScanDiff(), history=[], refresh_seconds=0)
     assert '<details class="group crit" open>' in page
-    # the problem (crit) group card renders before the healthy (ok) one
-    assert page.index('class="group crit"') < page.index('class="group okc"')
+    # healthy Storage group is now a tile in the grid, below the problem card
+    assert "Storage (1)" in page
+    assert page.index('class="group crit"') < page.index('<div class="tilegrid">')
 
 
 def test_group_worst_of_children_uses_explicit_group_over_id():
