@@ -8,9 +8,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 from urllib.parse import urlparse
 
-from app import db
-from app.diff import ScanDiff, diff_scans
-from app.models import HealthCheck
+from homelab_guardian import db
+from homelab_guardian.diff import ScanDiff, diff_scans
+from homelab_guardian.models import HealthCheck
 
 # Read-only web view rendered from SQLite snapshots. Stdlib http.server only:
 # no web framework dependency, no write endpoints, no JavaScript required.
@@ -75,7 +75,11 @@ header.overall .meta { color: var(--muted); font-size: 0.85rem; margin-top: 4px;
   padding: 16px 20px; margin-bottom: 16px;
 }
 .card h2 { margin: 0 0 10px; font-size: 1.02rem; }
-.check { border-left: 5px solid var(--accent, var(--border)); padding-left: 14px; margin: 14px 0; }
+.check {
+  border-left: 5px solid var(--accent, var(--border));
+  background: var(--bg); border-radius: 0 10px 10px 0;
+  padding: 10px 14px; margin: 12px 0;
+}
 .check .name { font-weight: 650; }
 .check .summary { margin: 2px 0; }
 .check .action { color: var(--muted); font-size: 0.9rem; }
@@ -87,14 +91,24 @@ header.overall .meta { color: var(--muted); font-size: 0.85rem; margin-top: 4px;
 }
 .crit { --accent: var(--critical); } .warn { --accent: var(--warning); }
 .unk { --accent: var(--unknown); } .okc { --accent: var(--ok); }
-.okgroup h3 {
-  margin: 14px 0 6px; font-size: 0.82rem; font-weight: 650;
-  color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em;
+.tilegrid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 12px; margin-top: 4px;
 }
-.okgroup:first-of-type h3 { margin-top: 4px; }
-ul.oklist { margin: 0; padding-left: 22px; }
-ul.oklist li { margin: 3px 0; break-inside: avoid; }
-@media (min-width: 700px) { ul.oklist { columns: 2; column-gap: 32px; } }
+.tile {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 10px; padding: 10px 14px; min-width: 0;
+}
+.tile h3 {
+  margin: 0 0 7px; font-size: 0.78rem; font-weight: 650;
+  color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;
+}
+.tile ul { list-style: none; margin: 0; padding: 0; }
+.tile li {
+  margin: 4px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-size: 0.92rem;
+}
+details.morehistory summary { cursor: pointer; color: var(--muted); font-size: 0.88rem; padding: 6px 0; }
 ul.changes { margin: 0; padding-left: 22px; }
 ul.changes li { margin: 5px 0; }
 .briefing p { margin: 8px 0; }
@@ -116,10 +130,13 @@ _STATUS_CLASS = {"critical": "crit", "warning": "warn", "unknown": "unk", "ok": 
 _CATEGORY_PREFIXES = [
     ("http_", "Web services"),
     ("tcp_", "TCP services"),
+    ("tls_", "Certificates"),
     ("dns_", "DNS"),
     ("ha_", "Home Assistant"),
     ("backup", "Backups"),
     ("docker", "Docker"),
+    ("systemd_", "Services"),
+    ("disk_", "Disks"),
     ("preflight_", "Preflight"),
     ("network_", "Network"),
 ]
@@ -272,17 +289,19 @@ def _render_groups(checks: list[HealthCheck]) -> str:
             by_category: dict[str, list[HealthCheck]] = {}
             for check in group:
                 by_category.setdefault(_category(check.id), []).append(check)
-            groups_html = []
+            tiles = []
             for category in sorted(by_category):
                 items = "".join(
-                    f"<li>✅ <b>{html.escape(c.name)}</b>: {html.escape(c.summary)}</li>"
+                    f'<li title="{html.escape(c.summary)}">✅ {html.escape(c.name)}</li>'
                     for c in by_category[category]
                 )
-                groups_html.append(
-                    f'<div class="okgroup"><h3>{category} ({len(by_category[category])})</h3>'
-                    f'<ul class="oklist">{items}</ul></div>'
+                tiles.append(
+                    f'<div class="tile"><h3>{category} ({len(by_category[category])})</h3><ul>{items}</ul></div>'
                 )
-            sections.append(f'<div class="card"><h2>{titles[status]} ({len(group)})</h2>{"".join(groups_html)}</div>')
+            sections.append(
+                f'<div class="card"><h2>{titles[status]} ({len(group)})</h2>'
+                f'<div class="tilegrid">{"".join(tiles)}</div></div>'
+            )
         else:
             body = "".join(_render_check(check) for check in group)
             sections.append(f'<div class="card"><h2>{titles[status]} ({len(group)})</h2>{body}</div>')
@@ -291,26 +310,37 @@ def _render_groups(checks: list[HealthCheck]) -> str:
     return "".join(sections)
 
 
+HISTORY_VISIBLE_ROWS = 5
+
+
+def _history_row(scan: tuple[int, str, dict[str, Any]], current_id: int | None) -> str:
+    scan_id, created_at, snapshot = scan
+    checks = checks_from_snapshot(snapshot)
+    overall = overall_of(checks)
+    icon, label = STATUS_META.get(overall, ("•", overall))
+    counts = _counts(checks)
+    current = ' class="current"' if scan_id == current_id else ""
+    return (
+        f"<tr{current}><td><a href=\"/scan/{scan_id}\">#{scan_id}</a></td>"
+        f"<td>{_fmt_time(created_at)}</td><td>{icon} {label}</td>"
+        f"<td>{counts['critical']} / {counts['warning']} / {counts['unknown']} / {counts['ok']}</td></tr>"
+    )
+
+
 def _render_history(history: list[tuple[int, str, dict[str, Any]]], current_id: int | None) -> str:
     if not history:
         return ""
-    rows: list[str] = []
-    for scan_id, created_at, snapshot in history:
-        checks = checks_from_snapshot(snapshot)
-        overall = overall_of(checks)
-        icon, label = STATUS_META.get(overall, ("•", overall))
-        counts = _counts(checks)
-        current = ' class="current"' if scan_id == current_id else ""
-        rows.append(
-            f"<tr{current}><td><a href=\"/scan/{scan_id}\">#{scan_id}</a></td>"
-            f"<td>{_fmt_time(created_at)}</td><td>{icon} {label}</td>"
-            f"<td>{counts['critical']} / {counts['warning']} / {counts['unknown']} / {counts['ok']}</td></tr>"
+    header = "<tr><th>Scan</th><th>Time</th><th>Status</th><th>crit / warn / unk / ok</th></tr>"
+    recent = "".join(_history_row(scan, current_id) for scan in history[:HISTORY_VISIBLE_ROWS])
+    body = f'<table class="history">{header}{recent}</table>'
+    older = history[HISTORY_VISIBLE_ROWS:]
+    if older:
+        older_rows = "".join(_history_row(scan, current_id) for scan in older)
+        body += (
+            f'<details class="morehistory"><summary>Show {len(older)} older scans</summary>'
+            f'<table class="history">{older_rows}</table></details>'
         )
-    return (
-        '<div class="card"><h2>Scan history</h2><table class="history">'
-        "<tr><th>Scan</th><th>Time</th><th>Status</th><th>crit / warn / unk / ok</th></tr>"
-        f"{''.join(rows)}</table></div>"
-    )
+    return f'<div class="card"><h2>Scan history</h2>{body}</div>'
 
 
 def render_scan_page(

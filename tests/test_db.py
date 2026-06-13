@@ -1,4 +1,4 @@
-from app import db
+from homelab_guardian import db
 
 
 def test_save_and_load_roundtrip(tmp_path):

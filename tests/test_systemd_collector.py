@@ -1,7 +1,7 @@
 import json
 import subprocess
 
-from app.collectors import systemd_collector
+from homelab_guardian.collectors import systemd_collector
 
 
 def _completed(stdout: str = "[]", returncode: int = 0, stderr: str = "") -> subprocess.CompletedProcess:

@@ -1,4 +1,4 @@
-from app.collectors import network_collector
+from homelab_guardian.collectors import network_collector
 
 
 def test_no_checks_configured_reports_unknown():

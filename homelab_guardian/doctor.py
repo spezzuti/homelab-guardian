@@ -6,10 +6,10 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from app.config import load_config
-from app.models import HealthCheck
-from app.reports.markdown_report import render
-from app.secrets import SecretStore, build_store
+from homelab_guardian.config import load_config
+from homelab_guardian.models import HealthCheck
+from homelab_guardian.reports.markdown_report import render
+from homelab_guardian.secrets import SecretStore, build_store
 
 
 def _socket_path(socket_url: str) -> Path | None:

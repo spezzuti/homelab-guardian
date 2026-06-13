@@ -5,8 +5,8 @@ from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
-from app.diff import ScanDiff
-from app.models import HealthCheck
+from homelab_guardian.diff import ScanDiff
+from homelab_guardian.models import HealthCheck
 
 STATUS_ORDER = {"critical": 0, "warning": 1, "unknown": 2, "ok": 3}
 STATUS_ICON = {"critical": "🚨", "warning": "⚠️", "unknown": "❔", "ok": "✅"}

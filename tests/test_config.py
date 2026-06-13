@@ -1,6 +1,6 @@
 import pytest
 
-from app.config import deep_merge, load_config
+from homelab_guardian.config import deep_merge, load_config
 
 
 def test_missing_file_raises(tmp_path):

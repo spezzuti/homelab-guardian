@@ -1,7 +1,7 @@
 import os
 import time
 
-from app.collectors import backup_collector
+from homelab_guardian.collectors import backup_collector
 
 
 def _config(path, **overrides):

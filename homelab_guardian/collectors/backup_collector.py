@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from app.models import HealthCheck
+from homelab_guardian.models import HealthCheck
 
 
 def _latest_file_mtime(path: Path) -> tuple[float | None, Path | None, int]:

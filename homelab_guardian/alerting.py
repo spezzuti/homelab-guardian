@@ -5,8 +5,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
-from app.diff import SEVERITY_RANK
-from app.models import HealthCheck
+from homelab_guardian.diff import SEVERITY_RANK
+from homelab_guardian.models import HealthCheck
 
 # Flap damping. A single blip — wifi hiccup, service restart, slow DNS —
 # should not page anyone. Each check keeps an alert state: its current

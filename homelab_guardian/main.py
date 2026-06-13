@@ -8,9 +8,9 @@ import traceback
 from pathlib import Path
 from typing import Any, Callable
 
-from app import db
-from app.alerting import update_alert_states
-from app.collectors import (
+from homelab_guardian import db
+from homelab_guardian.alerting import update_alert_states
+from homelab_guardian.collectors import (
     backup_collector,
     disk_collector,
     docker_collector,
@@ -18,14 +18,14 @@ from app.collectors import (
     network_collector,
     systemd_collector,
 )
-from app.config import load_config
-from app.diff import diff_scans
-from app.doctor import run_doctor
-from app.explain import explain
-from app.models import HealthCheck
-from app.notifications import telegram_notifier
-from app.reports.markdown_report import write_report
-from app.secrets import SecretStore, build_store
+from homelab_guardian.config import load_config
+from homelab_guardian.diff import diff_scans
+from homelab_guardian.doctor import run_doctor
+from homelab_guardian.explain import explain
+from homelab_guardian.models import HealthCheck
+from homelab_guardian.notifications import telegram_notifier
+from homelab_guardian.reports.markdown_report import write_report
+from homelab_guardian.secrets import SecretStore, build_store
 
 CollectorFn = Callable[..., list[HealthCheck]]
 
@@ -258,7 +258,7 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.command == "init":
-        from app.wizard import run_init
+        from homelab_guardian.wizard import run_init
 
         return run_init(args.config, force=args.force, discover_network=False if args.no_discover else None)
 
@@ -268,7 +268,7 @@ def main() -> int:
     if args.doctor or args.command == "doctor":
         return run_doctor(args.config)
     if args.command == "serve":
-        from app.web import serve
+        from homelab_guardian.web import serve
 
         return serve(
             load_config(args.config),

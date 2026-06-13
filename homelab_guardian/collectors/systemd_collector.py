@@ -4,7 +4,7 @@ import json
 import subprocess
 from typing import Any, Callable
 
-from app.models import HealthCheck
+from homelab_guardian.models import HealthCheck
 
 # Read-only systemd inspection via systemctl. Two layers:
 #   1. A sweep per bus (system, optionally user) for failed units and

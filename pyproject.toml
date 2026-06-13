@@ -8,6 +8,7 @@ version = "0.2.0"
 description = "Local-first, read-only homelab health reports in plain English"
 readme = "README.md"
 requires-python = ">=3.10"
+license = {text = "AGPL-3.0-or-later"}
 dependencies = [
     "PyYAML>=6.0.1",
     "requests>=2.31.0",
@@ -18,7 +19,7 @@ dependencies = [
 dev = ["pytest>=8.0.0"]
 
 [project.scripts]
-guardian = "app.main:main"
+guardian = "homelab_guardian.main:main"
 
 [tool.setuptools.packages.find]
-include = ["app*"]
+include = ["homelab_guardian*"]

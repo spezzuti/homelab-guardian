@@ -1,4 +1,4 @@
-from app import db
+from homelab_guardian import db
 
 
 def test_load_scan_and_before(tmp_path):

@@ -4,7 +4,7 @@ import os
 import shutil
 from typing import Any
 
-from app.models import HealthCheck
+from homelab_guardian.models import HealthCheck
 
 # Disk-full is the most common silent homelab failure: backups stop, databases
 # corrupt, containers crash-loop, all without a single alert from the service

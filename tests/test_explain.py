@@ -1,8 +1,8 @@
 import json
 
-from app.diff import ScanDiff
-from app.explain import build_prompt, explain
-from app.models import HealthCheck
+from homelab_guardian.diff import ScanDiff
+from homelab_guardian.explain import build_prompt, explain
+from homelab_guardian.models import HealthCheck
 
 
 def _check(check_id: str, status: str = "ok", summary: str = "fine") -> HealthCheck:

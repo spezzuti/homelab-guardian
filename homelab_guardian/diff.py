@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from app.models import HealthCheck
+from homelab_guardian.models import HealthCheck
 
 # Severity for change direction: moving up this scale is a regression,
 # moving down is an improvement. "unknown" sits between ok and warning

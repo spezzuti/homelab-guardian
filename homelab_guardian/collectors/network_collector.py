@@ -8,8 +8,8 @@ from typing import Any
 import requests
 import urllib3
 
-from app.models import HealthCheck
-from app.tls import fetch_cert_expiry
+from homelab_guardian.models import HealthCheck
+from homelab_guardian.tls import fetch_cert_expiry
 
 
 def _expected_status(item: dict[str, Any]) -> set[int]:

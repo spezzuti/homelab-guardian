@@ -1,11 +1,11 @@
 from datetime import datetime, timedelta, timezone
 
-from app import db
-from app.models import HealthCheck
-from app.notifications.telegram_notifier import build_message
-from app.reports.markdown_report import overall_status, render
-from app.web import overall_of, render_scan_page
-from app.diff import ScanDiff
+from homelab_guardian import db
+from homelab_guardian.models import HealthCheck
+from homelab_guardian.notifications.telegram_notifier import build_message
+from homelab_guardian.reports.markdown_report import overall_status, render
+from homelab_guardian.web import overall_of, render_scan_page
+from homelab_guardian.diff import ScanDiff
 
 
 def _check(check_id: str, status: str = "ok", acked: bool = False, note: str = "") -> HealthCheck:
@@ -66,7 +66,7 @@ def test_report_moves_acked_to_muted_section():
 
 
 def test_telegram_message_excludes_acked():
-    from app.alerting import AlertEvents
+    from homelab_guardian.alerting import AlertEvents
 
     checks = [_check("noisy", "critical", acked=True), _check("fine", "ok")]
     message = build_message(checks, AlertEvents(), scan_id=1)

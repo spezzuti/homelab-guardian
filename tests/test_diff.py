@@ -1,5 +1,5 @@
-from app.diff import diff_scans
-from app.models import HealthCheck
+from homelab_guardian.diff import diff_scans
+from homelab_guardian.models import HealthCheck
 
 
 def _check(check_id: str, status: str = "ok", name: str | None = None) -> HealthCheck:

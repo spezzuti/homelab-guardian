@@ -1,6 +1,6 @@
-from app import db
-from app.alerting import update_alert_states
-from app.models import HealthCheck
+from homelab_guardian import db
+from homelab_guardian.alerting import update_alert_states
+from homelab_guardian.models import HealthCheck
 
 
 def _check(check_id: str, status: str = "ok", acked: bool = False) -> HealthCheck:

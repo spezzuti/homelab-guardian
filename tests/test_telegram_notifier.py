@@ -1,6 +1,6 @@
-from app.alerting import AlertEvents
-from app.models import HealthCheck
-from app.notifications.telegram_notifier import TELEGRAM_MESSAGE_LIMIT, build_message, should_notify
+from homelab_guardian.alerting import AlertEvents
+from homelab_guardian.models import HealthCheck
+from homelab_guardian.notifications.telegram_notifier import TELEGRAM_MESSAGE_LIMIT, build_message, should_notify
 
 
 def _check(check_id: str, status: str = "ok", summary: str = "fine") -> HealthCheck:

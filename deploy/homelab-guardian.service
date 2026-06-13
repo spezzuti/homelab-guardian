@@ -23,7 +23,7 @@ Wants=network-online.target
 WorkingDirectory=%h/homelab-guardian
 Environment=PYTHONUNBUFFERED=1
 # EnvironmentFile=%h/homelab-guardian/.env
-ExecStart=%h/homelab-guardian/.venv/bin/python -m app.main --config config.yaml --interval 900
+ExecStart=%h/homelab-guardian/.venv/bin/python -m homelab_guardian.main --config config.yaml --interval 900
 Restart=on-failure
 RestartSec=30
 

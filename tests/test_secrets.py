@@ -3,7 +3,7 @@ import subprocess
 
 import pytest
 
-from app.secrets import BitwardenSecretStore, EnvSecretStore, build_store
+from homelab_guardian.secrets import BitwardenSecretStore, EnvSecretStore, build_store
 
 
 def _completed(stdout: str = "[]", returncode: int = 0, stderr: str = "") -> subprocess.CompletedProcess:

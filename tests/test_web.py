@@ -1,6 +1,6 @@
-from app.diff import ScanDiff, diff_scans
-from app.models import HealthCheck
-from app.web import checks_from_snapshot, overall_of, render_empty_page, render_scan_page
+from homelab_guardian.diff import ScanDiff, diff_scans
+from homelab_guardian.models import HealthCheck
+from homelab_guardian.web import checks_from_snapshot, overall_of, render_empty_page, render_scan_page
 
 
 def _check(check_id: str, status: str = "ok", summary: str = "fine") -> HealthCheck:
@@ -69,3 +69,22 @@ def test_page_renders_diff_changes():
 def test_empty_page_mentions_first_scan():
     page = render_empty_page()
     assert "No scans yet" in page
+
+
+def test_history_collapses_after_visible_rows():
+    scans = [_scan(i, _check("a")) for i in range(20, 0, -1)]
+    page = render_scan_page(scans[0], ScanDiff(), history=scans, refresh_seconds=0)
+    assert "Show 15 older scans" in page
+    assert 'href="/scan/20"' in page
+    assert 'href="/scan/1"' in page
+
+
+def test_ok_checks_render_as_category_tiles():
+    checks = [
+        HealthCheck("http_a", "Web A", "ok", "answers 200"),
+        HealthCheck("disk_root", "Root disk", "ok", "26% full"),
+    ]
+    page = render_scan_page(_scan(1, *checks), ScanDiff(), history=[], refresh_seconds=0)
+    assert "tilegrid" in page
+    assert "Web services (1)" in page
+    assert 'title="answers 200"' in page

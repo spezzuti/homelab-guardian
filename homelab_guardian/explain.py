@@ -6,9 +6,9 @@ from typing import Any
 
 import requests
 
-from app.diff import ScanDiff
-from app.models import HealthCheck
-from app.reports.markdown_report import overall_status
+from homelab_guardian.diff import ScanDiff
+from homelab_guardian.models import HealthCheck
+from homelab_guardian.reports.markdown_report import overall_status
 
 DEFAULT_API_KEY_ENV = "GUARDIAN_AI_API_KEY"
 

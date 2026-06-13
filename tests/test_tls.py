@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from app.tls import parse_der_validity
+from homelab_guardian.tls import parse_der_validity
 
 
 def _tlv(tag: int, value: bytes) -> bytes:

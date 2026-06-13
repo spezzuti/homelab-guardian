@@ -6,9 +6,9 @@ from typing import Any
 
 import requests
 
-from app.alerting import AlertEvents
-from app.models import HealthCheck
-from app.reports.markdown_report import STATUS_ICON, overall_status
+from homelab_guardian.alerting import AlertEvents
+from homelab_guardian.models import HealthCheck
+from homelab_guardian.reports.markdown_report import STATUS_ICON, overall_status
 
 TELEGRAM_MESSAGE_LIMIT = 4096
 DEFAULT_BOT_TOKEN_ENV = "TELEGRAM_BOT_TOKEN"

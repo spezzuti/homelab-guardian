@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-from app.models import HealthCheck, HealthStatus
+from homelab_guardian.models import HealthCheck, HealthStatus
 
 
 def _as_mapping(value: Any) -> dict[str, Any]:

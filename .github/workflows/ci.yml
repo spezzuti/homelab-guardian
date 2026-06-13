@@ -20,4 +20,4 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - run: python -m pytest tests/ -v
       - name: Smoke-test example config scan
-        run: python -m app.main --config config.example.yaml
+        run: python -m homelab_guardian.main --config config.example.yaml

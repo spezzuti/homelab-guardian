@@ -1,4 +1,4 @@
-from app.collectors import disk_collector
+from homelab_guardian.collectors import disk_collector
 
 
 def test_default_path_when_unconfigured():

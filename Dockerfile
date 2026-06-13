@@ -8,9 +8,9 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app ./app
+COPY homelab_guardian ./homelab_guardian
 COPY config.example.yaml ./config.example.yaml
 
 RUN mkdir -p /app/data /app/reports
 
-CMD ["python", "-m", "app.main", "--config", "/app/config.yaml"]
+CMD ["python", "-m", "homelab_guardian.main", "--config", "/app/config.yaml"]

@@ -1,6 +1,6 @@
 import os
 
-from app.main import load_dotenv
+from homelab_guardian.main import load_dotenv
 
 
 def test_missing_file_is_noop(tmp_path):

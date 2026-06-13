@@ -5,7 +5,7 @@ from typing import Any
 
 import requests
 
-from app.models import HealthCheck, HealthStatus
+from homelab_guardian.models import HealthCheck, HealthStatus
 
 READ_ONLY_STATES_ENDPOINT = "/api/states"
 DEFAULT_TOKEN_ENV = "HOMEASSISTANT_TOKEN"

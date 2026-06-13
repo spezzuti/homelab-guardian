@@ -1,6 +1,6 @@
 import yaml
 
-from app.wizard import DiscoveredService, build_config, discover, render_config_yaml, subnet_hosts
+from homelab_guardian.wizard import DiscoveredService, build_config, discover, render_config_yaml, subnet_hosts
 
 
 def _svc(ip: str, port: int, label: str, scheme: str) -> DiscoveredService:

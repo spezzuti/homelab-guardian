@@ -73,25 +73,25 @@ Use this mode for development or for hosts where Python already has access to th
 python -m venv .venv
 . .venv/bin/activate
 pip install -r requirements.txt
-python -m app.main --config config.yaml
+python -m homelab_guardian.main --config config.yaml
 ```
 
 Safe example run without private services:
 
 ```bash
-python -m app.main --config config.example.yaml
+python -m homelab_guardian.main --config config.example.yaml
 ```
 
 Preflight check:
 
 ```bash
-python -m app.main doctor --config config.yaml
+python -m homelab_guardian.main doctor --config config.yaml
 ```
 
 Equivalent form:
 
 ```bash
-python -m app.main --config config.yaml --doctor
+python -m homelab_guardian.main --config config.yaml --doctor
 ```
 
 ## Prebuilt Docker image
@@ -155,7 +155,7 @@ If `/var/run/docker.sock` is missing:
 
 Safest next step:
 
-1. Run `python -m app.main doctor --config config.yaml`.
+1. Run `python -m homelab_guardian.main doctor --config config.yaml`.
 2. Confirm the host actually runs Docker.
 3. If running in Docker Compose, confirm the socket mount exists.
 4. If you do not want Docker inventory on this machine, disable `collectors.docker.enabled`.
@@ -269,7 +269,7 @@ Safe setup for local dogfood:
 4. Run a report:
 
    ```bash
-   python -m app.main --config config.yaml
+   python -m homelab_guardian.main --config config.yaml
    ```
 
 5. If running through Docker Compose, use the same ignored `.env` file and `config.yaml`:
@@ -337,7 +337,7 @@ collectors:
 Then run:
 
 ```bash
-python -m app.main --config config.yaml
+python -m homelab_guardian.main --config config.yaml
 ```
 
 Expected result: the dummy backup check reports `ok` while the marker file is fresh. To test stale behavior safely, change `max_age_days` to `0` or adjust only files inside `/tmp/homelab-guardian-backup-dogfood`. Never commit `config.yaml`, generated reports, database files, or the dummy runtime folder.
@@ -361,7 +361,7 @@ JavaScript, no write endpoints; binds to localhost unless you say otherwise.
 Guardian runs once by default. For continuous monitoring, pass `--interval`:
 
 ```bash
-python -m app.main --config config.yaml --interval 900
+python -m homelab_guardian.main --config config.yaml --interval 900
 ```
 
 This repeats the scan every 900 seconds. A failed scan is logged and the loop
@@ -397,12 +397,12 @@ secrets:
     project_id: "" # optional: restrict to one project
 ```
 
-`python -m app.main doctor` verifies the provider end-to-end and reports how
+`python -m homelab_guardian.main doctor` verifies the provider end-to-end and reports how
 many secrets are readable. The provider interface is intentionally small, so
 additional backends (Vault, 1Password, Infisical) can be added without
 touching collectors.
 
-Alternative: `bws run -- python -m app.main --config config.yaml` injects all
+Alternative: `bws run -- python -m homelab_guardian.main --config config.yaml` injects all
 secrets as process environment variables without any Guardian configuration.
 
 ## AI briefing — bring your own model

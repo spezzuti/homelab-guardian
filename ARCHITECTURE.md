@@ -5,7 +5,7 @@
 Homelab Guardian is a small Python CLI application.
 
 ```text
-app/
+homelab_guardian/
   main.py                  CLI entry point
   config.py                YAML config loading and defaults
   db.py                    SQLite connection and snapshot schema helpers
@@ -63,7 +63,7 @@ repo checkout
 The container runs the same CLI entry point:
 
 ```text
-python -m app.main --config /app/config.yaml
+python -m homelab_guardian.main --config /app/config.yaml
 ```
 
 ### Direct socket mode

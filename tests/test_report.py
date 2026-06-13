@@ -1,6 +1,6 @@
-from app.diff import ScanDiff, diff_scans
-from app.models import HealthCheck
-from app.reports.markdown_report import overall_status, render
+from homelab_guardian.diff import ScanDiff, diff_scans
+from homelab_guardian.models import HealthCheck
+from homelab_guardian.reports.markdown_report import overall_status, render
 
 
 def _check(check_id: str, status: str = "ok", summary: str = "fine") -> HealthCheck:
