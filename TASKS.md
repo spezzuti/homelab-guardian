@@ -76,6 +76,15 @@
 - [ ] Add Docker image build verification on a Docker host
 - [x] Add CI
 
+## Sprint 7 — reliability quartet (2026-06-13)
+
+- [x] Disk space collector (thresholds, defaults to the system drive)
+- [x] TLS certificate expiry checks incl. self-signed (dependency-free DER
+      validity parse), validated live against LE and Proxmox certs
+- [x] Snapshot retention pruning (app.retention_days, default 60)
+- [x] Flap damping: per-check alert state machine, confirm_scans gating,
+      symmetric recovery confirmation, ack-aware
+
 ## Sprint 6 — Docker validation, GHCR, systemd collector (2026-06-13)
 
 - [x] Real Docker host test with direct socket mode (Marcus, Docker 29.1.3:

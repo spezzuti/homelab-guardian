@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import socket
 import warnings
+from datetime import datetime, timezone
 from typing import Any
 
 import requests
 import urllib3
 
 from app.models import HealthCheck
+from app.tls import fetch_cert_expiry
 
 
 def _expected_status(item: dict[str, Any]) -> set[int]:
@@ -128,7 +130,59 @@ def collect(config: dict[str, Any], secrets: Any = None) -> list[HealthCheck]:
                 )
             )
 
+    for item in config.get("tls_checks", []) or []:
+        host = item.get("host")
+        port = int(item.get("port", 443))
+        check_id = item.get("id") or f"tls_{host}_{port}"
+        name = item.get("name") or f"TLS certificate: {host}"
+        warn_days = float(item.get("warn_days", 14))
+        critical_days = float(item.get("critical_days", 3))
+        timeout = float(item.get("timeout", 5))
+        if not host:
+            checks.append(HealthCheck(check_id, name, "unknown", "TLS check is missing a host.", item, "Add a host or remove this check."))
+            continue
+        try:
+            not_before, not_after, verified = fetch_cert_expiry(host, port, timeout=timeout)
+        except Exception as exc:
+            checks.append(
+                HealthCheck(
+                    check_id,
+                    name,
+                    "warning",
+                    f"Could not read the TLS certificate from {host}:{port}.",
+                    {"host": host, "port": port, "error": str(exc)},
+                    "Check that the service is up and actually speaks TLS on this port.",
+                )
+            )
+            continue
+        days_left = (not_after - datetime.now(timezone.utc)).total_seconds() / 86400
+        evidence = {
+            "host": host,
+            "port": port,
+            "not_before": not_before.isoformat(),
+            "not_after": not_after.isoformat(),
+            "days_left": round(days_left, 1),
+            "chain_verified": verified,
+            "warn_days": warn_days,
+        }
+        if days_left <= 0:
+            checks.append(
+                HealthCheck(check_id, name, "critical", f"Certificate for {host}:{port} EXPIRED {abs(days_left):.1f} days ago.", evidence, "Renew the certificate now; clients are already failing or bypassing warnings.")
+            )
+        elif days_left <= critical_days:
+            checks.append(
+                HealthCheck(check_id, name, "critical", f"Certificate for {host}:{port} expires in {days_left:.1f} days.", evidence, "Renew immediately; check why auto-renewal (certbot/ACME) did not run.")
+            )
+        elif days_left <= warn_days:
+            checks.append(
+                HealthCheck(check_id, name, "warning", f"Certificate for {host}:{port} expires in {days_left:.1f} days.", evidence, "Renew soon, or verify the auto-renewal job is healthy.")
+            )
+        else:
+            checks.append(
+                HealthCheck(check_id, name, "ok", f"Certificate for {host}:{port} is valid for {days_left:.0f} more days.", evidence, "No action required.")
+            )
+
     if not checks:
-        checks.append(HealthCheck("network_not_configured", "Network checks", "unknown", "No network checks are configured.", {}, "Add dns_checks, tcp_checks, or http_checks to config.yaml if desired."))
+        checks.append(HealthCheck("network_not_configured", "Network checks", "unknown", "No network checks are configured.", {}, "Add dns_checks, tcp_checks, http_checks, or tls_checks to config.yaml if desired."))
 
     return checks

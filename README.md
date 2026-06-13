@@ -287,6 +287,7 @@ Supports:
 - DNS resolution checks
 - TCP port checks
 - HTTP status checks
+- TLS certificate expiry checks (works for self-signed certificates too)
 
 Failures include clear evidence such as hostname, port, expected status, actual status, timeout, and error text.
 
@@ -438,6 +439,27 @@ Optional and disabled by default. Configure under `notifications.telegram` in
 variables (see `config.example.yaml`). `send_on: changes` is the recommended
 mode: you only get a message when something actually changed since the last
 scan.
+
+### Disk space collector
+
+Reads usage on configured mounts (or the drive Guardian runs on when no
+paths are set) with warning/critical percent thresholds. Disk-full is the
+most common silent homelab failure; this is the check that catches it early.
+
+### systemd collector
+
+Sweeps the system (and optionally user) service manager for failed units and
+units stuck in a restart loop — the `activating/auto-restart` state that
+never reaches "failed" and hides exactly the breakage that matters. Specific
+units can be watched individually with state and restart-count evidence.
+
+## Flap damping
+
+One wifi blip should not page you. With `notifications.telegram.confirm_scans: 2`,
+a status change must hold for two consecutive scans before Guardian announces
+it — in both directions, so recoveries are confirmed too. A check that flaps
+up and down never triggers a message. The report and web view always show the
+live state; damping only gates notifications.
 
 ## Acknowledging known issues
 

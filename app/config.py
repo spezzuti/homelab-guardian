@@ -10,6 +10,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "name": "Homelab Guardian",
         "report_path": "reports/latest.md",
         "database_path": "data/guardian.sqlite",
+        "retention_days": 60,
     },
     "collectors": {
         "docker": {"enabled": False, "socket_url": "unix://var/run/docker.sock", "exclude_containers": []},
@@ -17,6 +18,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "network": {"enabled": True, "dns_checks": [], "tcp_checks": []},
         "backups": {"enabled": True, "paths": []},
         "systemd": {"enabled": False, "include_user": False, "units": []},
+        "disks": {"enabled": False, "paths": []},
     },
     "secrets": {
         "provider": "env",
@@ -39,6 +41,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "bot_token_env": "TELEGRAM_BOT_TOKEN",
             "chat_id_env": "TELEGRAM_CHAT_ID",
             "send_on": "changes",
+            "confirm_scans": 1,
         },
     },
 }

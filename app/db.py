@@ -30,8 +30,29 @@ def connect(database_path: str | Path) -> sqlite3.Connection:
         )
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS check_states (
+            check_id TEXT PRIMARY KEY,
+            status TEXT NOT NULL,
+            consecutive INTEGER NOT NULL,
+            notified_status TEXT NOT NULL DEFAULT 'ok',
+            updated_at TEXT NOT NULL
+        )
+        """
+    )
     conn.commit()
     return conn
+
+
+def prune_scans(conn: sqlite3.Connection, retention_days: float) -> int:
+    """Delete scan snapshots older than retention_days. Returns rows removed."""
+    from datetime import timedelta
+
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=retention_days)).isoformat()
+    cursor = conn.execute("DELETE FROM scans WHERE created_at < ?", (cutoff,))
+    conn.commit()
+    return cursor.rowcount
 
 
 def set_ack(conn: sqlite3.Connection, check_id: str, note: str = "", expires_at: str | None = None) -> None:

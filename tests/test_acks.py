@@ -66,8 +66,10 @@ def test_report_moves_acked_to_muted_section():
 
 
 def test_telegram_message_excludes_acked():
+    from app.alerting import AlertEvents
+
     checks = [_check("noisy", "critical", acked=True), _check("fine", "ok")]
-    message = build_message(checks, None, scan_id=1)
+    message = build_message(checks, AlertEvents(), scan_id=1)
     assert "OK" in message
     assert "Noisy" not in message
 

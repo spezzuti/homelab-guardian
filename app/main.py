@@ -9,8 +9,10 @@ from pathlib import Path
 from typing import Any, Callable
 
 from app import db
+from app.alerting import update_alert_states
 from app.collectors import (
     backup_collector,
+    disk_collector,
     docker_collector,
     homeassistant_collector,
     network_collector,
@@ -33,6 +35,7 @@ COLLECTORS: dict[str, CollectorFn] = {
     "network": network_collector.collect,
     "backups": backup_collector.collect,
     "systemd": systemd_collector.collect,
+    "disks": disk_collector.collect,
 }
 
 
@@ -102,6 +105,15 @@ def run_scan(config_path: str) -> int:
             "narrative": narrative,
         }
         scan_id = db.save_scan(conn, snapshot)
+
+        telegram_config = config.get("notifications", {}).get("telegram", {})
+        events = update_alert_states(conn, checks, int(telegram_config.get("confirm_scans", 1)))
+
+        retention_days = float(config.get("app", {}).get("retention_days", 60))
+        if retention_days > 0:
+            pruned = db.prune_scans(conn, retention_days)
+            if pruned:
+                print(f"Pruned {pruned} scan snapshot(s) older than {retention_days:g} days.")
     finally:
         conn.close()
 
@@ -110,9 +122,7 @@ def run_scan(config_path: str) -> int:
     print(f"Wrote report: {written}")
     print(f"Checks: {len(checks)}")
 
-    telegram_notifier.notify(
-        config.get("notifications", {}).get("telegram", {}), checks, diff, scan_id, secrets=secrets
-    )
+    telegram_notifier.notify(telegram_config, checks, events, scan_id, secrets=secrets)
     return 0
 
 

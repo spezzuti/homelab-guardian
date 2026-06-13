@@ -178,6 +178,8 @@ def build_config(
                 "http_checks": http_checks,
             },
             "backups": {"enabled": False, "paths": []},
+            # empty paths = watch the system drive Guardian runs on
+            "disks": {"enabled": True, "paths": []},
         },
     }
 

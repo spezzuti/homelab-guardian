@@ -4,6 +4,8 @@ app:
   report_path: reports/latest.md
   # Local SQLite snapshots are runtime output and are ignored by Git.
   database_path: data/guardian.sqlite
+  # Scan snapshots older than this are pruned automatically. 0 disables pruning.
+  retention_days: 60
 
 collectors:
   docker:
@@ -53,6 +55,14 @@ collectors:
         # (Proxmox, TrueNAS, iDRAC, etc.). The check still proves the service
         # answers HTTPS; it just skips certificate-chain validation.
         # verify_tls: false
+    # Certificate expiry monitoring. Works for self-signed certificates too.
+    # tls_checks:
+    #   - id: tls_reverse_proxy
+    #     name: Reverse proxy certificate
+    #     host: example.com
+    #     port: 443
+    #     warn_days: 14      # warning below this many days left
+    #     critical_days: 3   # critical below this many days left
 
   systemd:
     # Read-only systemd inspection on Linux hosts. Sweeps every service for
@@ -70,6 +80,18 @@ collectors:
     #   - unit: my-bot.service
     #     user: true             # a user-bus unit
     units: []
+
+  disks:
+    # Disk-full is the most common silent homelab failure. Reads usage on the
+    # configured mounts; with paths empty, watches the drive Guardian runs on.
+    enabled: true
+    paths: []
+    # paths:
+    #   - path: /
+    #     warn_percent: 85
+    #     critical_percent: 95
+    #   - path: /mnt/media
+    #     name: Media pool
 
   backups:
     enabled: true
@@ -138,6 +160,10 @@ notifications:
     chat_id_env: "TELEGRAM_CHAT_ID"
     # When to send: always | changes | problems
     #   always   — every scan
-    #   changes  — only when something changed since the previous scan
-    #   problems — only when overall status is warning or critical
+    #   changes  — when a confirmed failure or recovery transition happened
+    #   problems — only when a confirmed failure transition happened
     send_on: changes
+    # Flap damping: a status must hold for this many consecutive scans before
+    # it is announced. 1 = immediate. 2 is recommended once scans run on a
+    # schedule — one network blip will no longer page you.
+    confirm_scans: 1

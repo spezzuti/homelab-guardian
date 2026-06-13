@@ -6,7 +6,7 @@ from typing import Any
 
 import requests
 
-from app.diff import ScanDiff
+from app.alerting import AlertEvents
 from app.models import HealthCheck
 from app.reports.markdown_report import STATUS_ICON, overall_status
 
@@ -16,54 +16,26 @@ DEFAULT_CHAT_ID_ENV = "TELEGRAM_CHAT_ID"
 
 # send_on modes:
 #   always   — every scan
-#   changes  — only when something changed vs the previous scan
-#   problems — only when overall status is warning or critical
+#   changes  — when a confirmed failure OR recovery transition happened
+#   problems — only when a confirmed failure transition happened
+# Transitions are flap-damped: with notifications.telegram.confirm_scans > 1
+# a status must hold for that many consecutive scans before it is announced.
 VALID_SEND_ON = {"always", "changes", "problems"}
 
 
-def should_notify(send_on: str, overall: str, diff: ScanDiff | None) -> bool:
+def should_notify(send_on: str, events: AlertEvents) -> bool:
     if send_on == "always":
         return True
     if send_on == "problems":
-        return overall in {"warning", "critical"}
-    # "changes": first scan counts as a change worth announcing only if unhealthy.
-    if diff is None or not diff.has_previous:
-        return overall in {"warning", "critical"}
-    return diff.has_changes
+        return bool(events.confirmed)
+    return events.any
 
 
-def _change_lines(diff: ScanDiff) -> list[str]:
-    lines: list[str] = []
-    for change in diff.regressions:
-        lines.append(
-            f"📉 <b>{html.escape(change['name'])}</b>: {change['previous_status']} → "
-            f"<b>{change['current_status']}</b> — {html.escape(change['summary'])}"
-        )
-    for change in diff.improvements:
-        lines.append(
-            f"📈 <b>{html.escape(change['name'])}</b>: {change['previous_status']} → "
-            f"<b>{change['current_status']}</b>"
-        )
-    for check in diff.new_checks:
-        if check["status"] != "ok":
-            icon = STATUS_ICON.get(check["status"], "•")
-            lines.append(
-                f"🆕 {icon} <b>{html.escape(check['name'])}</b>: {check['status']} — "
-                f"{html.escape(check['summary'])}"
-            )
-    new_ok = sum(1 for check in diff.new_checks if check["status"] == "ok")
-    if new_ok:
-        lines.append(f"🆕 {new_ok} new check(s) added, all ok.")
-    for check in diff.removed_checks:
-        lines.append(f"➖ <b>{html.escape(check['name'])}</b>: no longer checked")
-    return lines
-
-
-def build_message(checks: list[HealthCheck], diff: ScanDiff | None, scan_id: int | None) -> str:
+def build_message(checks: list[HealthCheck], events: AlertEvents, scan_id: int | None) -> str:
     overall = overall_status(checks)
-    checks = [c for c in checks if not c.acknowledged]
+    visible = [c for c in checks if not c.acknowledged]
     icon = STATUS_ICON.get(overall, "•")
-    counts = {status: sum(1 for c in checks if c.status == status) for status in STATUS_ICON}
+    counts = {status: sum(1 for c in visible if c.status == status) for status in STATUS_ICON}
 
     lines = [
         f"{icon} <b>Homelab Guardian — {overall.upper()}</b>",
@@ -71,18 +43,33 @@ def build_message(checks: list[HealthCheck], diff: ScanDiff | None, scan_id: int
         f"{counts['unknown']} unknown, {counts['ok']} ok",
     ]
 
-    problems = [c for c in checks if c.status in {"critical", "warning"}]
-    if problems:
+    if events.confirmed:
         lines.append("")
-        for check in problems[:10]:
-            check_icon = STATUS_ICON.get(check.status, "•")
-            lines.append(f"{check_icon} <b>{html.escape(check.name)}</b>: {html.escape(check.summary)}")
-        if len(problems) > 10:
-            lines.append(f"…and {len(problems) - 10} more. See the full report.")
+        lines.append("<b>Now failing (confirmed):</b>")
+        for event in events.confirmed[:10]:
+            lines.append(
+                f"📉 <b>{html.escape(event['name'])}</b>: {event['previous_status']} → "
+                f"<b>{event['current_status']}</b> — {html.escape(event['summary'])}"
+            )
+        if len(events.confirmed) > 10:
+            lines.append(f"…and {len(events.confirmed) - 10} more. See the full report.")
 
-    if diff is not None and diff.has_previous and diff.has_changes:
-        lines.extend(["", "<b>What changed:</b>"])
-        lines.extend(_change_lines(diff))
+    if events.recovered:
+        lines.append("")
+        lines.append("<b>Recovered:</b>")
+        for event in events.recovered[:10]:
+            lines.append(
+                f"📈 <b>{html.escape(event['name'])}</b>: {event['previous_status']} → "
+                f"<b>{event['current_status']}</b>"
+            )
+
+    if not events.any:
+        ongoing = [c for c in visible if c.status in {"critical", "warning"}]
+        if ongoing:
+            lines.append("")
+            for check in ongoing[:5]:
+                check_icon = STATUS_ICON.get(check.status, "•")
+                lines.append(f"{check_icon} <b>{html.escape(check.name)}</b>: {html.escape(check.summary)}")
 
     message = "\n".join(lines)
     if len(message) > TELEGRAM_MESSAGE_LIMIT:
@@ -93,7 +80,7 @@ def build_message(checks: list[HealthCheck], diff: ScanDiff | None, scan_id: int
 def notify(
     config: dict[str, Any],
     checks: list[HealthCheck],
-    diff: ScanDiff | None,
+    events: AlertEvents,
     scan_id: int | None,
     secrets: Any = None,
 ) -> bool:
@@ -107,7 +94,7 @@ def notify(
         print(f"Telegram notifier: invalid send_on '{send_on}', expected one of {sorted(VALID_SEND_ON)}.")
         return False
 
-    if not should_notify(send_on, overall_status(checks), diff):
+    if not should_notify(send_on, events):
         return False
 
     def _resolve(name: str) -> str:
@@ -126,7 +113,7 @@ def notify(
             f"https://api.telegram.org/bot{token}/sendMessage",
             json={
                 "chat_id": chat_id,
-                "text": build_message(checks, diff, scan_id),
+                "text": build_message(checks, events, scan_id),
                 "parse_mode": "HTML",
                 "disable_web_page_preview": True,
             },
