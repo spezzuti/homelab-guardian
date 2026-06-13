@@ -76,6 +76,66 @@
 - [ ] Add Docker image build verification on a Docker host
 - [x] Add CI
 
+## Sprint 8 — host-hardening collectors (from Marcus audit 2026-06-13)
+
+Derived from a read-only audit of the production host. Each maps to the
+existing collector contract: a module under `homelab_guardian/collectors/`
+exposing `collect(config, secrets=None) -> list[HealthCheck]`, registered in
+`COLLECTORS` in `main.py`, gated by `enabled`, read-only, returning the
+`status/summary/evidence/recommended_action` shape. Real findings that would
+have been caught automatically are noted per item.
+
+Shipped 2026-06-13 (built + tested + dogfooded; not yet committed or deployed
+to the live Marcus service):
+
+- [x] **firewall collector** (`firewall`): root-free — reads ufw/nftables/
+      firewalld service state + the world-readable `/etc/default/ufw` policy.
+      `warning` when no firewall or default-allow; `ok` on default-deny.
+- [x] **exposed-services collector** (`exposed_services`): parses `ss -tulnH`,
+      flags non-loopback binds on sensitive ports (SMB, VNC, DB ports, ...),
+      with `allow_ports`/`sensitive_ports` overrides. *(Dogfood caught SMB +
+      VNC still LISTENING on 0.0.0.0 on Marcus even after the firewall — a
+      real, correct finding.)*
+- [x] **ssh-hardening collector** (`ssh`): root-free — resolves effective
+      sshd config from the files with sshd's own first-match-wins + drop-in
+      ordering; warns on password auth / direct root login; notes fail2ban.
+- [x] **updates collector** (`updates`): apt-check counts + security count +
+      `/var/run/reboot-required`. apt-only for now; dnf/pacman → unknown.
+- [x] **backup-health collector** (`backup_health`): `restic` mode
+      (authoritative snapshot age) + creds-free `systemd` mode (a backup
+      unit's last result/finish). *(Dogfood: restic mode reported the 1.3h-old
+      Marcus snapshot `ok`; systemd mode correctly flagged that a oneshot's
+      run-time is cleared by reboot — message now says so explicitly.)*
+- [x] **Dashboard grouping**: `group` field on `HealthCheck`; web view is now
+      group-primary — collapsible worst-of-children cards, problem groups
+      auto-open and sort first, healthy groups collapse (calm by default).
+      Network targets take a `group:` so a service's reachability + cert roll
+      up together (e.g. "Core services"). Falls back to id-category grouping.
+- [x] `config.example.yaml` entries for all five collectors + `group:` docs;
+      142 tests pass (5 new collector test files + grouping tests).
+- [x] Dogfood against Marcus (isolated /tmp copy, temp DB): firewall ok, ssh
+      ok, updates ok, backups ok (restic), Core services rolled up, exposed
+      services warned. Grouping + collectors validated end-to-end.
+- [ ] **Wizard** (`guardian init`): not yet updated to offer the five new
+      collectors interactively.
+- [ ] **Deploy to the live Marcus service** (currently runs the old code) and
+      enable the new collectors in the production config.yaml.
+- [ ] **Calm-by-default cleanup**: `backups` and `network` default to
+      `enabled: True` in `config.py` DEFAULT_CONFIG, so an unconfigured host
+      emits `*_not_configured` "unknown" tiles — noise. Either default them
+      off, or have collectors return no checks when enabled-but-empty.
+- [ ] **First-scan-after-boot is spurious** (found 2026-06-13): the service
+      runs a scan immediately on startup with no wait-for-network gate, so
+      after any reboot the first scan fires before DNS/NetworkManager is up
+      and flips every network/TLS check `ok -> warning` (even the host's own
+      loopback SSH). The dashboard then shows ~19 false warnings until the
+      next interval. Fix options: gate the first scan on a DNS/network-ready
+      probe (resolve a known host, retry with backoff) before scanning;
+      and/or have the web view de-emphasize a scan where *all* network checks
+      fail simultaneously (likely-environmental, not real). Flap damping
+      already suppresses the Telegram page; the gap is the web view + the
+      wasted scan. Add a `network-ready` preflight the scan loop awaits.
+
 ## Sprint 7 — reliability quartet (2026-06-13)
 
 - [x] Disk space collector (thresholds, defaults to the system drive)

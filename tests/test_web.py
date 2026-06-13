@@ -79,12 +79,47 @@ def test_history_collapses_after_visible_rows():
     assert 'href="/scan/1"' in page
 
 
-def test_ok_checks_render_as_category_tiles():
+def test_healthy_groups_collapse_by_default():
+    # All-ok groups render as collapsed cards (no `open` attribute) so a calm
+    # dashboard is the default; the summary still names the group.
     checks = [
-        HealthCheck("http_a", "Web A", "ok", "answers 200"),
-        HealthCheck("disk_root", "Root disk", "ok", "26% full"),
+        HealthCheck("http_a", "Web A", "ok", "answers 200", group="Core services"),
+        HealthCheck("tls_a", "Web A cert", "ok", "valid 80 days", group="Core services"),
     ]
     page = render_scan_page(_scan(1, *checks), ScanDiff(), history=[], refresh_seconds=0)
-    assert "tilegrid" in page
-    assert "Web services (1)" in page
+    assert '<details class="group okc">' in page  # collapsed, not `open`
+    assert "Core services" in page
     assert 'title="answers 200"' in page
+
+
+def test_problem_group_opens_and_sorts_first():
+    # A group with a worse check rolls up to that status, opens, and sorts
+    # ahead of a healthy group.
+    checks = [
+        HealthCheck("disk_root", "Root disk", "ok", "26% full", group="Storage"),
+        HealthCheck("firewall_host", "Host firewall", "critical", "no firewall", group="Security"),
+    ]
+    page = render_scan_page(_scan(1, *checks), ScanDiff(), history=[], refresh_seconds=0)
+    assert '<details class="group crit" open>' in page
+    # the problem (crit) group card renders before the healthy (ok) one
+    assert page.index('class="group crit"') < page.index('class="group okc"')
+
+
+def test_group_worst_of_children_uses_explicit_group_over_id():
+    # One warning child makes the whole group a warning, and an explicit group
+    # overrides the id-derived fallback.
+    checks = [
+        HealthCheck("http_a", "Web A", "ok", "ok", group="Core services"),
+        HealthCheck("http_b", "Web B", "warning", "degraded", group="Core services"),
+    ]
+    page = render_scan_page(_scan(1, *checks), ScanDiff(), history=[], refresh_seconds=0)
+    assert '<details class="group warn" open>' in page
+    # the single heading rolls both up; the id-fallback "Web services" is unused
+    assert "Web services" not in page
+
+
+def test_group_falls_back_to_category_for_ungrouped_checks():
+    checks = [HealthCheck("disk_root", "Root disk", "ok", "26% full")]
+    page = render_scan_page(_scan(1, *checks), ScanDiff(), history=[], refresh_seconds=0)
+    assert "Disks" in page
+    assert 'title="26% full"' in page

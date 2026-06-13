@@ -12,11 +12,16 @@ from homelab_guardian import db
 from homelab_guardian.alerting import update_alert_states
 from homelab_guardian.collectors import (
     backup_collector,
+    backup_health_collector,
     disk_collector,
     docker_collector,
+    exposed_services_collector,
+    firewall_collector,
     homeassistant_collector,
     network_collector,
+    ssh_collector,
     systemd_collector,
+    updates_collector,
 )
 from homelab_guardian.config import load_config
 from homelab_guardian.diff import diff_scans
@@ -36,6 +41,11 @@ COLLECTORS: dict[str, CollectorFn] = {
     "backups": backup_collector.collect,
     "systemd": systemd_collector.collect,
     "disks": disk_collector.collect,
+    "firewall": firewall_collector.collect,
+    "exposed_services": exposed_services_collector.collect,
+    "ssh": ssh_collector.collect,
+    "updates": updates_collector.collect,
+    "backup_health": backup_health_collector.collect,
 }
 
 

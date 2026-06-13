@@ -123,6 +123,31 @@ table.history th, table.history td {
 table.history th { color: var(--muted); font-weight: 600; }
 table.history tr.current td { font-weight: 650; }
 footer { color: var(--muted); font-size: 0.8rem; margin-top: 28px; text-align: center; }
+details.group {
+  background: var(--card); border: 1px solid var(--border);
+  border-left: 8px solid var(--accent, var(--border)); border-radius: 12px;
+  margin-bottom: 14px;
+}
+details.group > summary {
+  cursor: pointer; list-style: none; padding: 14px 20px;
+  display: flex; align-items: center; gap: 10px; font-weight: 650; font-size: 1.02rem;
+}
+details.group > summary::-webkit-details-marker { display: none; }
+details.group > summary::after {
+  content: "▸"; color: var(--muted); font-weight: 400; margin-left: 4px;
+}
+details.group[open] > summary::after { content: "▾"; }
+details.group > summary .gcount {
+  color: var(--muted); font-weight: 500; font-size: 0.85rem; margin-left: auto;
+}
+details.group[open] > summary { border-bottom: 1px solid var(--border); }
+.group .gbody { padding: 4px 20px 14px; }
+.group ul.oklist { list-style: none; margin: 10px 0 0; padding: 0; columns: 2; column-gap: 18px; }
+.group ul.oklist li {
+  margin: 5px 0; font-size: 0.93rem; break-inside: avoid;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+@media (max-width: 520px) { .group ul.oklist { columns: 1; } }
 """
 
 _STATUS_CLASS = {"critical": "crit", "warning": "warn", "unknown": "unk", "ok": "okc"}
@@ -177,6 +202,7 @@ def checks_from_snapshot(snapshot: dict[str, Any]) -> list[HealthCheck]:
                 summary=str(item.get("summary", "")),
                 evidence=item.get("evidence") or {},
                 recommended_action=str(item.get("recommended_action", "")),
+                group=str(item.get("group", "")),
                 acknowledged=bool(item.get("acknowledged", False)),
                 ack_note=str(item.get("ack_note", "")),
             )
@@ -271,43 +297,74 @@ def _render_briefing(narrative: str) -> str:
     return f'<div class="card briefing"><h2>Briefing</h2>{paragraphs}</div>'
 
 
+def effective_group(check: HealthCheck) -> str:
+    """The heading a check rolls up under: its explicit group, or a sensible
+    one derived from its id so older snapshots still group cleanly."""
+    return check.group or _category(check.id)
+
+
+_SEVERITY = {status: index for index, status in enumerate(STATUS_ORDER)}
+
+
+def _worst(checks: list[HealthCheck]) -> str:
+    statuses = {c.status for c in checks}
+    for status in STATUS_ORDER[:-1]:
+        if status in statuses:
+            return status
+    return "ok"
+
+
 def _render_groups(checks: list[HealthCheck]) -> str:
+    """Group-primary view: one collapsible card per group, showing the
+    worst-of-children status. Groups with a problem sort first and open by
+    default; all-healthy groups stay collapsed and quiet."""
     acked = [c for c in checks if c.acknowledged]
-    checks = [c for c in checks if not c.acknowledged]
-    sections: list[str] = []
-    titles = {
-        "critical": "Critical issues — check first",
-        "warning": "Warnings — likely needs attention",
-        "unknown": "Unknown — not enough signal",
-        "ok": "Healthy checks",
-    }
-    for status in STATUS_ORDER:
-        group = sorted((c for c in checks if c.status == status), key=lambda c: c.name.lower())
-        if not group:
-            continue
-        if status == "ok":
-            by_category: dict[str, list[HealthCheck]] = {}
-            for check in group:
-                by_category.setdefault(_category(check.id), []).append(check)
-            tiles = []
-            for category in sorted(by_category):
-                items = "".join(
-                    f'<li title="{html.escape(c.summary)}">✅ {html.escape(c.name)}</li>'
-                    for c in by_category[category]
-                )
-                tiles.append(
-                    f'<div class="tile"><h3>{category} ({len(by_category[category])})</h3><ul>{items}</ul></div>'
-                )
-            sections.append(
-                f'<div class="card"><h2>{titles[status]} ({len(group)})</h2>'
-                f'<div class="tilegrid">{"".join(tiles)}</div></div>'
+    active = [c for c in checks if not c.acknowledged]
+
+    grouped: dict[str, list[HealthCheck]] = {}
+    for check in active:
+        grouped.setdefault(effective_group(check), []).append(check)
+
+    ordered = sorted(
+        grouped.items(),
+        key=lambda kv: (_SEVERITY[_worst(kv[1])], kv[0].lower()),
+    )
+
+    cards: list[str] = []
+    for name, members in ordered:
+        worst = _worst(members)
+        counts: dict[str, int] = {}
+        for check in members:
+            counts[check.status] = counts.get(check.status, 0) + 1
+        summary_counts = " · ".join(
+            f"{counts[s]} {STATUS_META[s][1].lower()}" for s in STATUS_ORDER if counts.get(s)
+        )
+        icon, _ = STATUS_META.get(worst, ("•", worst))
+
+        problems = sorted(
+            (c for c in members if c.status != "ok"),
+            key=lambda c: (_SEVERITY[c.status], c.name.lower()),
+        )
+        healthy = sorted((c for c in members if c.status == "ok"), key=lambda c: c.name.lower())
+
+        body = "".join(_render_check(check) for check in problems)
+        if healthy:
+            items = "".join(
+                f'<li title="{html.escape(c.summary)}">✅ {html.escape(c.name)}</li>' for c in healthy
             )
-        else:
-            body = "".join(_render_check(check) for check in group)
-            sections.append(f'<div class="card"><h2>{titles[status]} ({len(group)})</h2>{body}</div>')
+            body += f'<ul class="oklist">{items}</ul>'
+
+        open_attr = " open" if worst != "ok" else ""
+        cards.append(
+            f'<details class="group {_STATUS_CLASS.get(worst, "unk")}"{open_attr}>'
+            f'<summary>{icon} {html.escape(name)}'
+            f'<span class="gcount">{summary_counts}</span></summary>'
+            f'<div class="gbody">{body}</div></details>'
+        )
+
     if acked:
-        sections.append(_render_acknowledged(acked))
-    return "".join(sections)
+        cards.append(_render_acknowledged(acked))
+    return "".join(cards)
 
 
 HISTORY_VISIBLE_ROWS = 5

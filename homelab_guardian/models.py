@@ -14,6 +14,12 @@ class HealthCheck:
     summary: str
     evidence: dict[str, Any] = field(default_factory=dict)
     recommended_action: str = "No action required."
+    # Coarse grouping label used to roll many checks up under one expandable
+    # heading in the dashboard (e.g. "Core services", "Security", "Backups").
+    # Empty means "derive a group from the check id" so older snapshots and
+    # collectors that don't set one still group sensibly. Keep groups few and
+    # human — they are the headings a newcomer scans, not a taxonomy.
+    group: str = ""
     # Acknowledged checks keep their real status but are muted: excluded from
     # overall status, change detection, and notifications, and rendered in
     # their own collapsed section.
