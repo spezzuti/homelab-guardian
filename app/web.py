@@ -24,20 +24,25 @@ STATUS_META = {
 }
 STATUS_ORDER = ["critical", "warning", "unknown", "ok"]
 
-PAGE_STYLE = """
-:root {
+_DARK_VARS = """
+    --bg: #14171c; --card: #1d222a; --text: #e8eaee; --muted: #9aa3b0;
+    --critical: #ff5d64; --warning: #ffb454; --unknown: #8fa1bd; --ok: #4ecb71;
+    --border: #2a313b;
+"""
+
+PAGE_STYLE = f"""
+:root {{
   color-scheme: light dark;
   --bg: #f5f6f8; --card: #ffffff; --text: #1c2330; --muted: #69707d;
   --critical: #d4373e; --warning: #c77d00; --unknown: #6c7a93; --ok: #2c8a4b;
   --border: #e3e6ea;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #14171c; --card: #1d222a; --text: #e8eaee; --muted: #9aa3b0;
-    --critical: #ff5d64; --warning: #ffb454; --unknown: #8fa1bd; --ok: #4ecb71;
-    --border: #2a313b;
-  }
-}
+}}
+@media (prefers-color-scheme: dark) {{
+  :root:not([data-theme="light"]) {{{_DARK_VARS}}}
+}}
+:root[data-theme="dark"] {{{_DARK_VARS}}}"""
+
+PAGE_STYLE += """
 * { box-sizing: border-box; }
 body {
   margin: 0; background: var(--bg); color: var(--text);
@@ -50,10 +55,16 @@ header.overall {
   background: var(--card); border: 1px solid var(--border);
   border-left: 8px solid var(--accent, var(--unknown));
 }
+header.overall { position: relative; }
 header.overall h1 { margin: 0 0 2px; font-size: 1.15rem; font-weight: 600; }
 header.overall .status { font-size: 1.7rem; font-weight: 700; }
 header.overall .meta { color: var(--muted); font-size: 0.85rem; margin-top: 4px; }
-.counts { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 20px; }
+.theme-toggle {
+  position: absolute; top: 14px; right: 14px; cursor: pointer;
+  background: var(--bg); color: var(--text); border: 1px solid var(--border);
+  border-radius: 8px; font-size: 1.05rem; padding: 4px 9px; line-height: 1;
+}
+.counts { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-bottom: 20px; }
 .pill {
   border-radius: 999px; padding: 4px 14px; font-size: 0.9rem; font-weight: 600;
   background: var(--card); border: 1px solid var(--border);
@@ -76,11 +87,21 @@ header.overall .meta { color: var(--muted); font-size: 0.85rem; margin-top: 4px;
 }
 .crit { --accent: var(--critical); } .warn { --accent: var(--warning); }
 .unk { --accent: var(--unknown); } .okc { --accent: var(--ok); }
+.okgroup h3 {
+  margin: 14px 0 6px; font-size: 0.82rem; font-weight: 650;
+  color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em;
+}
+.okgroup:first-of-type h3 { margin-top: 4px; }
 ul.oklist { margin: 0; padding-left: 22px; }
-ul.oklist li { margin: 3px 0; }
+ul.oklist li { margin: 3px 0; break-inside: avoid; }
+@media (min-width: 700px) { ul.oklist { columns: 2; column-gap: 32px; } }
 ul.changes { margin: 0; padding-left: 22px; }
 ul.changes li { margin: 5px 0; }
 .briefing p { margin: 8px 0; }
+.card.acked summary { cursor: pointer; list-style: revert; }
+.card.acked summary h2 { display: inline; }
+.ackhint { color: var(--muted); font-size: 0.88rem; }
+.acknote { color: var(--muted); font-style: italic; }
 table.history { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
 table.history th, table.history td {
   text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border);
@@ -91,6 +112,39 @@ footer { color: var(--muted); font-size: 0.8rem; margin-top: 28px; text-align: c
 """
 
 _STATUS_CLASS = {"critical": "crit", "warning": "warn", "unknown": "unk", "ok": "okc"}
+
+_CATEGORY_PREFIXES = [
+    ("http_", "Web services"),
+    ("tcp_", "TCP services"),
+    ("dns_", "DNS"),
+    ("ha_", "Home Assistant"),
+    ("backup", "Backups"),
+    ("docker", "Docker"),
+    ("preflight_", "Preflight"),
+    ("network_", "Network"),
+]
+
+THEME_SCRIPT = """
+<script>
+(function () {
+  var saved = localStorage.getItem("guardian-theme");
+  if (saved) document.documentElement.dataset.theme = saved;
+  window.toggleTheme = function () {
+    var current = document.documentElement.dataset.theme ||
+      (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    var next = current === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = next;
+    localStorage.setItem("guardian-theme", next);
+  };
+})();
+</script>"""
+
+
+def _category(check_id: str) -> str:
+    for prefix, label in _CATEGORY_PREFIXES:
+        if check_id.startswith(prefix):
+            return label
+    return "Other"
 
 
 def checks_from_snapshot(snapshot: dict[str, Any]) -> list[HealthCheck]:
@@ -106,13 +160,15 @@ def checks_from_snapshot(snapshot: dict[str, Any]) -> list[HealthCheck]:
                 summary=str(item.get("summary", "")),
                 evidence=item.get("evidence") or {},
                 recommended_action=str(item.get("recommended_action", "")),
+                acknowledged=bool(item.get("acknowledged", False)),
+                ack_note=str(item.get("ack_note", "")),
             )
         )
     return checks
 
 
 def overall_of(checks: list[HealthCheck]) -> str:
-    statuses = {check.status for check in checks}
+    statuses = {check.status for check in checks if not check.acknowledged}
     for status in STATUS_ORDER[:-1]:
         if status in statuses:
             return status
@@ -127,7 +183,24 @@ def _fmt_time(created_at: str) -> str:
 
 
 def _counts(checks: list[HealthCheck]) -> dict[str, int]:
-    return {status: sum(1 for c in checks if c.status == status) for status in STATUS_ORDER}
+    return {status: sum(1 for c in checks if c.status == status and not c.acknowledged) for status in STATUS_ORDER}
+
+
+def _render_acknowledged(acked: list[HealthCheck]) -> str:
+    items: list[str] = []
+    for check in sorted(acked, key=lambda c: c.name.lower()):
+        icon, _ = STATUS_META.get(check.status, ("•", check.status))
+        note = f' <span class="acknote">— {html.escape(check.ack_note)}</span>' if check.ack_note else ""
+        items.append(
+            f"<li>🔕 {icon} <b>{html.escape(check.name)}</b> (currently {check.status}): "
+            f"{html.escape(check.summary)}{note}</li>"
+        )
+    return (
+        f'<div class="card acked"><details><summary><h2>Acknowledged — muted known issues ({len(acked)})</h2></summary>'
+        f'<p class="ackhint">Excluded from overall status, change detection, and notifications. '
+        f"Unmute with <code>guardian unack &lt;check-id&gt;</code>.</p>"
+        f'<ul class="changes">{"".join(items)}</ul></details></div>'
+    )
 
 
 def _render_check(check: HealthCheck) -> str:
@@ -182,6 +255,8 @@ def _render_briefing(narrative: str) -> str:
 
 
 def _render_groups(checks: list[HealthCheck]) -> str:
+    acked = [c for c in checks if c.acknowledged]
+    checks = [c for c in checks if not c.acknowledged]
     sections: list[str] = []
     titles = {
         "critical": "Critical issues — check first",
@@ -194,13 +269,25 @@ def _render_groups(checks: list[HealthCheck]) -> str:
         if not group:
             continue
         if status == "ok":
-            items = "".join(
-                f"<li>✅ <b>{html.escape(c.name)}</b>: {html.escape(c.summary)}</li>" for c in group
-            )
-            sections.append(f'<div class="card"><h2>{titles[status]} ({len(group)})</h2><ul class="oklist">{items}</ul></div>')
+            by_category: dict[str, list[HealthCheck]] = {}
+            for check in group:
+                by_category.setdefault(_category(check.id), []).append(check)
+            groups_html = []
+            for category in sorted(by_category):
+                items = "".join(
+                    f"<li>✅ <b>{html.escape(c.name)}</b>: {html.escape(c.summary)}</li>"
+                    for c in by_category[category]
+                )
+                groups_html.append(
+                    f'<div class="okgroup"><h3>{category} ({len(by_category[category])})</h3>'
+                    f'<ul class="oklist">{items}</ul></div>'
+                )
+            sections.append(f'<div class="card"><h2>{titles[status]} ({len(group)})</h2>{"".join(groups_html)}</div>')
         else:
             body = "".join(_render_check(check) for check in group)
             sections.append(f'<div class="card"><h2>{titles[status]} ({len(group)})</h2>{body}</div>')
+    if acked:
+        sections.append(_render_acknowledged(acked))
     return "".join(sections)
 
 
@@ -244,14 +331,18 @@ def render_scan_page(
         f'<span class="pill {_STATUS_CLASS[s]}">{STATUS_META[s][0]} <b>{counts[s]}</b> {STATUS_META[s][1].lower()}</span>'
         for s in STATUS_ORDER
     )
+    acked_count = sum(1 for c in checks if c.acknowledged)
+    if acked_count:
+        pills += f'<span class="pill">🔕 <b>{acked_count}</b> acknowledged</span>'
     refresh = f'<meta http-equiv="refresh" content="{int(refresh_seconds)}">' if refresh_seconds else ""
 
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">{refresh}
-<title>{app_name} — {label}</title><style>{PAGE_STYLE}</style></head>
+<title>{app_name} — {label}</title><style>{PAGE_STYLE}</style>{THEME_SCRIPT}</head>
 <body><main>
 <header class="overall {_STATUS_CLASS.get(overall, 'unk')}">
+<button class="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark theme">🌓</button>
 <h1>{app_name}</h1>
 <div class="status">{icon} {label.upper()}</div>
 <div class="meta">Scan #{scan_id} · {_fmt_time(created_at)}{' · auto-refreshes every %ds' % refresh_seconds if refresh_seconds else ''}</div>

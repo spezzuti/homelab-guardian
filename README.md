@@ -422,6 +422,24 @@ variables (see `config.example.yaml`). `send_on: changes` is the recommended
 mode: you only get a message when something actually changed since the last
 scan.
 
+## Acknowledging known issues
+
+Chronic problems train you to ignore alerts. Acknowledge a check to mute it
+without losing sight of it:
+
+```bash
+guardian ack ha_unavailable_entities --note "MQTT bridge down, part ordered" --days 14
+guardian ack          # list current acknowledgments
+guardian unack ha_unavailable_entities
+```
+
+An acknowledged check keeps its real status but is excluded from the overall
+status, change detection, and notifications. It appears in a collapsed
+"Acknowledged" section of the report and web view, with your note, so it
+stays visible without drowning the signal. Acknowledgments can expire
+automatically (`--days`, `--until`); check ids are shown in reports and in
+the web view's evidence blocks.
+
 ## Report layout
 
 The Markdown report includes:

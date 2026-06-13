@@ -14,6 +14,11 @@ class HealthCheck:
     summary: str
     evidence: dict[str, Any] = field(default_factory=dict)
     recommended_action: str = "No action required."
+    # Acknowledged checks keep their real status but are muted: excluded from
+    # overall status, change detection, and notifications, and rendered in
+    # their own collapsed section.
+    acknowledged: bool = False
+    ack_note: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

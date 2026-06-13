@@ -61,11 +61,31 @@ def run_scan(config_path: str) -> int:
     database_path = config.get("app", {}).get("database_path", "data/guardian.sqlite")
     conn = db.connect(database_path)
     try:
+        acks = db.load_active_acks(conn)
+        for check in checks:
+            ack = acks.get(check.id)
+            if ack is not None:
+                check.acknowledged = True
+                check.ack_note = ack.get("note") or ""
+
+        # Acknowledged checks are muted: change detection ignores them on
+        # both sides so a flapping known issue cannot trigger notifications.
+        acked_ids = {check.id for check in checks if check.acknowledged}
+        active_checks = [check for check in checks if not check.acknowledged]
+
         previous = db.load_latest_scan(conn)
         if previous is not None:
-            diff = diff_scans(previous[2], checks, previous_scan_id=previous[0], previous_created_at=previous[1])
+            previous_snapshot = dict(previous[2])
+            previous_snapshot["checks"] = [
+                item
+                for item in previous_snapshot.get("checks", [])
+                if not (isinstance(item, dict) and item.get("id") in acked_ids)
+            ]
+            diff = diff_scans(
+                previous_snapshot, active_checks, previous_scan_id=previous[0], previous_created_at=previous[1]
+            )
         else:
-            diff = diff_scans(None, checks)
+            diff = diff_scans(None, active_checks)
 
         narrative = explain(config.get("ai", {}), checks, diff, secrets=secrets)
 
@@ -114,6 +134,55 @@ def load_dotenv(path: str | Path = ".env") -> int:
     return loaded
 
 
+def run_ack(config_path: str, command: str, check_id: str | None, note: str, days: float, until: str) -> int:
+    from datetime import datetime, timedelta, timezone
+
+    config = load_config(config_path)
+    conn = db.connect(config.get("app", {}).get("database_path", "data/guardian.sqlite"))
+    try:
+        if command == "unack":
+            if not check_id:
+                print("Usage: guardian unack <check-id>")
+                return 1
+            if db.remove_ack(conn, check_id):
+                print(f"Unacknowledged: {check_id}. It will count toward overall status again.")
+                return 0
+            print(f"No acknowledgment found for: {check_id}")
+            return 1
+
+        if not check_id:
+            acks = db.list_acks(conn)
+            if not acks:
+                print("No acknowledged checks. Mute one with: guardian ack <check-id> --note \"reason\"")
+                return 0
+            now = datetime.now(timezone.utc).isoformat()
+            for ack in acks:
+                expired = ack["expires_at"] is not None and ack["expires_at"] <= now
+                expiry = f", expires {ack['expires_at']}" if ack["expires_at"] else ", no expiry"
+                state = " [EXPIRED]" if expired else ""
+                note_text = f" — {ack['note']}" if ack["note"] else ""
+                print(f"  🔕 {ack['check_id']}{state} (since {ack['created_at']}{expiry}){note_text}")
+            return 0
+
+        expires_at: str | None = None
+        if until:
+            parsed = datetime.fromisoformat(until)
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            expires_at = parsed.isoformat()
+        elif days > 0:
+            expires_at = (datetime.now(timezone.utc) + timedelta(days=days)).isoformat()
+
+        db.set_ack(conn, check_id, note=note, expires_at=expires_at)
+        expiry_text = f" until {expires_at}" if expires_at else " with no expiry"
+        print(f"Acknowledged: {check_id}{expiry_text}.")
+        print("It is now muted: excluded from overall status, change detection, and notifications.")
+        print("Check ids appear in reports and the web view; undo with: guardian unack " + check_id)
+        return 0
+    finally:
+        conn.close()
+
+
 def run_scan_loop(config_path: str, interval_seconds: int) -> int:
     """Run scans forever, every interval_seconds. A failed scan is reported
     and the loop continues — a transient collector error must not stop a
@@ -143,9 +212,17 @@ def main() -> int:
 
     parser = argparse.ArgumentParser(description="Generate a Homelab Guardian health report.")
     parser.add_argument(
-        "command", nargs="?", choices=["scan", "doctor", "init", "serve"], default="scan", help="Command to run"
+        "command",
+        nargs="?",
+        choices=["scan", "doctor", "init", "serve", "ack", "unack"],
+        default="scan",
+        help="Command to run",
     )
+    parser.add_argument("check_id", nargs="?", help="ack/unack: the check id to mute or unmute")
     parser.add_argument("--config", default="config.yaml", help="Path to YAML config file")
+    parser.add_argument("--note", default="", help="ack: why this check is muted")
+    parser.add_argument("--days", type=float, default=0, help="ack: auto-expire after this many days")
+    parser.add_argument("--until", default="", help="ack: auto-expire at this ISO date/time")
     parser.add_argument("--doctor", action="store_true", help="Run preflight checks instead of a normal scan")
     parser.add_argument("--force", action="store_true", help="init: overwrite an existing config file")
     parser.add_argument(
@@ -169,6 +246,8 @@ def main() -> int:
         return run_init(args.config, force=args.force, discover_network=False if args.no_discover else None)
 
     load_dotenv()
+    if args.command in {"ack", "unack"}:
+        return run_ack(args.config, args.command, args.check_id, args.note, args.days, args.until)
     if args.doctor or args.command == "doctor":
         return run_doctor(args.config)
     if args.command == "serve":

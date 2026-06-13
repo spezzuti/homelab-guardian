@@ -61,6 +61,7 @@ def _change_lines(diff: ScanDiff) -> list[str]:
 
 def build_message(checks: list[HealthCheck], diff: ScanDiff | None, scan_id: int | None) -> str:
     overall = overall_status(checks)
+    checks = [c for c in checks if not c.acknowledged]
     icon = STATUS_ICON.get(overall, "•")
     counts = {status: sum(1 for c in checks if c.status == status) for status in STATUS_ICON}
 

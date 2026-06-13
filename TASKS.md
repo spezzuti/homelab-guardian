@@ -76,6 +76,14 @@
 - [ ] Add Docker image build verification on a Docker host
 - [x] Add CI
 
+## Sprint 5 — UI polish + acknowledgments (2026-06-13)
+
+- [x] Web UI: centered count pills, dark/light theme toggle with
+      localStorage persistence, healthy checks grouped by category in columns
+- [x] Ack system: guardian ack/unack CLI, SQLite acks table, optional expiry
+- [x] Acked checks muted across overall status, diff, Telegram, AI prompt,
+      report, and web view (collapsed section with notes)
+
 ## Sprint 4 — web report view (2026-06-12)
 
 - [x] `guardian serve`: read-only stdlib web view rendered from SQLite

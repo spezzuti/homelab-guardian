@@ -46,7 +46,7 @@ def _render_diff(diff: ScanDiff) -> list[str]:
 
 
 def overall_status(checks: list[HealthCheck]) -> str:
-    statuses = {check.status for check in checks}
+    statuses = {check.status for check in checks if not check.acknowledged}
     if "critical" in statuses:
         return "critical"
     if "warning" in statuses:
@@ -88,12 +88,26 @@ def _render_check(check: HealthCheck) -> list[str]:
     ]
 
 
+def _render_acknowledged(acked: list[HealthCheck]) -> list[str]:
+    lines = [f"## Acknowledged — muted known issues ({len(acked)})", ""]
+    lines.append("These checks are excluded from overall status, change detection, and notifications.")
+    lines.append("")
+    for check in acked:
+        icon = STATUS_ICON.get(check.status, "•")
+        note = f" — note: {check.ack_note}" if check.ack_note else ""
+        lines.append(f"- 🔕 {icon} **{check.name}** (currently {check.status}): {check.summary}{note}")
+    lines.append("")
+    return lines
+
+
 def render(
     checks: list[HealthCheck],
     scan_id: int | None = None,
     diff: ScanDiff | None = None,
     narrative: str | None = None,
 ) -> str:
+    acked = [check for check in checks if check.acknowledged]
+    checks = [check for check in checks if not check.acknowledged]
     counts = Counter(check.status for check in checks)
     generated_at = datetime.now(timezone.utc).isoformat()
     overall = overall_status(checks)
@@ -134,9 +148,11 @@ def render(
             f"- Warning: {counts.get('warning', 0)}",
             f"- Unknown: {counts.get('unknown', 0)}",
             f"- OK: {counts.get('ok', 0)}",
-            "",
         ]
     )
+    if acked:
+        lines.append(f"- Acknowledged (muted): {len(acked)}")
+    lines.append("")
 
     if diff is not None:
         lines.extend(_render_diff(diff))
@@ -158,6 +174,9 @@ def render(
             continue
         for check in group:
             lines.extend(_render_check(check))
+
+    if acked:
+        lines.extend(_render_acknowledged(acked))
 
     return "\n".join(lines).rstrip() + "\n"
 

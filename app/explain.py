@@ -30,7 +30,7 @@ say what is unknown rather than guessing."""
 
 
 def _problems_payload(checks: list[HealthCheck], max_checks: int, max_evidence_chars: int) -> list[dict[str, Any]]:
-    problems = [c for c in checks if c.status != "ok"]
+    problems = [c for c in checks if c.status != "ok" and not c.acknowledged]
     payload = []
     for check in problems[:max_checks]:
         evidence = json.dumps(check.evidence, sort_keys=True, default=str)
@@ -54,12 +54,15 @@ def build_prompt(checks: list[HealthCheck], diff: ScanDiff | None, config: dict[
     payload: dict[str, Any] = {
         "overall_status": overall_status(checks),
         "counts": {
-            status: sum(1 for c in checks if c.status == status)
+            status: sum(1 for c in checks if c.status == status and not c.acknowledged)
             for status in ("critical", "warning", "unknown", "ok")
         },
         "problems": _problems_payload(checks, max_checks, max_evidence_chars),
-        "healthy_checks": [c.name for c in checks if c.status == "ok"],
+        "healthy_checks": [c.name for c in checks if c.status == "ok" and not c.acknowledged],
     }
+    acknowledged = [c.name for c in checks if c.acknowledged]
+    if acknowledged:
+        payload["acknowledged_known_issues_do_not_mention"] = acknowledged
     if diff is not None and diff.has_previous:
         payload["changes_since_previous_scan"] = {
             "regressions": diff.regressions,

@@ -20,8 +20,51 @@ def connect(database_path: str | Path) -> sqlite3.Connection:
         )
         """
     )
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS acks (
+            check_id TEXT PRIMARY KEY,
+            note TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            expires_at TEXT
+        )
+        """
+    )
     conn.commit()
     return conn
+
+
+def set_ack(conn: sqlite3.Connection, check_id: str, note: str = "", expires_at: str | None = None) -> None:
+    created_at = datetime.now(timezone.utc).isoformat()
+    conn.execute(
+        "INSERT INTO acks (check_id, note, created_at, expires_at) VALUES (?, ?, ?, ?) "
+        "ON CONFLICT(check_id) DO UPDATE SET note = excluded.note, "
+        "created_at = excluded.created_at, expires_at = excluded.expires_at",
+        (check_id, note, created_at, expires_at),
+    )
+    conn.commit()
+
+
+def remove_ack(conn: sqlite3.Connection, check_id: str) -> bool:
+    cursor = conn.execute("DELETE FROM acks WHERE check_id = ?", (check_id,))
+    conn.commit()
+    return cursor.rowcount > 0
+
+
+def list_acks(conn: sqlite3.Connection) -> list[dict[str, Any]]:
+    rows = conn.execute("SELECT check_id, note, created_at, expires_at FROM acks ORDER BY check_id").fetchall()
+    return [{"check_id": r[0], "note": r[1], "created_at": r[2], "expires_at": r[3]} for r in rows]
+
+
+def load_active_acks(conn: sqlite3.Connection, now: datetime | None = None) -> dict[str, dict[str, Any]]:
+    """Active (non-expired) acknowledgments keyed by check id."""
+    current = (now or datetime.now(timezone.utc)).isoformat()
+    rows = conn.execute(
+        "SELECT check_id, note, created_at, expires_at FROM acks "
+        "WHERE expires_at IS NULL OR expires_at > ?",
+        (current,),
+    ).fetchall()
+    return {r[0]: {"check_id": r[0], "note": r[1], "created_at": r[2], "expires_at": r[3]} for r in rows}
 
 
 def load_latest_scan(conn: sqlite3.Connection) -> tuple[int, str, dict[str, Any]] | None:
