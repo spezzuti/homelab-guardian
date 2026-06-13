@@ -15,8 +15,11 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "collectors": {
         "docker": {"enabled": False, "socket_url": "unix://var/run/docker.sock", "exclude_containers": []},
         "homeassistant": {"enabled": False, "url": "", "token_env": "HOMEASSISTANT_TOKEN"},
-        "network": {"enabled": True, "dns_checks": [], "tcp_checks": []},
-        "backups": {"enabled": True, "paths": []},
+        # All collectors are opt-in (enabled: False by default) so an
+        # unconfigured host stays quiet instead of emitting "not configured"
+        # tiles. config.example.yaml turns the common ones on.
+        "network": {"enabled": False, "dns_checks": [], "tcp_checks": []},
+        "backups": {"enabled": False, "paths": []},
         "systemd": {"enabled": False, "include_user": False, "units": []},
         "disks": {"enabled": False, "paths": []},
     },

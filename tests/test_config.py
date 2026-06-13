@@ -33,7 +33,8 @@ def test_override_merges_deeply(tmp_path):
     assert loaded["collectors"]["docker"]["enabled"] is True
     # sibling defaults survive the override
     assert loaded["collectors"]["docker"]["socket_url"] == "unix://var/run/docker.sock"
-    assert loaded["collectors"]["network"]["enabled"] is True
+    # collectors are opt-in: network stays off until a config enables it
+    assert loaded["collectors"]["network"]["enabled"] is False
 
 
 def test_deep_merge_replaces_non_dict_values():

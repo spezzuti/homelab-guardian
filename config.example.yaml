@@ -51,6 +51,10 @@ collectors:
         url: https://example.com
         expected_status: [200]
         timeout: 5
+        # Optional: roll this check up under a named heading in the dashboard.
+        # Give a service's reachability and certificate checks the SAME group
+        # (e.g. "Core services") and they collapse together under one tile.
+        # group: Core services
         # Set verify_tls: false for services with self-signed certificates
         # (Proxmox, TrueNAS, iDRAC, etc.). The check still proves the service
         # answers HTTPS; it just skips certificate-chain validation.
@@ -107,6 +111,54 @@ collectors:
     #     max_age_days: 2
     #     required: true
     paths: []
+
+  # --- Host hardening collectors (Linux hosts; run Guardian on the host) ---
+
+  firewall:
+    # Is a host firewall active and does it default to denying inbound?
+    # Reads service state and the world-readable ufw config files; no root.
+    enabled: false
+
+  exposed_services:
+    # Names services listening on a non-loopback address, flagging sensitive
+    # ones (SMB, VNC, databases, ...). Reads `ss` only.
+    enabled: false
+    # Ports you have intentionally exposed to the LAN (silences the warning):
+    # allow_ports: [445]
+    # Extra ports to treat as sensitive (port: label):
+    # sensitive_ports:
+    #   8086: InfluxDB
+
+  ssh:
+    # Reads the effective sshd config (first-match-wins, drop-ins included) and
+    # warns on password authentication or direct root login. Needs no root.
+    enabled: false
+
+  updates:
+    # Pending updates, pending SECURITY updates, and whether a reboot is
+    # required to finish applying them. apt-based hosts only for now.
+    enabled: false
+
+  backup_health:
+    # Watches the backup JOB, not just a directory: is there a recent snapshot?
+    enabled: false
+    # repos:
+    #   # restic mode — authoritative snapshot age (needs the repo password):
+    #   - id: nas_restic
+    #     name: NAS restic backup
+    #     tool: restic
+    #     repository: /mnt/backup/restic
+    #     password_file: /root/.config/restic/password
+    #     # password_env: RESTIC_PASSWORD   # alternative to password_file
+    #     max_age_hours: 36       # warning beyond this
+    #     critical_age_hours: 108 # critical beyond this (default: 3x warn)
+    #   # systemd mode — credential-free; checks a backup unit's last run:
+    #   - id: nightly_backup_job
+    #     name: Nightly backup job
+    #     tool: systemd
+    #     unit: my-backup.service
+    #     max_age_hours: 36
+    repos: []
 
 secrets:
   # Where Guardian looks up named secrets (tokens, API keys, chat ids).
