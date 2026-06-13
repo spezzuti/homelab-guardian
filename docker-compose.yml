@@ -1,7 +1,9 @@
 services:
   homelab-guardian:
+    # Prebuilt images are published for amd64/arm64; `docker compose build`
+    # still works for local development.
     build: .
-    image: homelab-guardian:local
+    image: ghcr.io/spezzuti/homelab-guardian:latest
     command: python -m app.main --config /app/config.yaml
     env_file:
       - path: .env

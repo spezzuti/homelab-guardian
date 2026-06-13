@@ -94,6 +94,23 @@ Equivalent form:
 python -m app.main --config config.yaml --doctor
 ```
 
+## Prebuilt Docker image
+
+Multi-arch images (amd64, arm64 — Raspberry Pi friendly) are published to
+GitHub Container Registry on every main-branch push:
+
+```bash
+docker pull ghcr.io/spezzuti/homelab-guardian:latest
+```
+
+Notes for containerized runs:
+
+- The systemd collector needs the host's systemd; run Guardian directly on
+  the host if you want service monitoring.
+- The Bitwarden secrets provider needs the `bws` CLI, which is not in the
+  image; in containers, inject secrets as environment variables instead
+  (env_file or `bws run -- docker compose ...`).
+
 ## Docker Compose run
 
 Preferred MVP install path on a Docker host:

@@ -76,6 +76,20 @@
 - [ ] Add Docker image build verification on a Docker host
 - [x] Add CI
 
+## Sprint 6 — Docker validation, GHCR, systemd collector (2026-06-13)
+
+- [x] Real Docker host test with direct socket mode (Marcus, Docker 29.1.3:
+      healthy/exited/unhealthy containers detected correctly)
+- [x] Containerized one-shot compose run validated on a real Docker host
+- [x] Docker image build verification on a Docker host
+- [x] GHCR multi-arch image workflow (amd64 + arm64)
+- [x] systemd collector: failed + restart-loop sweeps (system/user bus),
+      watched units, old-systemd fallback — found 2 real failed services
+      on first production scan
+- [ ] Socket proxy mode test on a real Docker host
+- [ ] Consider shipping bws CLI in the Docker image for the bitwarden
+      secrets provider in containers
+
 ## Sprint 5 — UI polish + acknowledgments (2026-06-13)
 
 - [x] Web UI: centered count pills, dark/light theme toggle with
