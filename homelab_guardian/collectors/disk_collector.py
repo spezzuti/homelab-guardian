@@ -87,4 +87,7 @@ def collect(config: dict[str, Any], secrets: Any = None) -> list[HealthCheck]:
     paths = config.get("paths", []) or []
     if not paths:
         paths = [{"path": _default_path(), "name": "Disk space: system drive"}]
-    return [_check_path(item) for item in paths]
+    checks = [_check_path(item) for item in paths]
+    for check in checks:
+        check.group = "Host"
+    return checks

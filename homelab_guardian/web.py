@@ -92,21 +92,27 @@ header.overall .meta { color: var(--muted); font-size: 0.85rem; margin-top: 4px;
 .crit { --accent: var(--critical); } .warn { --accent: var(--warning); }
 .unk { --accent: var(--unknown); } .okc { --accent: var(--ok); }
 .tilegrid {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: 12px; margin-top: 4px;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 12px; margin-top: 4px; align-items: start;
 }
-.tile {
-  background: var(--bg); border: 1px solid var(--border);
-  border-radius: 10px; padding: 10px 14px; min-width: 0;
+details.tile {
+  background: var(--card); border: 1px solid var(--border);
+  border-left: 5px solid var(--accent, var(--ok));
+  border-radius: 10px; min-width: 0;
 }
-.tile h3 {
-  margin: 0 0 7px; font-size: 0.78rem; font-weight: 650;
-  color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em;
+details.tile > summary {
+  cursor: pointer; list-style: none; padding: 9px 13px;
+  font-weight: 650; font-size: 0.94rem; display: flex; align-items: center; gap: 7px;
 }
-.tile ul { list-style: none; margin: 0; padding: 0; }
-.tile li {
+details.tile > summary::-webkit-details-marker { display: none; }
+details.tile > summary .tcount { color: var(--muted); font-weight: 500; font-size: 0.85rem; }
+details.tile > summary::after { content: "▸"; margin-left: auto; color: var(--muted); font-weight: 400; }
+details.tile[open] > summary::after { content: "▾"; }
+details.tile[open] > summary { border-bottom: 1px solid var(--border); }
+details.tile ul { list-style: none; margin: 0; padding: 8px 13px 11px; }
+details.tile li {
   margin: 4px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  font-size: 0.92rem;
+  font-size: 0.9rem;
 }
 details.morehistory summary { cursor: pointer; color: var(--muted); font-size: 0.88rem; padding: 6px 0; }
 ul.changes { margin: 0; padding-left: 22px; }
@@ -123,6 +129,7 @@ table.history th, table.history td {
 table.history th { color: var(--muted); font-weight: 600; }
 table.history tr.current td { font-weight: 650; }
 footer { color: var(--muted); font-size: 0.8rem; margin-top: 28px; text-align: center; }
+h2.sectionhead { margin: 22px 2px 10px; font-size: 1.02rem; }
 details.group {
   background: var(--card); border: 1px solid var(--border);
   border-left: 8px solid var(--accent, var(--border)); border-radius: 12px;
@@ -359,7 +366,9 @@ def _render_groups(checks: list[HealthCheck]) -> str:
             f'<div class="gbody">{body}</div></details>'
         )
 
-    # Fully-healthy groups: compact multi-column tile grid (calm + dense).
+    # Fully-healthy groups: collapsible tiles in a 2-column grid. Each tile
+    # rolls its checks up under a green header and opens by default so the
+    # checks stay visible, but can be collapsed to tidy the view.
     if healthy_groups:
         total_ok = sum(len(m) for _, m in healthy_groups)
         healthy_groups.sort(key=lambda kv: kv[0].lower())
@@ -369,10 +378,14 @@ def _render_groups(checks: list[HealthCheck]) -> str:
                 f'<li title="{html.escape(c.summary)}">✅ {html.escape(c.name)}</li>'
                 for c in sorted(members, key=lambda c: c.name.lower())
             )
-            tiles.append(f'<div class="tile"><h3>{html.escape(name)} ({len(members)})</h3><ul>{items}</ul></div>')
+            tiles.append(
+                f'<details class="tile okc" open><summary>✅ {html.escape(name)}'
+                f'<span class="tcount">({len(members)})</span></summary>'
+                f'<ul>{items}</ul></details>'
+            )
         sections.append(
-            f'<div class="card"><h2>Healthy ({total_ok})</h2>'
-            f'<div class="tilegrid">{"".join(tiles)}</div></div>'
+            f'<h2 class="sectionhead">Healthy ({total_ok})</h2>'
+            f'<div class="tilegrid">{"".join(tiles)}</div>'
         )
 
     if acked:

@@ -11,7 +11,7 @@ from homelab_guardian.models import HealthCheck
 # counts without root; /var/run/reboot-required is a flag the package tooling
 # drops. Apt only for now; dnf/pacman hosts report "unknown" cleanly.
 
-GROUP = "Updates"
+GROUP = "Host"
 
 _APT_CHECK = "/usr/lib/update-notifier/apt-check"
 

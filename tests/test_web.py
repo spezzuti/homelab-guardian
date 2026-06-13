@@ -79,16 +79,17 @@ def test_history_collapses_after_visible_rows():
     assert 'href="/scan/1"' in page
 
 
-def test_healthy_groups_render_as_dense_tiles():
-    # All-ok groups render as compact tiles in the multi-column grid, not as
-    # full-width cards — dense and calm.
+def test_healthy_groups_render_as_collapsible_tiles():
+    # All-ok groups render as collapsible tiles in the multi-column grid —
+    # dense, and each can be rolled up.
     checks = [
         HealthCheck("http_a", "Web A", "ok", "answers 200", group="Core services"),
         HealthCheck("tls_a", "Web A cert", "ok", "valid 80 days", group="Core services"),
     ]
     page = render_scan_page(_scan(1, *checks), ScanDiff(), history=[], refresh_seconds=0)
     assert "tilegrid" in page
-    assert "Core services (2)" in page
+    assert '<details class="tile okc" open>' in page
+    assert "Core services" in page
     assert 'title="answers 200"' in page
 
 
@@ -102,7 +103,7 @@ def test_problem_group_card_renders_before_healthy_tiles():
     page = render_scan_page(_scan(1, *checks), ScanDiff(), history=[], refresh_seconds=0)
     assert '<details class="group crit" open>' in page
     # healthy Storage group is now a tile in the grid, below the problem card
-    assert "Storage (1)" in page
+    assert "Storage" in page
     assert page.index('class="group crit"') < page.index('<div class="tilegrid">')
 
 

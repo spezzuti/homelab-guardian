@@ -223,4 +223,6 @@ def collect(
         checks.append(_bus_sweep("user", True, runner))
     for item in config.get("units", []) or []:
         checks.append(_watched_unit(item, runner))
+    for check in checks:
+        check.group = "Host"
     return checks

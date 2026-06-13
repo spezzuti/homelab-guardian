@@ -19,7 +19,7 @@ def test_security_updates_are_warning():
     checks = updates_collector.collect({}, runner=_runner("56;3"), reader=_reader({}))
     assert checks[0].status == "warning"
     assert checks[0].evidence["security_updates"] == 3
-    assert checks[0].group == "Updates"
+    assert checks[0].group == "Host"
 
 
 def test_reboot_required_is_warning():
