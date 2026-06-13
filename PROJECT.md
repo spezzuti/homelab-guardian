@@ -2,7 +2,11 @@
 
 ## Concept
 
-Homelab Guardian is a local-first, read-only homelab operations assistant for Docker, Home Assistant, DNS/network checks, and backup freshness.
+Homelab Guardian is a local-first homelab operations assistant for Docker,
+Home Assistant, DNS/network checks, backup freshness, systemd services, disks,
+and TLS certificates. Its infrastructure collectors are read-only; its own
+reports, snapshots, acknowledgments, alert state, and retention cleanup are
+local runtime state.
 
 The product goal is not to replace dashboards such as Uptime Kuma, Beszel, Grafana, or Home Assistant.
 
@@ -30,15 +34,20 @@ A technical home user running some combination of:
 
 > Stop babysitting your homelab. Get a plain-English health report that tells you what broke, what changed, and what to check next.
 
-## MVP name
+## Current release shape
 
-Guardian v0.1: Daily Homelab Doctor
+Guardian v0.2: Daily Homelab Doctor plus dashboard and alerts.
+
+The project is now a packaged `guardian` CLI with optional setup wizard,
+Markdown report generation, SQLite scan history, read-only web view,
+acknowledgments, flap-damped Telegram notifications, optional BYOM AI
+briefings, env/Bitwarden secrets providers, and GHCR image publishing.
 
 ## Non-negotiable constraints
 
 - Local-first
-- Read-only by default
-- No destructive actions in the MVP
+- Read-only against homelab infrastructure by default
+- No destructive infrastructure actions
 - No self-healing yet
 - No AI shell execution
 - No cloud dependency required
@@ -48,4 +57,5 @@ Guardian v0.1: Daily Homelab Doctor
 - Home Assistant token stored only through environment variables or local untracked config
 - Every integration optional
 - Every collector degrades gracefully
-- Simple, boring, testable first version
+- Local app writes are limited to configured report/database paths and explicit outbound integrations
+- Simple, boring, testable implementation

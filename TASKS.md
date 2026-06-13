@@ -60,9 +60,9 @@
 - [ ] Confirm stale dummy marker reports warning without touching real backup paths
 - [ ] Confirm dummy runtime folder, `config.yaml`, reports, and SQLite files are not committed
 
-## v0.1 next tasks
+## v0.1/v0.2 cleanup and carried-forward tasks
 
-- [ ] Real Docker host test with direct socket mode
+- [x] Real Docker host test with direct socket mode (completed in Sprint 6)
 - [ ] Real Docker host test with socket proxy mode
 - [x] Home Assistant collector dogfood
 - [ ] Report polish for containerized runs
@@ -73,7 +73,7 @@
 - [x] Add unit tests for each collector failure mode
 - [x] Add report golden-file test
 - [x] Add optional Telegram notification adapter later
-- [ ] Add Docker image build verification on a Docker host
+- [x] Add Docker image build verification on a Docker host (completed in Sprint 6)
 - [x] Add CI
 
 ## Sprint 7 — reliability quartet (2026-06-13)
@@ -127,9 +127,9 @@
       Google Cast false-positive fingerprinting)
 - [x] .env autoloading for bare CLI runs (no python-dotenv dependency)
 - [x] Emoji-safe stdout on legacy Windows codepages
-- [ ] Rename `app` package to `homelab_guardian` before any PyPI release
-- [ ] Pick a license before publishing
-- [ ] Prebuilt Docker image (GHCR) via GitHub Actions
+- [x] Rename `app` package to `homelab_guardian` before any PyPI release
+- [x] Pick a license before publishing (AGPL-3.0-or-later)
+- [x] Prebuilt Docker image (GHCR) via GitHub Actions
 
 ## Sprint 2 — diff, notify, schedule, explain (2026-06-12)
 

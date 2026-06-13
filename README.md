@@ -1,6 +1,7 @@
 # Homelab Guardian
 
-Homelab Guardian is a local-first, read-only homelab operations assistant.
+Homelab Guardian is a local-first homelab operations assistant built around
+read-only infrastructure collectors and local reports.
 
 It is not another dashboard. It generates plain-English health reports that explain:
 
@@ -9,13 +10,16 @@ It is not another dashboard. It generates plain-English health reports that expl
 - what matters
 - what the safest next step is
 
-Guardian v0.1 is the **Daily Homelab Doctor**: a simple CLI that collects optional read-only signals, stores local snapshots, and writes a Markdown report.
+Guardian v0.2 is the **Daily Homelab Doctor plus dashboard and alerts**: a
+packaged CLI that collects optional read-only signals, stores local snapshots,
+writes Markdown reports, serves a read-only web view, and can send optional
+flap-damped notifications.
 
 ## Core principles
 
 - Local-first
-- Read-only by default
-- No destructive actions in the MVP
+- Read-only against homelab infrastructure by default
+- No destructive infrastructure actions
 - No self-healing yet
 - No AI shell execution
 - No cloud dependency required
@@ -23,6 +27,11 @@ Guardian v0.1 is the **Daily Homelab Doctor**: a simple CLI that collects option
 - Secrets stay local
 - Every integration is optional
 - Collectors degrade gracefully when unavailable or unconfigured
+
+Guardian does write its own local runtime state: Markdown reports, SQLite scan
+snapshots, acknowledgments, alert state, and retention cleanup. Optional
+integrations may send outbound requests for Telegram notifications or AI
+briefings when explicitly enabled.
 
 ## Quick start
 
@@ -113,7 +122,7 @@ Notes for containerized runs:
 
 ## Docker Compose run
 
-Preferred MVP install path on a Docker host:
+Preferred install path on a Docker host:
 
 ```bash
 cp config.example.yaml config.yaml
@@ -494,4 +503,17 @@ The Markdown report includes:
 
 ## Safety notes
 
-Homelab Guardian does not modify services, containers, files outside its configured output/database paths, DNS records, Home Assistant entities, or backup contents.
+Homelab Guardian's safety boundary has three parts:
+
+- **Infrastructure collectors are read-only.** Guardian does not modify
+  services, containers, DNS records, Home Assistant entities, backup contents,
+  systemd units, certificates, disks, or remote hosts.
+- **Local runtime state is writable.** Guardian writes reports, SQLite scan
+  snapshots, acknowledgments, alert state, and optional retention pruning under
+  the configured report/database paths.
+- **Outbound integrations are opt-in.** Telegram notifications and AI briefings
+  send structured status data only when explicitly enabled; Guardian still works
+  with both disabled.
+
+No self-healing workflows are implemented. Recommended actions are diagnostic
+next steps for the operator, not commands Guardian runs automatically.
