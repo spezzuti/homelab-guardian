@@ -16,6 +16,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "homeassistant": {"enabled": False, "url": "", "token_env": "HOMEASSISTANT_TOKEN"},
         "network": {"enabled": True, "dns_checks": [], "tcp_checks": []},
         "backups": {"enabled": True, "paths": []},
+        "systemd": {"enabled": False, "include_user": False, "units": []},
     },
     "secrets": {
         "provider": "env",

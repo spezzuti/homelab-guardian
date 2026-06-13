@@ -54,6 +54,23 @@ collectors:
         # answers HTTPS; it just skips certificate-chain validation.
         # verify_tls: false
 
+  systemd:
+    # Read-only systemd inspection on Linux hosts. Sweeps every service for
+    # failures AND restart loops (a unit stuck in auto-restart never reaches
+    # "failed", so failure checks alone miss it). Run Guardian directly on
+    # the host for this collector; a container cannot see the host's systemd.
+    enabled: false
+    # Also sweep the per-user service manager (systemctl --user).
+    include_user: false
+    # Optionally watch specific units closely (state + restart counts):
+    # units:
+    #   - unit: nginx.service
+    #   - unit: my-backup.service
+    #     required: false        # warning instead of critical when stopped
+    #   - unit: my-bot.service
+    #     user: true             # a user-bus unit
+    units: []
+
   backups:
     enabled: true
     # Backup paths are local to the machine/container running Guardian.

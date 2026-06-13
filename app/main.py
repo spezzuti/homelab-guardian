@@ -9,7 +9,13 @@ from pathlib import Path
 from typing import Any, Callable
 
 from app import db
-from app.collectors import backup_collector, docker_collector, homeassistant_collector, network_collector
+from app.collectors import (
+    backup_collector,
+    docker_collector,
+    homeassistant_collector,
+    network_collector,
+    systemd_collector,
+)
 from app.config import load_config
 from app.diff import diff_scans
 from app.doctor import run_doctor
@@ -26,6 +32,7 @@ COLLECTORS: dict[str, CollectorFn] = {
     "homeassistant": homeassistant_collector.collect,
     "network": network_collector.collect,
     "backups": backup_collector.collect,
+    "systemd": systemd_collector.collect,
 }
 
 
