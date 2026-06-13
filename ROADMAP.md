@@ -37,9 +37,12 @@ Delivered capabilities:
 - Multi-arch GHCR image workflow
 - AGPL-3.0-or-later license
 
+## Validated after v0.2.0
+
+- Docker socket-proxy mode on a real Docker host: read endpoints worked, Guardian inventory matched `docker ps`, write-oriented `POST /containers/create` was blocked with `403`, and temporary validation artifacts were cleaned up.
+
 ## v0.3 candidates — harden before widening scope
 
-- Validate Docker socket-proxy mode on a real Docker host
 - Finish backup freshness dogfood with dummy local folders before real backup paths
 - Make doctor/preflight semantics explicit: practical writable preflight vs. optional check-only mode
 - Add web dashboard deployment guidance for reverse proxy/auth

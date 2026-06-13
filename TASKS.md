@@ -63,7 +63,7 @@
 ## v0.1/v0.2 cleanup and carried-forward tasks
 
 - [x] Real Docker host test with direct socket mode (completed in Sprint 6)
-- [ ] Real Docker host test with socket proxy mode
+- [x] Real Docker host test with socket proxy mode (Leatherface Docker guest: proxy read endpoints worked, POST create blocked with 403, Guardian inventory matched `docker ps`, cleanup verified)
 - [x] Home Assistant collector dogfood
 - [ ] Report polish for containerized runs
 - [x] Snapshot comparison improvements
@@ -95,7 +95,7 @@
 - [x] systemd collector: failed + restart-loop sweeps (system/user bus),
       watched units, old-systemd fallback — found 2 real failed services
       on first production scan
-- [ ] Socket proxy mode test on a real Docker host
+- [x] Socket proxy mode test on a real Docker host (Leatherface Docker guest: 6 containers matched through proxy, write probe blocked, no test artifacts left behind)
 - [ ] Consider shipping bws CLI in the Docker image for the bitwarden
       secrets provider in containers
 
