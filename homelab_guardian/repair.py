@@ -37,13 +37,14 @@ def _playbook_config(config: dict[str, Any], action: str) -> dict[str, Any]:
 # Each playbook: applies_to(check)->bool, plan(config,pcfg,check)->dict (raises
 # RepairError if not permitted), verify(config,runner)->HealthCheck|None.
 
-def _normalize_allowed_units(pcfg: dict[str, Any]) -> set[str]:
+def _normalize_allowed(pcfg: dict[str, Any], key: str, id_field: str) -> set[str]:
+    """The allowlist for a playbook: a list of names, or of {<id_field>: name}."""
     out: set[str] = set()
-    for entry in pcfg.get("allowed_units", []) or []:
+    for entry in pcfg.get(key, []) or []:
         if isinstance(entry, str):
             out.add(entry)
-        elif isinstance(entry, dict) and entry.get("unit"):
-            out.add(str(entry["unit"]))
+        elif isinstance(entry, dict) and entry.get(id_field):
+            out.add(str(entry[id_field]))
     return out
 
 
@@ -59,7 +60,7 @@ def _systemd_plan(config: dict[str, Any], pcfg: dict[str, Any], check) -> dict[s
     unit = str(check.evidence.get("unit"))
     bus = str(check.evidence.get("bus", "system"))
     user = bus == "user"
-    allowed = _normalize_allowed_units(pcfg)
+    allowed = _normalize_allowed(pcfg, "allowed_units", "unit")
     if unit not in allowed:
         raise RepairError(
             f"Unit '{unit}' is not in the allowlist. Add it to "
@@ -89,11 +90,62 @@ def _systemd_verify(config: dict[str, Any], check_id: str, runner) -> Any:
     return None
 
 
+def _docker_applies(check) -> bool:
+    return (
+        check.id.startswith("docker_container_")
+        and isinstance(check.evidence, dict)
+        and bool(check.evidence.get("name"))
+    )
+
+
+def _docker_plan(config: dict[str, Any], pcfg: dict[str, Any], check) -> dict[str, Any]:
+    name = str(check.evidence.get("name"))
+    allowed = _normalize_allowed(pcfg, "allowed_containers", "name")
+    if name not in allowed:
+        raise RepairError(
+            f"Container '{name}' is not in the allowlist. Add it to "
+            f"repair.playbooks.restart_container.allowed_containers to permit this repair."
+        )
+    # Whether `docker` needs elevation depends on the host's socket permissions;
+    # use_sudo lets a deployment opt into a scoped `sudo -n docker restart` grant.
+    use_sudo = bool(pcfg.get("use_sudo", False))
+    argv = (["sudo", "-n", "docker", "restart", name] if use_sudo
+            else ["docker", "restart", name])
+    return {
+        "action": "restart_container",
+        "check_id": check.id,
+        "params": {"container": name},
+        "argv": argv,
+        "blast_radius": f"Restarts only the container {name} — a brief interruption of that one container.",
+        "reversible": "A restart is the standard recovery; the prior state was exited/unhealthy/restarting.",
+        "needs_privilege": use_sudo,
+        "timeout": float(pcfg.get("timeout", 60)),
+    }
+
+
+def _docker_verify(config: dict[str, Any], check_id: str, runner) -> Any:
+    # The Docker collector reads via the Docker SDK, not `runner`; re-run it and
+    # find the same check. (runner is unused here — verify's contract is just
+    # "re-read the check", however that collector does it.)
+    from homelab_guardian.collectors import docker_collector
+
+    docker_cfg = config.get("collectors", {}).get("docker", {}) or {}
+    for c in docker_collector.collect(docker_cfg):
+        if c.id == check_id:
+            return c
+    return None
+
+
 PLAYBOOKS: dict[str, dict[str, Any]] = {
     "restart_systemd_unit": {
         "applies_to": _systemd_applies,
         "plan": _systemd_plan,
         "verify": _systemd_verify,
+    },
+    "restart_container": {
+        "applies_to": _docker_applies,
+        "plan": _docker_plan,
+        "verify": _docker_verify,
     },
 }
 

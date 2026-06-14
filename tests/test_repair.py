@@ -166,3 +166,71 @@ def test_loop_guard_blocks_after_limit(tmp_path):
     repair.approve(conn, pid2, "alice")
     with pytest.raises(repair.RepairError, match="Loop guard"):
         repair.execute(config, conn, pid2, runner=_runner())
+
+
+# --- restart_container playbook --------------------------------------------
+
+DCHECK_ID = "docker_container_abc123def456"
+CONTAINER = "jellyfin"
+
+
+def _container_check(status="exited"):
+    sev = {"running": "ok", "exited": "warning", "created": "warning", "paused": "warning",
+           "dead": "critical", "restarting": "critical"}.get(status, "unknown")
+    return HealthCheck(DCHECK_ID, f"Docker container: {CONTAINER}", sev,
+                       f"{CONTAINER}: status={status}.",
+                       evidence={"id": "abc123def456", "name": CONTAINER, "status": status}, group="Applications")
+
+
+def _dconfig(tmp_path, **playbook):
+    pb = {"enabled": True, "allowed_containers": [CONTAINER], "max_attempts_per_hour": 3}
+    pb.update(playbook)
+    return {
+        "app": {"database_path": str(tmp_path / "g.sqlite")},
+        "collectors": {"docker": {"enabled": True}},
+        "repair": {"enabled": True, "playbooks": {"restart_container": pb}},
+    }
+
+
+def _patch_docker_collect(monkeypatch, status):
+    import homelab_guardian.collectors.docker_collector as dc
+    monkeypatch.setattr(dc, "collect", lambda config, secrets=None: [_container_check(status)])
+
+
+def test_container_applies_and_plan(tmp_path):
+    config = _dconfig(tmp_path)
+    assert repair.applicable_actions(config, _container_check()) == ["restart_container"]
+    plan = repair.build_plan(config, _container_check(), "restart_container")
+    assert plan["argv"] == ["docker", "restart", CONTAINER]
+    assert plan["needs_privilege"] is False
+
+
+def test_container_plan_use_sudo_and_allowlist(tmp_path):
+    cfg = _dconfig(tmp_path, use_sudo=True)
+    assert repair.build_plan(cfg, _container_check(), "restart_container")["argv"] == \
+        ["sudo", "-n", "docker", "restart", CONTAINER]
+    cfg2 = _dconfig(tmp_path, allowed_containers=["other"])
+    with pytest.raises(repair.RepairError, match="not in the allowlist"):
+        repair.build_plan(cfg2, _container_check(), "restart_container")
+
+
+def test_container_execute_happy_path(tmp_path, monkeypatch):
+    conn = db.connect(str(tmp_path / "g.sqlite"))
+    db.save_scan(conn, {"app": "HG", "checks": [_container_check("exited").to_dict()]})
+    config = _dconfig(tmp_path)
+    pid = repair.propose(config, conn, DCHECK_ID, "restart_container")["proposal_id"]
+    repair.approve(conn, pid, "alice")
+    _patch_docker_collect(monkeypatch, "running")  # verify sees it healthy again
+    res = repair.execute(config, conn, pid, runner=_runner())
+    assert res["status"] == "executed" and res["verify"]["status"] == "ok"
+
+
+def test_container_execute_still_failing(tmp_path, monkeypatch):
+    conn = db.connect(str(tmp_path / "g.sqlite"))
+    db.save_scan(conn, {"app": "HG", "checks": [_container_check("exited").to_dict()]})
+    config = _dconfig(tmp_path)
+    pid = repair.propose(config, conn, DCHECK_ID, "restart_container")["proposal_id"]
+    repair.approve(conn, pid, "alice")
+    _patch_docker_collect(monkeypatch, "exited")  # still down after restart
+    res = repair.execute(config, conn, pid, runner=_runner())
+    assert res["status"] == "failed" and res["verify"]["verified"] is False

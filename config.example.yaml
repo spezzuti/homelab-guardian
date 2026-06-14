@@ -278,6 +278,15 @@ repair:
       auto_approve: false       # true skips per-instance approval — leave off until you trust it
       max_attempts_per_hour: 3  # loop guard: after this, Guardian escalates to you instead of restarting again
       timeout: 60
+    restart_container:
+      enabled: false
+      # Only containers named here can be restarted. The container name is read
+      # from the failing docker_container_* check's evidence, then checked here.
+      allowed_containers: []    # e.g. [jellyfin, ersatztv]
+      use_sudo: false           # true → `sudo -n docker restart <name>` (scoped sudoers) if your user can't reach the Docker socket directly
+      auto_approve: false
+      max_attempts_per_hour: 3
+      timeout: 60
 
 notifications:
   # Delivery mode:

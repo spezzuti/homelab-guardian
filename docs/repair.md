@@ -158,9 +158,16 @@ a restart loop.
   the human ("I've restarted X three times this hour and it keeps failing — this
   needs you"). A repair that can't fix it must not become a restart loop of its own.
 
-Candidates for *later* (each its own design + sign-off): `restart_container`
-(Docker), `prune_path` (a specific, safe directory — higher risk, needs care),
-`renew_cert`. None ship with the first cut.
+**`restart_container`** (shipped second) — restart a watched Docker container that
+is `exited` / `dead` / `restarting` / `unhealthy`. Same shape: the container name
+is read from the failing `docker_container_*` check's evidence and checked against
+`repair.playbooks.restart_container.allowed_containers`; `run` is `docker restart
+<name>` (or `sudo -n docker restart <name>` when `use_sudo: true`, for hosts where
+the service user can't reach the Docker socket directly); `verify` re-runs the
+Docker collector for that check.
+
+Candidates for *later* (each its own design + sign-off): `prune_path` (a specific,
+safe directory — higher risk, needs care), `renew_cert`.
 
 ## Privilege
 
