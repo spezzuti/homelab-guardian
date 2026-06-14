@@ -241,7 +241,7 @@ def main() -> int:
     parser.add_argument(
         "command",
         nargs="?",
-        choices=["scan", "doctor", "init", "serve", "ack", "unack"],
+        choices=["scan", "doctor", "init", "serve", "ack", "unack", "mcp"],
         default="scan",
         help="Command to run",
     )
@@ -287,6 +287,10 @@ def main() -> int:
             scan_interval=args.interval,
             scan_loop=(lambda: run_scan_loop(args.config, args.interval)) if args.interval > 0 else None,
         )
+    if args.command == "mcp":
+        from homelab_guardian.mcp_server import run_stdio
+
+        return run_stdio(args.config)
     if args.interval > 0:
         return run_scan_loop(args.config, args.interval)
     return run_scan(args.config)

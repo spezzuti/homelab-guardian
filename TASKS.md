@@ -142,6 +142,27 @@ Marcus** (box `main`, new collectors enabled in the production config.yaml):
       already suppresses the Telegram page; the gap is the web view + the
       wasted scan. Add a `network-ready` preflight the scan loop awaits.
 
+## Sprint 9 — MCP server (2026-06-13)
+
+Expose Guardian over the Model Context Protocol so any agent (Marcus, Claude)
+gets its structured "eyes" instead of re-deriving homelab state. Design +
+connection details in `docs/mcp.md`.
+
+- [x] **Read-only MCP server** (`guardian mcp`, FastMCP over stdio): tools
+      `get_health_summary`, `list_problems`, `list_checks`, `get_check`,
+      `get_recent_changes`, `list_scan_history` + a `guardian://health`
+      resource. Thin layer over the existing `db`/`web`/`diff` helpers — reads
+      the same snapshot the web view renders; runs no scans, mutates nothing.
+- [x] Optional `[mcp]` extra (`pip install 'homelab-guardian[mcp]'`) so core
+      stays dependency-light; data layer unit-tested without `mcp` (7 tests).
+- [ ] Dogfood: install the extra on Marcus, point Marcus's MCP config at
+      `guardian mcp`, confirm Marcus consumes Guardian instead of double-alerting.
+- [ ] **Acknowledgement tools (gated write phase):** `acknowledge_check` /
+      `unacknowledge_check` behind an explicit opt-in (config flag / MCP
+      `always_ask`). First write surface — never on by default.
+- [ ] **Approval-gated repair playbooks** (whitelisted, never raw shell).
+- [ ] **HTTP transport + auth** once the dashboard auth foundation lands.
+
 ## Sprint 7 — reliability quartet (2026-06-13)
 
 - [x] Disk space collector (thresholds, defaults to the system drive)
