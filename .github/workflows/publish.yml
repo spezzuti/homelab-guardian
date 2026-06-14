@@ -7,7 +7,7 @@ name: Publish to PyPI
 #   Owner:             spezzuti
 #   Repository name:   homelab-guardian
 #   Workflow name:     publish.yml
-#   Environment:       pypi
+#   Environment:       (leave BLANK — this workflow does not use one)
 # After that, pushing a v* tag builds and publishes automatically.
 
 on:
@@ -17,7 +17,6 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    environment: pypi
     permissions:
       id-token: write   # required for Trusted Publishing (OIDC)
     steps:

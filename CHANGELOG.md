@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## v0.3.1 — 2026-06-14
+
+First release published to PyPI. (0.3.0 was tagged but never published.)
 
 ### Added
 
@@ -9,6 +11,13 @@
   bearer token (`mcp.http.token_env`); it refuses to start without one, so the
   network surface is never unauthenticated. For SSO, front it with a reverse
   proxy. Default bind `127.0.0.1:8675`.
+- **Scan-loop auto-repair (self-healing)** — with a playbook's `auto_approve:
+  true`, Guardian auto-proposes, executes, and verifies its repair on a
+  *confirmed* (flap-damped) critical, no human in the loop — the deterministic
+  reflex tier acting on its own. Loop-guarded and audited; destructive actions
+  still can never auto-approve. The agent notification carries what was
+  auto-handled (`auto_repaired`) so the agent narrates the fix instead of
+  re-alarming.
 
 ## v0.3.0 — 2026-06-14
 
