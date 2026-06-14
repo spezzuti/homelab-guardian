@@ -305,6 +305,21 @@ repair:
       enabled: false            # `sudo -n apt-get clean` (needs scoped sudoers); harmless, re-downloadable
       auto_approve: false
       max_attempts_per_hour: 2
+    prune_dir:
+      # Deletes USER files older than older_than_days under allowed_paths ONLY.
+      # risk:destructive (never auto-approves). Carries the backup interlock:
+      # a not-ok Backups check hard-refuses; with no Backups check it warns and
+      # allows unless require_fresh_backup is true.
+      enabled: false
+      allowed_paths: []         # e.g. [/srv/downloads/tmp] — never derived from input
+      older_than_days: 14
+      require_fresh_backup: false   # true → refuse unless a healthy Backups check exists
+      auto_approve: false
+      max_attempts_per_hour: 2
+      timeout: 120
+  # Optional: require re-typing the proposal id to execute a destructive repair
+  # (off by default — a single human approval is enough, like Claude Code).
+  require_typed_confirmation: false
 
 notifications:
   # Delivery mode:

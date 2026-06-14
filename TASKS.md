@@ -243,9 +243,17 @@ connection details in `docs/mcp.md`.
             surface); 🔧 header link with pending-count badge when repairs
             enabled. Approval channel ONLY — never executes (execution stays
             MCP/CLI). 251 tests (8 real-HTTP); box-smoked on an isolated serve.
-      - [ ] 3d: opt-in auto_approve for vetted actions; prune_path / renew_cert
-      - [ ] arm repairs on Marcus (enable + allowlist + scoped sudoers) — later,
-            user's call, as the system is fleshed out
+      - [x] 3d-a/3d-b (done 2026-06-14, commits 5de9c7c/9373591): reclaim design
+            + framework (preview/preconditions/risk-tiers) + cache/log playbooks
+            (docker_prune/journal_vacuum/apt_clean). 259 tests; preview dogfooded
+            read-only on the box. Reclaim stays disabled on live.
+      - [ ] 3d-c: prune_dir (user-data) + mandatory-narrow backup precondition
+            + optional require_typed_confirmation knob
+      - [x] ARMED on Marcus (go-live 2026-06-14): mcp.allow_writes + repair
+            (restart_systemd_unit[hermes-dashboard], auto_approve off); live
+            end-to-end dogfood on hermes-dashboard. Running as intended.
+      - [ ] expand repair coverage on Marcus (more watched units/allowlist +
+            scoped sudoers) as the system is fleshed out
 - [ ] **HTTP transport + auth** once the dashboard auth foundation lands.
 
 ## Sprint 7 — reliability quartet (2026-06-13)

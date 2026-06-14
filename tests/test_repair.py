@@ -347,3 +347,84 @@ def test_reclaim_execute_verifies_disk_recovered(tmp_path, monkeypatch):
     monkeypatch.setattr(dc, "collect", lambda config, secrets=None: [_disk_check("ok")])  # freed space
     res = repair.execute(config, conn, pid, runner=_reclaim_runner())
     assert res["status"] == "executed" and res["verify"]["status"] == "ok"
+
+
+# --- prune_dir: backup interlock + typed confirmation ----------------------
+
+def _backup_check(status="ok"):
+    return HealthCheck("backup_health_main", "Backup health", status, "snapshot fresh", group="Backups")
+
+
+def _prune_runner():
+    def run(cmd, **kw):
+        if "-printf" in cmd:                  # preview: sizes of matching files
+            return _CP(cmd, 0, "100\n200\n300\n")
+        if "-delete" in cmd:                  # the prune action
+            return _CP(cmd, 0)
+        return _CP(cmd, 0)
+    return run
+
+
+def _prune_config(tmp_path, **pb):
+    base = {"enabled": True, "allowed_paths": ["/srv/tmp"], "older_than_days": 14}
+    base.update(pb)
+    return {
+        "app": {"database_path": str(tmp_path / "g.sqlite")},
+        "collectors": {"disks": {"enabled": True}},
+        "repair": {"enabled": True, "playbooks": {"prune_dir": base}},
+    }
+
+
+def test_prune_dir_plan_and_preview(tmp_path):
+    config = _prune_config(tmp_path)
+    plan = repair.build_plan(config, _disk_check(), "prune_dir", latest_checks=[_disk_check()], runner=_prune_runner())
+    assert plan["argv"] == ["find", "/srv/tmp", "-type", "f", "-mtime", "+14", "-delete"]
+    assert plan["risk"] == "destructive"
+    assert plan["preview"]["files"] == 3 and plan["preview"]["bytes"] == 600
+
+
+def test_prune_dir_no_allowed_paths_refuses(tmp_path):
+    config = _prune_config(tmp_path, allowed_paths=[])
+    with pytest.raises(repair.RepairError, match="no allowed_paths"):
+        repair.build_plan(config, _disk_check(), "prune_dir", latest_checks=[_disk_check()])
+
+
+def test_prune_dir_refuses_when_backup_not_ok(tmp_path):
+    config = _prune_config(tmp_path)
+    latest = [_disk_check(), _backup_check("critical")]
+    with pytest.raises(repair.RepairError, match="backup safety net is down"):
+        repair.build_plan(config, _disk_check(), "prune_dir", latest_checks=latest, runner=_prune_runner())
+
+
+def test_prune_dir_allows_with_warning_when_no_backup(tmp_path):
+    config = _prune_config(tmp_path)
+    plan = repair.build_plan(config, _disk_check(), "prune_dir", latest_checks=[_disk_check()], runner=_prune_runner())
+    assert "No backup_health signal" in plan["warning"]  # allowed, but warned
+
+
+def test_prune_dir_require_fresh_backup_refuses_when_none(tmp_path):
+    config = _prune_config(tmp_path, require_fresh_backup=True)
+    with pytest.raises(repair.RepairError, match="requires a verified backup"):
+        repair.build_plan(config, _disk_check(), "prune_dir", latest_checks=[_disk_check()])
+
+
+def test_prune_dir_clean_when_backup_ok(tmp_path):
+    config = _prune_config(tmp_path)
+    plan = repair.build_plan(config, _disk_check(), "prune_dir",
+                             latest_checks=[_disk_check(), _backup_check("ok")], runner=_prune_runner())
+    assert "warning" not in plan  # healthy backup → no warning, allowed
+
+
+def test_typed_confirmation_blocks_then_allows(tmp_path, monkeypatch):
+    conn = db.connect(str(tmp_path / "g.sqlite"))
+    db.save_scan(conn, {"app": "HG", "checks": [_disk_check().to_dict(), _backup_check("ok").to_dict()]})
+    config = _prune_config(tmp_path)
+    config["repair"]["require_typed_confirmation"] = True
+    pid = repair.propose(config, conn, DISK_CHECK_ID, "prune_dir")["proposal_id"]
+    repair.approve(conn, pid, "alice")
+    with pytest.raises(repair.RepairError, match="typed confirmation"):
+        repair.execute(config, conn, pid, runner=_prune_runner())  # no token
+    import homelab_guardian.collectors.disk_collector as dc
+    monkeypatch.setattr(dc, "collect", lambda config, secrets=None: [_disk_check("ok"), _backup_check("ok")])
+    res = repair.execute(config, conn, pid, runner=_prune_runner(), confirmation=str(pid))
+    assert res["status"] == "executed"

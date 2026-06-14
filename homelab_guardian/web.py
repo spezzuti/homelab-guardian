@@ -661,6 +661,8 @@ def _render_proposal(p: dict[str, Any], *, editable: bool, csrf_token: str) -> s
     if plan.get("preview"):
         prev = ", ".join(f"{k}={v}" for k, v in plan["preview"].items())
         parts.append(f'<div class="rplan">Preview: <code>{html.escape(prev[:300])}</code></div>')
+    if plan.get("warning"):
+        parts.append(f'<div class="banner err">⚠ {html.escape(str(plan["warning"]))}</div>')
     meta = f'proposed by {html.escape(str(p.get("proposed_by") or "—"))} · {html.escape(str(p.get("proposed_at") or ""))}'
     if p.get("approved_by"):
         verb = "denied" if status == "denied" else "approved"
