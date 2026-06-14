@@ -266,8 +266,12 @@ connection details in `docs/mcp.md`.
       - [x] docs consolidation (commit 22f0b47): CHANGELOG Unreleased(v0.3)
             section + README MCP/agent/repair sections + corrected Core
             principles/Safety notes.
-      - [ ] expand repair coverage on Marcus (more watched units/allowlist +
-            scoped sudoers) as the system is fleshed out
+      - [x] expand repair coverage on Marcus (2026-06-14 eve): watched +
+            allowlisted the dashboard fleet (mnemosyne, agentic-os — user units)
+            + fail2ban (system unit) with a SCOPED sudoers grant
+            (`NOPASSWD: /usr/bin/systemctl restart fail2ban.service` only).
+            Doctor preflight validates; dogfooded the privileged fail2ban repair
+            end-to-end via the scoped grant. auto_approve still off (propose-only).
 - [ ] **HTTP transport + auth** once the dashboard auth foundation lands.
 
 ## Sprint 7 — reliability quartet (2026-06-13)
