@@ -287,6 +287,24 @@ repair:
       auto_approve: false
       max_attempts_per_hour: 3
       timeout: 60
+    # Disk-reclaim playbooks (see docs/repair-reclaim.md). Each applies to a
+    # FAILING disk_* check and carries a read-only preview of what it would free.
+    # docker_prune is risk:destructive and can never be auto-approved.
+    docker_prune:
+      enabled: false            # `docker system prune -f` (NOT volumes unless allow_volumes)
+      allow_volumes: false      # true also removes named volumes — that is data; leave off
+      auto_approve: false       # ignored for destructive actions even if set true
+      max_attempts_per_hour: 2
+      timeout: 120
+    journal_vacuum:
+      enabled: false            # `sudo -n journalctl --vacuum-size=<vacuum_size>` (needs scoped sudoers)
+      vacuum_size: "200M"
+      auto_approve: false
+      max_attempts_per_hour: 2
+    apt_clean:
+      enabled: false            # `sudo -n apt-get clean` (needs scoped sudoers); harmless, re-downloadable
+      auto_approve: false
+      max_attempts_per_hour: 2
 
 notifications:
   # Delivery mode:

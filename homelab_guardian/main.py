@@ -329,13 +329,16 @@ def run_ack(config_path: str, command: str, check_id: str | None, note: str, day
 
 
 def _print_plan(plan: dict) -> None:
-    print(f"  Action:       {plan['action']}")
+    print(f"  Action:       {plan['action']}  [risk: {plan.get('risk', 'moderate')}]")
     print(f"  Check:        {plan['check_id']}")
     print(f"  Will run:     {' '.join(plan['argv'])}")
     print(f"  Blast radius: {plan['blast_radius']}")
     print(f"  Reversible:   {plan['reversible']}")
+    if plan.get("preview"):
+        preview = ", ".join(f"{k}={v}" for k, v in plan["preview"].items())
+        print(f"  Preview:      {preview}")
     if plan.get("needs_privilege"):
-        print("  Privilege:    needs a scoped sudoers grant for that exact systemctl argv.")
+        print("  Privilege:    needs a scoped sudoers grant for that exact argv.")
 
 
 def run_repair(config_path: str, sub: str | None, rest: list[str], by: str = "cli") -> int:

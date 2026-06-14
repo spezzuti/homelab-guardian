@@ -234,3 +234,116 @@ def test_container_execute_still_failing(tmp_path, monkeypatch):
     _patch_docker_collect(monkeypatch, "exited")  # still down after restart
     res = repair.execute(config, conn, pid, runner=_runner())
     assert res["status"] == "failed" and res["verify"]["verified"] is False
+
+
+# --- disk-reclaim family: preview / risk tiers / preconditions -------------
+
+DISK_CHECK_ID = "disk__"  # disk collector slug for "/"
+
+
+def _disk_check(status="critical"):
+    return HealthCheck(DISK_CHECK_ID, "Disk space: /", status, "/ is 95.0% full (3.1 GiB free).",
+                       evidence={"path": "/", "percent_used": 95.0}, group="Host")
+
+
+def _rconfig(tmp_path, action, **pb):
+    base = {"enabled": True, "max_attempts_per_hour": 2}
+    base.update(pb)
+    return {
+        "app": {"database_path": str(tmp_path / "g.sqlite")},
+        "collectors": {"disks": {"enabled": True, "paths": [{"path": "/"}]}},
+        "repair": {"enabled": True, "playbooks": {action: base}},
+    }
+
+
+def _reclaim_runner(prune_code=0):
+    """Fake for reclaim: read-only preview commands + the reclaim argv."""
+    def run(cmd, **kw):
+        if "df" in cmd:                       # docker system df preview
+            return _CP(cmd, 0, "Images 2 1.1GB / Reclaimable 1.1GB")
+        if "--disk-usage" in cmd:             # journalctl preview
+            return _CP(cmd, 0, "Archived and active journals take up 740.0M")
+        if cmd[:2] == ["du", "-sh"]:          # apt cache preview
+            return _CP(cmd, 0, "182M\t/var/cache/apt/archives")
+        if "prune" in cmd or "vacuum-size" in " ".join(cmd) or "clean" in cmd:
+            return _CP(cmd, prune_code)       # the reclaim action itself
+        return _CP(cmd, 0)
+    return run
+
+
+def test_reclaim_applies_to_failing_disk_only(tmp_path):
+    config = _rconfig(tmp_path, "docker_prune")
+    assert "docker_prune" in repair.applicable_actions(config, _disk_check("critical"))
+    assert repair.applicable_actions(config, _disk_check("ok")) == []  # healthy disk → nothing
+
+
+def test_docker_prune_plan_has_preview_and_destructive_risk(tmp_path):
+    config = _rconfig(tmp_path, "docker_prune")
+    plan = repair.build_plan(config, _disk_check(), "docker_prune", runner=_reclaim_runner())
+    assert plan["argv"] == ["docker", "system", "prune", "-f"]  # never --volumes by default
+    assert plan["risk"] == "destructive"
+    assert "Reclaimable" in plan["preview"]["docker_system_df"]
+
+
+def test_allow_volumes_adds_flag(tmp_path):
+    config = _rconfig(tmp_path, "docker_prune", allow_volumes=True)
+    plan = repair.build_plan(config, _disk_check(), "docker_prune", runner=_reclaim_runner())
+    assert plan["argv"][-1] == "--volumes"
+
+
+def test_journal_and_apt_plans(tmp_path):
+    jc = _rconfig(tmp_path, "journal_vacuum", vacuum_size="100M")
+    jp = repair.build_plan(jc, _disk_check(), "journal_vacuum", runner=_reclaim_runner())
+    assert jp["argv"] == ["sudo", "-n", "journalctl", "--vacuum-size=100M"] and jp["risk"] == "moderate"
+    assert "740.0M" in jp["preview"]["current_journal_usage"]
+    ac = _rconfig(tmp_path, "apt_clean")
+    ap = repair.build_plan(ac, _disk_check(), "apt_clean", runner=_reclaim_runner())
+    assert ap["argv"] == ["sudo", "-n", "apt-get", "clean"] and ap["risk"] == "low"
+    assert ap["preview"]["apt_cache_size"] == "182M"
+
+
+def test_destructive_never_auto_approves(tmp_path):
+    conn = db.connect(str(tmp_path / "g.sqlite"))
+    db.save_scan(conn, {"app": "HG", "checks": [_disk_check().to_dict()]})
+    config = _rconfig(tmp_path, "docker_prune", auto_approve=True)  # opt-in ignored for destructive
+    res = repair.propose(config, conn, DISK_CHECK_ID, "docker_prune")
+    assert res["status"] == "proposed"  # NOT auto-approved despite auto_approve: true
+
+
+def test_low_risk_can_auto_approve(tmp_path):
+    conn = db.connect(str(tmp_path / "g.sqlite"))
+    db.save_scan(conn, {"app": "HG", "checks": [_disk_check().to_dict()]})
+    config = _rconfig(tmp_path, "apt_clean", auto_approve=True)
+    res = repair.propose(config, conn, DISK_CHECK_ID, "apt_clean")
+    assert res["status"] == "approved"  # low risk + opt-in → auto-approved
+
+
+def test_precondition_can_block(tmp_path):
+    # Inject a synthetic precondition to prove the cross-collector interlock hook.
+    monkey = repair.PLAYBOOKS["apt_clean"]
+    saved = dict(monkey)
+    monkey["preconditions"] = lambda config, pcfg, check, latest: "backup is stale" if any(
+        c.id == "backup_health" and c.status != "ok" for c in latest) else None
+    try:
+        conn = db.connect(str(tmp_path / "g.sqlite"))
+        db.save_scan(conn, {"app": "HG", "checks": [
+            _disk_check().to_dict(),
+            HealthCheck("backup_health", "Backup", "critical", "stale").to_dict(),
+        ]})
+        config = _rconfig(tmp_path, "apt_clean")
+        with pytest.raises(repair.RepairError, match="backup is stale"):
+            repair.propose(config, conn, DISK_CHECK_ID, "apt_clean")
+    finally:
+        repair.PLAYBOOKS["apt_clean"] = saved
+
+
+def test_reclaim_execute_verifies_disk_recovered(tmp_path, monkeypatch):
+    conn = db.connect(str(tmp_path / "g.sqlite"))
+    db.save_scan(conn, {"app": "HG", "checks": [_disk_check("critical").to_dict()]})
+    config = _rconfig(tmp_path, "docker_prune")
+    pid = repair.propose(config, conn, DISK_CHECK_ID, "docker_prune")["proposal_id"]
+    repair.approve(conn, pid, "alice")
+    import homelab_guardian.collectors.disk_collector as dc
+    monkeypatch.setattr(dc, "collect", lambda config, secrets=None: [_disk_check("ok")])  # freed space
+    res = repair.execute(config, conn, pid, runner=_reclaim_runner())
+    assert res["status"] == "executed" and res["verify"]["status"] == "ok"
