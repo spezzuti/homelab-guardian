@@ -195,8 +195,16 @@ connection details in `docs/mcp.md`.
       the same snapshot the web view renders; runs no scans, mutates nothing.
 - [x] Optional `[mcp]` extra (`pip install 'homelab-guardian[mcp]'`) so core
       stays dependency-light; data layer unit-tested without `mcp` (7 tests).
-- [ ] Dogfood: install the extra on Marcus, point Marcus's MCP config at
-      `guardian mcp`, confirm Marcus consumes Guardian instead of double-alerting.
+- [x] Dogfood: install the extra on Marcus, point Marcus's MCP config at
+      `guardian mcp` (done 2026-06-14, Door A step 1). `pip install -e '.[mcp]'`
+      into Guardian's venv (importable from any cwd + `guardian` console cmd);
+      `guardian` stdio entry added to `~/.hermes/config.yaml` mcp_servers;
+      MCP db path now resolves against the config dir so the foreign-cwd launch
+      reads the right snapshot. Verified: `hermes mcp test guardian` →
+      `✓ Connected (763ms)`, 6 tools discovered.
+      Remaining: the *behavioural* half — make Marcus actually prefer Guardian
+      for health questions / stop double-alerting (a hermes agent-policy change,
+      not transport). Capability is now in place.
 - [ ] **Acknowledgement tools (gated write phase):** `acknowledge_check` /
       `unacknowledge_check` behind an explicit opt-in (config flag / MCP
       `always_ask`). First write surface — never on by default.

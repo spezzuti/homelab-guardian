@@ -96,10 +96,42 @@ async with stdio_client(params) as (read, write):
 
 **Marcus (hermes-agent)** — point its MCP config at the same stdio command. This
 is the configuration that lets Marcus consume Guardian instead of double-alerting.
+hermes-agent uses a `mcp_servers.<name>` block (stdio `command`/`args`); the live
+wiring on Marcus is:
+
+```yaml
+# ~/.hermes/config.yaml
+mcp_servers:
+  guardian:
+    command: /home/marcus/homelab-guardian/.venv/bin/guardian
+    args: [mcp, --config, /home/marcus/homelab-guardian/config.yaml]
+    enabled: true
+    timeout: 30
+    tools:
+      resources: true
+```
+
+Two prerequisites the stdio launch depends on, both because the client starts
+`guardian mcp` from **its own** working directory, not Guardian's:
+
+1. The package must be importable from any cwd — `pip install -e '.[mcp]'` into
+   Guardian's venv (this also creates the `guardian` console command). Running
+   straight from the source tree only works when cwd is the checkout.
+2. A relative `app.database_path` is resolved against the **config file's**
+   directory (see `resolve_database_path`), so the server reads the same
+   snapshot the scanner writes — regardless of where the client launched it.
+
+Verify with hermes's own tooling: `hermes mcp test guardian` should report
+`✓ Connected` and `✓ Tools discovered: 6`.
 
 ## Roadmap
 
 1. **v1 (done):** read-only stdio server, the six tools + health resource.
+   **Wired live on Marcus (2026-06-14):** `hermes mcp test guardian` →
+   `✓ Connected`, 6 tools. Marcus can now read Guardian's view over MCP.
+   *Remaining behavioural step: have Marcus actually prefer Guardian for
+   homelab-health questions / stop its own redundant alerting — an agent-policy
+   change on the hermes side, separate from this transport wiring.*
 2. **Acknowledgement tools (gated):** `acknowledge_check` / `unacknowledge_check`
    — the first *write* surface. Mutates the acks table, so it ships behind an
    explicit opt-in (a config flag and/or MCP `always_ask` confirmation), never on
