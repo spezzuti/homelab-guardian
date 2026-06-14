@@ -367,10 +367,11 @@ def build_server(database_path: str, allow_writes: bool = False, config: dict[st
                 if check is None:
                     return {"error": f"No check '{check_id}' in the latest scan."}
                 actions = _repair.applicable_actions(config, check)
+                latest = _repair._all_latest_checks(conn)
                 plans = []
                 for a in actions:
                     try:
-                        plans.append(_repair.build_plan(config, check, a))
+                        plans.append(_repair.build_plan(config, check, a, latest_checks=latest))
                     except _repair.RepairError as exc:
                         plans.append({"action": a, "blocked": str(exc)})
                 return {"check_id": check_id, "status": check.status, "actions": actions, "plans": plans}

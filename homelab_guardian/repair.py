@@ -136,16 +136,108 @@ def _docker_verify(config: dict[str, Any], check_id: str, runner) -> Any:
     return None
 
 
+# --- disk-reclaim playbooks (destructive family) ---------------------------
+# These apply to a FAILING disk check. Unlike restart, the action is a fixed
+# whitelisted reclaim (not derived from the check) — the disk check only triggers
+# applicability. Each carries a read-only `preview` (concrete effects) and a risk
+# tier; `docker_prune` is `destructive` and so can never be auto-approved.
+
+def _disk_applies(check) -> bool:
+    return (
+        check.id.startswith("disk_")
+        and check.status in {"warning", "critical"}
+        and isinstance(check.evidence, dict)
+    )
+
+
+def _disk_verify(config: dict[str, Any], check_id: str, runner) -> Any:
+    from homelab_guardian.collectors import disk_collector
+
+    for c in disk_collector.collect(config.get("collectors", {}).get("disks", {}) or {}):
+        if c.id == check_id:
+            return c
+    return None
+
+
+def _run_read(runner, argv: list[str], timeout: float = 15) -> str:
+    """Best-effort read-only command for previews. Returns stripped stdout or ''."""
+    try:
+        r = runner(argv, capture_output=True, text=True, timeout=timeout)
+        return (r.stdout or "").strip()
+    except Exception:
+        return ""
+
+
+def _docker_prune_plan(config, pcfg, check) -> dict[str, Any]:
+    allow_volumes = bool(pcfg.get("allow_volumes", False))
+    argv = ["docker", "system", "prune", "-f"] + (["--volumes"] if allow_volumes else [])
+    scope = " INCLUDING named volumes (data loss!)" if allow_volumes else " (images/containers/networks/build cache — not volumes)"
+    return {
+        "action": "docker_prune", "check_id": check.id, "params": {"allow_volumes": allow_volumes},
+        "argv": argv,
+        "blast_radius": f"Removes unused Docker data{scope}. Stopped containers and dangling images are deleted.",
+        "reversible": "Not reversible — pruned images/containers are gone (re-pullable / re-creatable).",
+        "needs_privilege": False, "timeout": float(pcfg.get("timeout", 120)),
+    }
+
+
+def _docker_prune_preview(config, pcfg, check, runner) -> dict[str, Any]:
+    return {"docker_system_df": _run_read(runner, ["docker", "system", "df"], 20) or "unavailable"}
+
+
+def _journal_vacuum_plan(config, pcfg, check) -> dict[str, Any]:
+    cap = str(pcfg.get("vacuum_size", "200M"))
+    return {
+        "action": "journal_vacuum", "check_id": check.id, "params": {"vacuum_size": cap},
+        "argv": ["sudo", "-n", "journalctl", f"--vacuum-size={cap}"],
+        "blast_radius": f"Trims the systemd journal to {cap}; older log history is deleted.",
+        "reversible": "Not reversible — vacuumed journal entries are gone.",
+        "needs_privilege": True, "timeout": float(pcfg.get("timeout", 60)),
+    }
+
+
+def _journal_vacuum_preview(config, pcfg, check, runner) -> dict[str, Any]:
+    return {
+        "current_journal_usage": _run_read(runner, ["journalctl", "--disk-usage"], 15) or "unavailable",
+        "vacuum_target": str(pcfg.get("vacuum_size", "200M")),
+    }
+
+
+def _apt_clean_plan(config, pcfg, check) -> dict[str, Any]:
+    return {
+        "action": "apt_clean", "check_id": check.id, "params": {},
+        "argv": ["sudo", "-n", "apt-get", "clean"],
+        "blast_radius": "Deletes cached .deb downloads from /var/cache/apt/archives.",
+        "reversible": "Harmless — packages re-download on the next apt operation; no system change.",
+        "needs_privilege": True, "timeout": float(pcfg.get("timeout", 60)),
+    }
+
+
+def _apt_clean_preview(config, pcfg, check, runner) -> dict[str, Any]:
+    out = _run_read(runner, ["du", "-sh", "/var/cache/apt/archives"], 15)
+    return {"apt_cache_size": (out.split()[0] if out else "unavailable")}
+
+
 PLAYBOOKS: dict[str, dict[str, Any]] = {
     "restart_systemd_unit": {
-        "applies_to": _systemd_applies,
-        "plan": _systemd_plan,
-        "verify": _systemd_verify,
+        "applies_to": _systemd_applies, "plan": _systemd_plan, "verify": _systemd_verify,
+        "risk": "moderate",
     },
     "restart_container": {
-        "applies_to": _docker_applies,
-        "plan": _docker_plan,
-        "verify": _docker_verify,
+        "applies_to": _docker_applies, "plan": _docker_plan, "verify": _docker_verify,
+        "risk": "moderate",
+    },
+    "docker_prune": {
+        "applies_to": _disk_applies, "plan": _docker_prune_plan, "verify": _disk_verify,
+        "preview": _docker_prune_preview, "risk": "destructive",
+    },
+    "journal_vacuum": {
+        "applies_to": _disk_applies, "plan": _journal_vacuum_plan, "verify": _disk_verify,
+        "preview": _journal_vacuum_preview, "risk": "moderate",
+    },
+    "apt_clean": {
+        "applies_to": _disk_applies, "plan": _apt_clean_plan, "verify": _disk_verify,
+        "preview": _apt_clean_preview, "risk": "low",
     },
 }
 
@@ -173,15 +265,21 @@ def applicable_actions(config: dict[str, Any], check) -> list[str]:
     return out
 
 
-def build_plan(config: dict[str, Any], check, action: str) -> dict[str, Any]:
+def build_plan(
+    config: dict[str, Any], check, action: str, latest_checks=None,
+    runner: Callable[..., subprocess.CompletedProcess] = subprocess.run,
+) -> dict[str, Any]:
     """Validate everything and resolve a concrete plan. Raises RepairError if the
-    repair is not permitted. Changes nothing — this is the dry run."""
+    repair is not permitted. Changes nothing — this is the dry run. Carries the
+    risk tier; runs the playbook's preconditions (cross-collector interlocks,
+    evaluated against `latest_checks`) and computes its read-only `preview`."""
     if not is_enabled(config):
         raise RepairError("Repairs are disabled (repair.enabled is false).")
     pb = PLAYBOOKS.get(action)
     if pb is None:
         raise RepairError(f"Unknown repair action '{action}'.")
-    if not _playbook_config(config, action).get("enabled", False):
+    pcfg = _playbook_config(config, action)
+    if not pcfg.get("enabled", False):
         raise RepairError(f"Repair action '{action}' is not enabled.")
     if check is None:
         raise RepairError("No such check in the latest scan.")
@@ -189,7 +287,30 @@ def build_plan(config: dict[str, Any], check, action: str) -> dict[str, Any]:
         raise RepairError(f"Check '{check.id}' is not failing; nothing to repair.")
     if not pb["applies_to"](check):
         raise RepairError(f"'{action}' does not apply to check '{check.id}'.")
-    return pb["plan"](config, _playbook_config(config, action), check)
+
+    # Preconditions: cross-collector interlocks against Guardian's own state.
+    precond = pb.get("preconditions")
+    if precond is not None and latest_checks is not None:
+        reason = precond(config, pcfg, check, latest_checks)
+        if reason:
+            raise RepairError(reason)
+
+    plan = pb["plan"](config, pcfg, check)
+    plan["risk"] = pb.get("risk", "moderate")
+
+    # Preview: a read-only estimate of the concrete effect, best-effort.
+    preview_fn = pb.get("preview")
+    if preview_fn is not None:
+        try:
+            plan["preview"] = preview_fn(config, pcfg, check, runner)
+        except Exception as exc:
+            plan["preview"] = {"error": str(exc)}
+    return plan
+
+
+def _all_latest_checks(conn) -> list:
+    scan = db.load_latest_scan(conn)
+    return web.checks_from_snapshot(scan[2]) if scan is not None else []
 
 
 # --- orchestration (propose / approve / deny / execute) --------------------
@@ -197,10 +318,11 @@ def build_plan(config: dict[str, Any], check, action: str) -> dict[str, Any]:
 def propose(config: dict[str, Any], conn, check_id: str, action: str, proposed_by: str = "") -> dict[str, Any]:
     """Create a proposal (dry run + recorded plan). Auto-approves only if the
     playbook opts in via auto_approve. Returns the proposal id, plan, and status."""
-    plan = build_plan(config, _load_check(conn, check_id), action)
+    plan = build_plan(config, _load_check(conn, check_id), action, latest_checks=_all_latest_checks(conn))
     proposal_id = db.create_repair_proposal(conn, check_id, action, plan, proposed_by=proposed_by)
     status = "proposed"
-    if _playbook_config(config, action).get("auto_approve", False):
+    # Auto-approve is opt-in AND never available to destructive actions.
+    if _playbook_config(config, action).get("auto_approve", False) and plan.get("risk") != "destructive":
         db.set_repair_decision(conn, proposal_id, "approved", "auto-approve")
         status = "approved"
     return {"proposal_id": proposal_id, "status": status, "plan": plan}
@@ -247,13 +369,15 @@ def execute(
         raise RepairError(f"No proposal #{proposal_id}.")
     if p["status"] != "approved":
         raise RepairError(f"Proposal #{proposal_id} is '{p['status']}', not approved — cannot execute.")
+    plan = p["plan_json"] if isinstance(p["plan_json"], dict) else {}
+    if plan.get("risk") == "destructive" and p.get("approved_by") == "auto-approve":
+        raise RepairError("Destructive repairs cannot run on an auto-approval; they require explicit human approval.")
     if not _within_loop_guard(config, conn, p["action"], p["check_id"]):
         raise RepairError(
             f"Loop guard: '{p['action']}' on '{p['check_id']}' has already run its hourly limit. "
             "It keeps not recovering — this needs a human, not another restart."
         )
 
-    plan = p["plan_json"] if isinstance(p["plan_json"], dict) else {}
     argv = p["argv"] if isinstance(p["argv"], list) else []
     try:
         completed = runner(argv, capture_output=True, text=True, timeout=float(plan.get("timeout", 60)))

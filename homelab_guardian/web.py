@@ -654,8 +654,13 @@ def _render_proposal(p: dict[str, Any], *, editable: bool, csrf_token: str) -> s
     ]
     if argv:
         parts.append(f'<div class="rplan">Will run: <code>{html.escape(argv)}</code></div>')
+    if plan.get("risk"):
+        parts.append(f'<div class="cid">risk: {html.escape(str(plan["risk"]))}</div>')
     if plan.get("blast_radius"):
         parts.append(f'<div class="notice">{html.escape(str(plan["blast_radius"]))}</div>')
+    if plan.get("preview"):
+        prev = ", ".join(f"{k}={v}" for k, v in plan["preview"].items())
+        parts.append(f'<div class="rplan">Preview: <code>{html.escape(prev[:300])}</code></div>')
     meta = f'proposed by {html.escape(str(p.get("proposed_by") or "—"))} · {html.escape(str(p.get("proposed_at") or ""))}'
     if p.get("approved_by"):
         verb = "denied" if status == "denied" else "approved"

@@ -142,13 +142,18 @@ repair:
 
 ## Phased plan
 
-- **a — this doc + sign-off.** ← here.
-- **b — framework: `preview` + `preconditions` + risk tiers**, wired into
-  propose/approve/execute and the three surfaces (CLI/dashboard/MCP), with the
-  audit trail carrying the preview. Then `docker_prune`, `journal_vacuum`,
-  `apt_clean` (the cache/log ones — destructive but no user data).
-- **c — `prune_dir`** (the user-data one) with the backup precondition + the
-  stronger confirmation we settle on below. Dogfood on a throwaway dir.
+- **a — doc + sign-off.** Done.
+- **b — framework + cache/log reclaim. Done.** `preview` (read-only effects,
+  carried on the proposal/audit), `preconditions` hook (cross-collector
+  interlock, evaluated at propose), and `risk` tiers (destructive can never
+  auto-approve — enforced at propose and defended at execute) are wired through
+  build_plan/propose/execute and shown on all three surfaces (CLI/dashboard/MCP).
+  Playbooks `docker_prune` (destructive), `journal_vacuum` (moderate), `apt_clean`
+  (low) ship, each with a preview, all `enabled: false` by default.
+- **c — `prune_dir`** (the user-data one) with the mandatory-but-narrow backup
+  precondition (configured-but-stale → hard refuse; no backup configured → warn
+  unless `require_fresh_backup: true`) and the optional `require_typed_confirmation`
+  knob. Dogfood on a throwaway dir. *Not yet built.*
 
 ## Operationalizing on Marcus — the deconfliction track (the "rest")
 
