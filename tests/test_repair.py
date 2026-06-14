@@ -463,6 +463,48 @@ def test_destructive_fails_closed_without_state(tmp_path):
         repair.build_plan(config, _disk_check(), "prune_dir", latest_checks=None)  # no state → refuse
 
 
+# --- remount playbook ------------------------------------------------------
+
+MOUNT_CHECK_ID = "mount_mnt_nas"
+
+
+def _mount_check(status="critical"):
+    return HealthCheck(MOUNT_CHECK_ID, "Mount: /mnt/nas", status, "/mnt/nas is not mounted.",
+                       evidence={"path": "/mnt/nas", "mounted": False, "required": True}, group="Storage")
+
+
+def _mconfig(tmp_path, **pb):
+    base = {"enabled": True, "allowed_mounts": ["/mnt/nas"], "max_attempts_per_hour": 3}
+    base.update(pb)
+    return {
+        "app": {"database_path": str(tmp_path / "g.sqlite")},
+        "collectors": {"mounts": {"enabled": True, "mounts": [{"path": "/mnt/nas"}]}},
+        "repair": {"enabled": True, "playbooks": {"remount": base}},
+    }
+
+
+def test_remount_plan_and_allowlist(tmp_path):
+    config = _mconfig(tmp_path)
+    assert repair.applicable_actions(config, _mount_check()) == ["remount"]
+    plan = repair.build_plan(config, _mount_check(), "remount", latest_checks=[_mount_check()])
+    assert plan["argv"] == ["sudo", "-n", "mount", "/mnt/nas"] and plan["risk"] == "moderate"
+    with pytest.raises(repair.RepairError, match="not in the allowlist"):
+        repair.build_plan(_mconfig(tmp_path, allowed_mounts=["/other"]), _mount_check(), "remount",
+                          latest_checks=[_mount_check()])
+
+
+def test_remount_execute_verifies(tmp_path, monkeypatch):
+    conn = db.connect(str(tmp_path / "g.sqlite"))
+    db.save_scan(conn, {"app": "HG", "checks": [_mount_check("critical").to_dict()]})
+    config = _mconfig(tmp_path)
+    pid = repair.propose(config, conn, MOUNT_CHECK_ID, "remount")["proposal_id"]
+    repair.approve(conn, pid, "alice")
+    import homelab_guardian.collectors.mount_collector as mc
+    monkeypatch.setattr(mc, "collect", lambda config, secrets=None: [_mount_check("ok")])  # re-mounted
+    res = repair.execute(config, conn, pid, runner=lambda cmd, **k: _CP(cmd, 0))
+    assert res["status"] == "executed" and res["verify"]["status"] == "ok"
+
+
 # --- auto-repair (scan-loop reflex self-healing) ---------------------------
 
 def _confirmed(check_id, status="critical"):

@@ -28,6 +28,7 @@ _FRIENDLY = {
     "firewall": "Host firewall",
     "network": "Network checks",
     "docker": "Docker",
+    "mounts": "Mount health",
 }
 
 # One-line descriptions so similar-sounding collectors are unmistakable in the
@@ -46,6 +47,7 @@ _DESCRIPTIONS = {
     "firewall": "Checks the host firewall is active and default-deny.",
     "network": "Checks DNS, TCP, HTTP, and TLS reachability targets.",
     "docker": "Checks container health (running / exited / unhealthy).",
+    "mounts": "Checks configured NAS/NFS/CIFS mountpoints are actually mounted.",
 }
 
 

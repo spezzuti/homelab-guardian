@@ -18,6 +18,7 @@ from homelab_guardian.collectors import (
     exposed_services_collector,
     firewall_collector,
     homeassistant_collector,
+    mount_collector,
     network_collector,
     ssh_collector,
     systemd_collector,
@@ -46,6 +47,7 @@ COLLECTORS: dict[str, CollectorFn] = {
     "ssh": ssh_collector.collect,
     "updates": updates_collector.collect,
     "backup_health": backup_health_collector.collect,
+    "mounts": mount_collector.collect,
 }
 
 
