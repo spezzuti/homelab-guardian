@@ -277,6 +277,18 @@ connection details in `docs/mcp.md`.
 - [x] BYOM AI briefing layer over one OpenAI-compatible endpoint
 - [ ] Per-config database_path guidance enforcement (currently docs-only)
 
+## Future collector enhancements
+
+- [ ] **DNS answer-assertion (split-horizon validation)**: extend the network
+      collector's `dns_checks` to support `server:` (query a specific resolver,
+      e.g. Pi-hole at 192.168.0.42) and `expected:` (assert the returned A
+      record, e.g. port.primalserv.com -> 192.168.0.87). Today the DNS check is
+      resolvability-only via the system resolver. This is the one capability
+      Marcus's retired lobby_network_watchdog had that Guardian lacks; deferred
+      by choice (a broken split-horizon would still surface via the dependent
+      http_checks failing). Broadly useful for any split-DNS homelab, not
+      Marcus-specific. Needs dnspython or a small UDP DNS query (no system dep).
+
 ## Future remote-collector support
 
 - [ ] Design remote Docker collector transport without giving the app broad shell access
