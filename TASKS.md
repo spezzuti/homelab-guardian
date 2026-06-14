@@ -235,8 +235,9 @@ connection details in `docs/mcp.md`.
       - [x] restart_container playbook (done 2026-06-14, commit d9c6ba0):
             same propose/approve/execute/verify shape; container name from the
             failing docker_container_* check's evidence, allowlisted, `docker
-            restart <name>` (or sudo). 243 tests. No live Docker dogfood — Marcus
-            runs no containers; rides the framework already proven live in 3b.
+            restart <name>` (or sudo). 243 tests. Dogfooded live on Marcus with a
+            throwaway alpine container: detect(exited)→propose→refuse-unapproved
+            →approve→real `docker restart`→verify(running)→audit; cleaned up.
       - [ ] 3c: dashboard Approve/Deny UX (reuse auth+CSRF)
       - [ ] 3d: opt-in auto_approve for vetted actions; prune_path / renew_cert
       - [ ] arm repairs on Marcus (enable + allowlist + scoped sudoers) — later,
