@@ -188,6 +188,27 @@ THEME_SCRIPT = """
 })();
 </script>"""
 
+# Remember each health tile's open/closed state across the page's auto-refresh,
+# so collapsing a tile sticks instead of springing back open every cycle.
+TILE_SCRIPT = """
+<script>
+(function () {
+  function key(d) { return "guardian-tile:" + (d.getAttribute("data-tile") || ""); }
+  function init() {
+    document.querySelectorAll("details.tile").forEach(function (d) {
+      var saved = localStorage.getItem(key(d));
+      if (saved === "open") d.open = true;
+      else if (saved === "closed") d.open = false;
+      d.addEventListener("toggle", function () {
+        localStorage.setItem(key(d), d.open ? "open" : "closed");
+      });
+    });
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+  else init();
+})();
+</script>"""
+
 
 def _category(check_id: str) -> str:
     for prefix, label in _CATEGORY_PREFIXES:
@@ -371,7 +392,10 @@ def _render_groups(checks: list[HealthCheck]) -> str:
     # checks stay visible, but can be collapsed to tidy the view.
     if healthy_groups:
         total_ok = sum(len(m) for _, m in healthy_groups)
-        healthy_groups.sort(key=lambda kv: kv[0].lower())
+        # Largest tiles first so paired rows are closer in height; collapsed by
+        # default (even + calm), with per-tile open state remembered client-side
+        # so an auto-refresh never re-expands what you collapsed.
+        healthy_groups.sort(key=lambda kv: (-len(kv[1]), kv[0].lower()))
         tiles = []
         for name, members in healthy_groups:
             items = "".join(
@@ -379,7 +403,7 @@ def _render_groups(checks: list[HealthCheck]) -> str:
                 for c in sorted(members, key=lambda c: c.name.lower())
             )
             tiles.append(
-                f'<details class="tile okc" open><summary>✅ {html.escape(name)}'
+                f'<details class="tile okc" data-tile="{html.escape(name)}"><summary>✅ {html.escape(name)}'
                 f'<span class="tcount">({len(members)})</span></summary>'
                 f'<ul>{items}</ul></details>'
             )
@@ -466,7 +490,7 @@ def render_scan_page(
 {_render_groups(checks)}
 {_render_history(history, scan_id)}
 <footer>Homelab Guardian — read-only view · <a href="/">latest</a></footer>
-</main></body></html>"""
+</main>{TILE_SCRIPT}</body></html>"""
 
 
 def render_empty_page() -> str:

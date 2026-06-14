@@ -88,8 +88,9 @@ def test_healthy_groups_render_as_collapsible_tiles():
     ]
     page = render_scan_page(_scan(1, *checks), ScanDiff(), history=[], refresh_seconds=0)
     assert "tilegrid" in page
-    assert '<details class="tile okc" open>' in page
-    assert "Core services" in page
+    # collapsed by default, with a stable key for client-side state persistence
+    assert '<details class="tile okc" data-tile="Core services">' in page
+    assert "guardian-tile:" in page  # persistence script present
     assert 'title="answers 200"' in page
 
 
