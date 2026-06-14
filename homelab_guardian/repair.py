@@ -218,6 +218,73 @@ def _apt_clean_preview(config, pcfg, check, runner) -> dict[str, Any]:
     return {"apt_cache_size": (out.split()[0] if out else "unavailable")}
 
 
+# prune_dir is the sharp one: it deletes USER files. The target dirs come from an
+# explicit allowlist (never the check / never caller text), with an age filter,
+# and it carries a backup precondition — refuse to delete when Guardian's own
+# backup_health is not ok-and-present.
+
+def _human_bytes(n: int) -> str:
+    f = float(n)
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if f < 1024:
+            return f"{f:.0f}{unit}"
+        f /= 1024
+    return f"{f:.0f}PB"
+
+
+def _backup_checks(latest_checks) -> list:
+    return [c for c in latest_checks if getattr(c, "group", "") == "Backups"]
+
+
+def _prune_dir_plan(config, pcfg, check) -> dict[str, Any]:
+    paths = [str(p) for p in (pcfg.get("allowed_paths") or [])]
+    if not paths:
+        raise RepairError("prune_dir has no allowed_paths configured; nothing is permitted.")
+    days = int(pcfg.get("older_than_days", 14))
+    argv = ["find", *paths, "-type", "f", "-mtime", f"+{days}", "-delete"]
+    return {
+        "action": "prune_dir", "check_id": check.id,
+        "params": {"paths": paths, "older_than_days": days},
+        "argv": argv,
+        "blast_radius": f"Permanently deletes files older than {days}d under: {', '.join(paths)}. User data — irreversible.",
+        "reversible": "NOT reversible — deleted files are gone; restore from backup if needed.",
+        "needs_privilege": False, "timeout": float(pcfg.get("timeout", 120)),
+    }
+
+
+def _prune_dir_preview(config, pcfg, check, runner) -> dict[str, Any]:
+    paths = [str(p) for p in (pcfg.get("allowed_paths") or [])]
+    days = int(pcfg.get("older_than_days", 14))
+    if not paths:
+        return {"error": "no allowed_paths"}
+    out = _run_read(runner, ["find", *paths, "-type", "f", "-mtime", f"+{days}", "-printf", "%s\\n"], 30)
+    sizes = [int(x) for x in out.split() if x.isdigit()]
+    total = sum(sizes)
+    return {"files": len(sizes), "bytes": total, "approx": _human_bytes(total), "older_than_days": days}
+
+
+def _prune_dir_precond(config, pcfg, check, latest_checks):
+    """Mandatory-but-narrow backup interlock. Configured-but-not-ok backup → hard
+    refuse. No backup signal at all → allow unless require_fresh_backup (then
+    refuse). Healthy backup → allow."""
+    backups = _backup_checks(latest_checks)
+    if backups:
+        if any(c.status != "ok" for c in backups):
+            return ("prune_dir refused: a Backups check is not ok — do not delete user files "
+                    "while the backup safety net is down.")
+        return None
+    if bool(pcfg.get("require_fresh_backup", False)):
+        return ("prune_dir requires a verified backup, but no Backups check is configured. "
+                "Add backup_health, or set require_fresh_backup: false to override.")
+    return None
+
+
+def _prune_dir_warn(config, pcfg, check, latest_checks):
+    if not _backup_checks(latest_checks):
+        return "No backup_health signal configured — deleting user files without a verified backup."
+    return None
+
+
 PLAYBOOKS: dict[str, dict[str, Any]] = {
     "restart_systemd_unit": {
         "applies_to": _systemd_applies, "plan": _systemd_plan, "verify": _systemd_verify,
@@ -238,6 +305,11 @@ PLAYBOOKS: dict[str, dict[str, Any]] = {
     "apt_clean": {
         "applies_to": _disk_applies, "plan": _apt_clean_plan, "verify": _disk_verify,
         "preview": _apt_clean_preview, "risk": "low",
+    },
+    "prune_dir": {
+        "applies_to": _disk_applies, "plan": _prune_dir_plan, "verify": _disk_verify,
+        "preview": _prune_dir_preview, "preconditions": _prune_dir_precond,
+        "warn": _prune_dir_warn, "risk": "destructive",
     },
 }
 
@@ -297,6 +369,13 @@ def build_plan(
 
     plan = pb["plan"](config, pcfg, check)
     plan["risk"] = pb.get("risk", "moderate")
+
+    # Warn (non-blocking advisory, e.g. "no verified backup") carried on the plan.
+    warn_fn = pb.get("warn")
+    if warn_fn is not None and latest_checks is not None:
+        w = warn_fn(config, pcfg, check, latest_checks)
+        if w:
+            plan["warning"] = w
 
     # Preview: a read-only estimate of the concrete effect, best-effort.
     preview_fn = pb.get("preview")
@@ -358,6 +437,7 @@ def execute(
     proposal_id: int,
     executed_by: str = "",
     runner: Callable[..., subprocess.CompletedProcess] = subprocess.run,
+    confirmation: str | None = None,
 ) -> dict[str, Any]:
     """Run an APPROVED proposal's action, then verify recovery. Refuses anything
     not approved, already executed, or over the loop guard. Never raises on a
@@ -372,6 +452,13 @@ def execute(
     plan = p["plan_json"] if isinstance(p["plan_json"], dict) else {}
     if plan.get("risk") == "destructive" and p.get("approved_by") == "auto-approve":
         raise RepairError("Destructive repairs cannot run on an auto-approval; they require explicit human approval.")
+    # Optional typed-confirmation gate for destructive actions (off by default).
+    require_typed = (bool(config.get("repair", {}).get("require_typed_confirmation", False))
+                     or bool(_playbook_config(config, p["action"]).get("require_typed_confirmation", False)))
+    if plan.get("risk") == "destructive" and require_typed and str(confirmation) != str(proposal_id):
+        raise RepairError(
+            f"This destructive repair requires typed confirmation — re-run with the token '{proposal_id}'."
+        )
     if not _within_loop_guard(config, conn, p["action"], p["check_id"]):
         raise RepairError(
             f"Loop guard: '{p['action']}' on '{p['check_id']}' has already run its hourly limit. "

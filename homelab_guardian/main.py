@@ -337,11 +337,13 @@ def _print_plan(plan: dict) -> None:
     if plan.get("preview"):
         preview = ", ".join(f"{k}={v}" for k, v in plan["preview"].items())
         print(f"  Preview:      {preview}")
+    if plan.get("warning"):
+        print(f"  ⚠ Warning:    {plan['warning']}")
     if plan.get("needs_privilege"):
         print("  Privilege:    needs a scoped sudoers grant for that exact argv.")
 
 
-def run_repair(config_path: str, sub: str | None, rest: list[str], by: str = "cli") -> int:
+def run_repair(config_path: str, sub: str | None, rest: list[str], by: str = "cli", confirm: str | None = None) -> int:
     from homelab_guardian import repair
 
     config = load_config(config_path)
@@ -395,7 +397,7 @@ def run_repair(config_path: str, sub: str | None, rest: list[str], by: str = "cl
                 repair.deny(conn, pid, denied_by=by)
                 print(f"Proposal #{pid} denied.")
             else:
-                res = repair.execute(config, conn, pid, executed_by=by)
+                res = repair.execute(config, conn, pid, executed_by=by, confirmation=confirm)
                 r, v = res["result"], res["verify"]
                 ran = f"exit {r.get('exit_code')}" if r.get("ran") else f"did not run: {r.get('error')}"
                 print(f"Proposal #{pid} {res['status']} — action {ran}.")
@@ -481,6 +483,7 @@ def main() -> int:
     parser.add_argument("check_id", nargs="?", help="ack/unack: the check id; repair: the subcommand")
     parser.add_argument("rest", nargs="*", help="repair: subcommand arguments")
     parser.add_argument("--by", default="cli", help="repair: identity recorded for approve/deny/execute")
+    parser.add_argument("--confirm", default=None, help="repair: typed-confirmation token for destructive execute")
     parser.add_argument("--config", default="config.yaml", help="Path to YAML config file")
     parser.add_argument("--note", default="", help="ack: why this check is muted")
     parser.add_argument("--days", type=float, default=0, help="ack: auto-expire after this many days")
@@ -511,7 +514,7 @@ def main() -> int:
     if args.command in {"ack", "unack"}:
         return run_ack(args.config, args.command, args.check_id, args.note, args.days, args.until)
     if args.command == "repair":
-        return run_repair(args.config, args.check_id, args.rest, by=args.by)
+        return run_repair(args.config, args.check_id, args.rest, by=args.by, confirm=args.confirm)
     if args.doctor or args.command == "doctor":
         return run_doctor(args.config)
     if args.command == "serve":
