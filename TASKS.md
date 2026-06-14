@@ -223,7 +223,15 @@ connection details in `docs/mcp.md`.
             AWAITING SIGN-OFF before code. Propose(agent)/approve(human-only)/
             execute/verify; `repair.enabled` default off; first playbook
             `restart_systemd_unit`; 4 open questions for the user.
-      - [ ] 3b: framework + restart_systemd_unit (CLI approval), dogfood openipmi
+      - [x] 3b (done 2026-06-14, commit 64b5cd0): `repair.py` framework +
+            `restart_systemd_unit`; `repair_proposals` audit table; CLI
+            `guardian repair {list|propose|approve|deny|execute|log}` (approve =
+            human/CLI only); MCP propose/execute/list/log gated by
+            `repair.enabled` (no approve tool). 239 tests. Dogfooded live on
+            Marcus with a dummy unit + scoped sudoers: detect→propose→refuse-
+            unapproved→approve→real `sudo systemctl restart`→verify recovered→
+            audit; agent (MCP) proved unable to self-approve. Artifacts cleaned
+            up; live config untouched (repair stays disabled).
       - [ ] 3c: dashboard Approve/Deny UX (reuse auth+CSRF)
       - [ ] 3d: more playbooks; opt-in auto_approve for vetted actions
 - [ ] **HTTP transport + auth** once the dashboard auth foundation lands.
