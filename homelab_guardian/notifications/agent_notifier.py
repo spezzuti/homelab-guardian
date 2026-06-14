@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
 import os
 from typing import Any
 
@@ -98,7 +101,7 @@ def notify(
             return secrets.get(name) or ""
         return os.getenv(name, "")
 
-    headers = dict(config.get("headers") or {})
+    headers = {"Content-Type": "application/json", **dict(config.get("headers") or {})}
     token_env = config.get("token_env")
     if token_env:
         token = _resolve(token_env)
@@ -107,10 +110,23 @@ def notify(
             scheme = config.get("auth_scheme", "Bearer")
             headers[header_name] = f"{scheme} {token}".strip()
 
+    # Serialize once so the bytes we sign are exactly the bytes we send.
+    body = json.dumps(build_payload(checks, events, scan_id))
+
+    # GitHub-style HMAC, the scheme hermes (and most webhook receivers) verify:
+    # X-Hub-Signature-256: sha256=<hmac_sha256(secret, raw_body)>.
+    hmac_secret = _resolve(config["hmac_secret_env"]) if config.get("hmac_secret_env") else ""
+    if hmac_secret:
+        sig = hmac.new(hmac_secret.encode(), body.encode(), hashlib.sha256).hexdigest()
+        headers["X-Hub-Signature-256"] = f"sha256={sig}"
+    event_type = config.get("event_type")
+    if event_type:
+        headers["X-GitHub-Event"] = str(event_type)
+
     try:
         response = requests.post(
             url,
-            json=build_payload(checks, events, scan_id),
+            data=body,
             headers=headers,
             timeout=float(config.get("timeout", 10)),
         )

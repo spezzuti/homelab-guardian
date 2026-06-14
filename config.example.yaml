@@ -278,7 +278,12 @@ notifications:
   agent:
     enabled: false
     webhook_url: ""              # the agent's inbound webhook (e.g. a hermes webhook route)
-    # Optional auth: token resolved from env/secrets, sent as a header.
+    # Auth — two interchangeable styles, pick what your receiver expects:
+    #  (a) HMAC (GitHub-style; what hermes webhooks verify). The per-route
+    #      secret signs the body as X-Hub-Signature-256: sha256=<hmac>.
+    # hmac_secret_env: "GUARDIAN_WEBHOOK_SECRET"
+    # event_type: "guardian.health_change"   # sent as X-GitHub-Event
+    #  (b) Bearer/header token, resolved from env/secrets.
     # token_env: "GUARDIAN_AGENT_WEBHOOK_TOKEN"
     # auth_header: "Authorization"   # default
     # auth_scheme: "Bearer"          # default; set "" to send the raw token

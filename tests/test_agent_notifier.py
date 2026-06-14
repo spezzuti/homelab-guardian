@@ -89,7 +89,10 @@ def test_notify_delivers_and_posts_payload(monkeypatch):
     assert ok is True
     assert len(poster.calls) == 1
     assert poster.calls[0]["url"] == "http://agent/hook"
-    assert poster.calls[0]["json"]["confirmed"][0]["id"] == "svc_a"
+    import json
+    sent = json.loads(poster.calls[0]["data"])  # signed bytes, sent as data=
+    assert sent["confirmed"][0]["id"] == "svc_a"
+    assert poster.calls[0]["headers"]["Content-Type"] == "application/json"
 
 
 def test_notify_missing_url_returns_false(monkeypatch):
@@ -125,6 +128,26 @@ def test_notify_adds_auth_header_from_token_env(monkeypatch):
         {"enabled": True, "webhook_url": "http://x", "token_env": "AGENT_TOKEN"},
         [_check("a")], AlertEvents(confirmed=[_event()]), 1, secrets=_Secrets())
     assert poster.calls[0]["headers"]["Authorization"] == "Bearer s3cr3t"
+
+
+def test_notify_signs_body_with_hmac(monkeypatch):
+    import hashlib
+    import hmac as hmac_mod
+    poster = _Poster()
+    _install(monkeypatch, poster)
+
+    class _Secrets:
+        def get(self, name):
+            return "whsecret" if name == "WH_SECRET" else ""
+
+    agent_notifier.notify(
+        {"enabled": True, "webhook_url": "http://x", "hmac_secret_env": "WH_SECRET",
+         "event_type": "guardian.health_change"},
+        [_check("a")], AlertEvents(confirmed=[_event()]), 1, secrets=_Secrets())
+    call = poster.calls[0]
+    expected = "sha256=" + hmac_mod.new(b"whsecret", call["data"].encode(), hashlib.sha256).hexdigest()
+    assert call["headers"]["X-Hub-Signature-256"] == expected
+    assert call["headers"]["X-GitHub-Event"] == "guardian.health_change"
 
 
 # --- dispatcher: mode switch + critical-fallback ---------------------------
