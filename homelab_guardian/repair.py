@@ -137,6 +137,43 @@ def _docker_verify(config: dict[str, Any], check_id: str, runner) -> Any:
     return None
 
 
+# --- remount playbook ------------------------------------------------------
+
+def _mount_applies(check) -> bool:
+    return (
+        check.id.startswith("mount_")
+        and check.status in {"warning", "critical"}
+        and isinstance(check.evidence, dict)
+        and bool(check.evidence.get("path"))
+    )
+
+
+def _remount_plan(config, pcfg, check) -> dict[str, Any]:
+    path = str(check.evidence.get("path"))
+    allowed = _normalize_allowed(pcfg, "allowed_mounts", "path")
+    if path not in allowed:
+        raise RepairError(
+            f"Mount '{path}' is not in the allowlist. Add it to "
+            f"repair.playbooks.remount.allowed_mounts to permit this repair."
+        )
+    return {
+        "action": "remount", "check_id": check.id, "params": {"path": path},
+        "argv": ["sudo", "-n", "mount", path],
+        "blast_radius": f"Mounts {path} per its fstab entry — does not unmount anything else.",
+        "reversible": "A mount is additive; the prior state was 'not mounted'.",
+        "needs_privilege": True, "timeout": float(pcfg.get("timeout", 60)),
+    }
+
+
+def _mount_verify(config: dict[str, Any], check_id: str, runner) -> Any:
+    from homelab_guardian.collectors import mount_collector
+
+    for c in mount_collector.collect(config.get("collectors", {}).get("mounts", {}) or {}):
+        if c.id == check_id:
+            return c
+    return None
+
+
 # --- disk-reclaim playbooks (destructive family) ---------------------------
 # These apply to a FAILING disk check. Unlike restart, the action is a fixed
 # whitelisted reclaim (not derived from the check) — the disk check only triggers
@@ -341,6 +378,10 @@ PLAYBOOKS: dict[str, dict[str, Any]] = {
     },
     "restart_container": {
         "applies_to": _docker_applies, "plan": _docker_plan, "verify": _docker_verify,
+        "risk": "moderate",
+    },
+    "remount": {
+        "applies_to": _mount_applies, "plan": _remount_plan, "verify": _mount_verify,
         "risk": "moderate",
     },
     "docker_prune": {

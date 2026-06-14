@@ -23,6 +23,9 @@ def test_every_playbook_builds_list_argv():
         "restart_container": (
             HealthCheck("docker_container_abc", "x", "warning", "exited", evidence={"name": "c1", "status": "exited"}),
             {"enabled": True, "allowed_containers": ["c1"]}),
+        "remount": (
+            HealthCheck("mount_mnt_nas", "x", "critical", "not mounted", evidence={"path": "/mnt/nas"}),
+            {"enabled": True, "allowed_mounts": ["/mnt/nas"]}),
         "docker_prune": (
             HealthCheck("disk_root", "/", "critical", "full", evidence={"path": "/"}), {"enabled": True}),
         "journal_vacuum": (

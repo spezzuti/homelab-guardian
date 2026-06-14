@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **`mounts` collector + `remount` repair** — verifies configured NAS/NFS/CIFS
+  mountpoints are actually mounted (a dropped share is silent: the mountpoint
+  dir still exists, so a disk check stays green). The `remount` playbook
+  re-mounts a dropped, allowlisted mount via `sudo -n mount <path>` and verifies
+  it came back.
+
 ## v0.3.1 — 2026-06-14
 
 First release published to PyPI. (0.3.0 was tagged but never published.)
