@@ -1,0 +1,32 @@
+name: Publish to PyPI
+
+# Publishes on a version tag (e.g. v0.3.0) via PyPI Trusted Publishing (OIDC) —
+# no API token is stored anywhere. ONE-TIME SETUP on pypi.org before the first
+# publish succeeds: Account → Publishing → "Add a pending publisher":
+#   PyPI project name: homelab-guardian
+#   Owner:             spezzuti
+#   Repository name:   homelab-guardian
+#   Workflow name:     publish.yml
+#   Environment:       pypi
+# After that, pushing a v* tag builds and publishes automatically.
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write   # required for Trusted Publishing (OIDC)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install build twine
+      - run: python -m build
+      - run: python -m twine check dist/*
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
