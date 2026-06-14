@@ -240,6 +240,92 @@ def _check_backup_health_config(config: dict[str, Any]) -> HealthCheck | None:
     )
 
 
+def _watched_systemd_units(config: dict[str, Any]) -> set[str]:
+    out: set[str] = set()
+    for item in (config.get("collectors", {}).get("systemd", {}).get("units", []) or []):
+        unit = item if isinstance(item, str) else (item or {}).get("unit")
+        if unit:
+            out.add(str(unit))
+    return out
+
+
+def _sudo_is_passwordless_all() -> bool | None:
+    """Best-effort: True if the user has unrestricted passwordless sudo (the
+    privilege footgun the repair feature must not rely on). None if undetermined."""
+    import subprocess
+    try:
+        out = subprocess.run(["sudo", "-n", "-l"], capture_output=True, text=True, timeout=8)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if out.returncode != 0:
+        return None
+    text = out.stdout or ""
+    return "(ALL : ALL) NOPASSWD: ALL" in text or "(ALL) NOPASSWD: ALL" in text
+
+
+def _check_repair_config(config: dict[str, Any]) -> HealthCheck | None:
+    repair_cfg = config.get("repair", {})
+    if not repair_cfg.get("enabled", False):
+        return None
+    playbooks = repair_cfg.get("playbooks", {}) or {}
+    enabled = {name for name, pb in playbooks.items() if (pb or {}).get("enabled", False)}
+    if not enabled:
+        return HealthCheck(
+            "preflight_repair", "Repair configuration", "warning",
+            "Repairs are enabled but no playbook is enabled — nothing can be repaired.",
+            {"enabled_playbooks": []},
+            "Enable a playbook (with an allowlist), or set repair.enabled: false.",
+        )
+
+    warnings: list[str] = []
+
+    # restart_systemd_unit: every allowed unit should be a watched unit (else no
+    # check is produced for it and nothing ever applies).
+    su = playbooks.get("restart_systemd_unit", {}) or {}
+    if su.get("enabled"):
+        watched = _watched_systemd_units(config)
+        for entry in su.get("allowed_units", []) or []:
+            unit = entry if isinstance(entry, str) else (entry or {}).get("unit")
+            if unit and unit not in watched:
+                warnings.append(f"restart_systemd_unit allows '{unit}', but the systemd collector does not watch it (no check → never repairable).")
+
+    # prune_dir: paths must exist and must not be system directories.
+    pd = playbooks.get("prune_dir", {}) or {}
+    if pd.get("enabled"):
+        risky = {"/", "/home", "/etc", "/var", "/usr", "/boot", "/bin", "/lib", "/root"}
+        for entry in pd.get("allowed_paths", []) or []:
+            path = entry if isinstance(entry, str) else (entry or {}).get("path")
+            if not path:
+                continue
+            if str(path) in risky:
+                warnings.append(f"prune_dir allowed_path '{path}' is a system directory — extremely dangerous; remove it.")
+            elif not Path(str(path)).expanduser().exists():
+                warnings.append(f"prune_dir allowed_path '{path}' does not exist.")
+
+    # Privilege footgun: any sudo-using playbook on a host with passwordless-ALL.
+    sudo_playbooks = {"journal_vacuum", "apt_clean"} & enabled
+    if sudo_playbooks and _sudo_is_passwordless_all():
+        warnings.append(f"{sorted(sudo_playbooks)} use sudo and this host has passwordless-ALL sudo — scope a sudoers grant to the exact argv instead.")
+
+    destructive = enabled & {"docker_prune", "prune_dir"}
+    auto_destructive = [n for n in destructive if (playbooks.get(n) or {}).get("auto_approve")]
+
+    status = "warning" if warnings else "ok"
+    summary = (f"{len(enabled)} repair playbook(s) enabled"
+               + (f"; {len(warnings)} warning(s)." if warnings else "; configuration looks sane."))
+    return HealthCheck(
+        "preflight_repair", "Repair configuration", status, summary,
+        {
+            "enabled_playbooks": sorted(enabled),
+            "destructive_enabled": sorted(destructive),
+            "require_approval": repair_cfg.get("require_approval", True),
+            "warnings": warnings,
+            "note": "auto_approve is ignored for destructive playbooks regardless of config." if auto_destructive else None,
+        },
+        "Review the warnings above." if warnings else "No action required.",
+    )
+
+
 def run_doctor(config_path: str | Path) -> int:
     checks: list[HealthCheck] = [_check_python()]
     config, config_check = _check_config(config_path)
@@ -252,6 +338,7 @@ def run_doctor(config_path: str | Path) -> int:
             _check_backup_config(config),
             _check_backup_health_config(config),
             _check_network_config(config),
+            _check_repair_config(config),
         ]
         checks.extend(check for check in optional_checks if check is not None)
         checks.extend(_check_homeassistant(config, build_store(config.get("secrets", {}))))
