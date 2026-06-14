@@ -179,7 +179,8 @@ def collect(config: dict[str, Any], secrets: Any = None) -> list[HealthCheck]:
                 HealthCheck(check_id, name, "ok", f"Certificate for {host}:{port} is valid for {days_left:.0f} more days.", evidence, "No action required.", group=group)
             )
 
-    if not checks:
-        checks.append(HealthCheck("network_not_configured", "Network checks", "unknown", "No network checks are configured.", {}, "Add dns_checks, tcp_checks, http_checks, or tls_checks to config.yaml if desired.", group="Network"))
-
+    # Enabled-but-unconfigured is not a finding — it's calm by default. The
+    # "you turned this on but added no checks" guidance lives in `guardian
+    # doctor` (preflight), so an empty network section reports nothing here
+    # rather than dragging the Network group to an alarming "unknown".
     return checks

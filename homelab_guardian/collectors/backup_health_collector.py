@@ -188,9 +188,9 @@ def collect(
 ) -> list[HealthCheck]:
     repos = config.get("repos", []) or []
     if not repos:
-        return [HealthCheck(
-            "backup_health_not_configured", "Backup health", "unknown",
-            "No backup repos are configured to monitor.",
-            {}, "Add repos: with a restic repository or a systemd backup unit to watch.", group=GROUP,
-        )]
+        # Enabled-but-unconfigured is calm by default — the "you turned this on
+        # but added no repos" guidance lives in `guardian doctor` (preflight),
+        # so an empty repos list reports nothing here rather than dragging the
+        # Backups group to "unknown".
+        return []
     return [_check_repo(item, runner, secrets) for item in repos]

@@ -148,6 +148,7 @@ a.settings-link {
 .settings-row:last-child { border-bottom: none; }
 .settings-row .label { font-weight: 600; }
 .settings-row .cid { color: var(--muted); font-size: 0.82rem; }
+.settings-row .cdesc { display: block; color: var(--muted); font-size: 0.82rem; margin-top: 3px; }
 input.toggle { width: 18px; height: 18px; }
 .savebar { margin-top: 18px; display: flex; gap: 14px; align-items: center; }
 button.save {
@@ -546,10 +547,13 @@ def render_settings_page(
     for c in collectors:
         checked = " checked" if c["enabled"] else ""
         disabled = "" if editable else " disabled"
+        desc = c.get("description") or ""
+        desc_html = f'<span class="cdesc">{html.escape(desc)}</span>' if desc else ""
         rows.append(
             f'<label class="settings-row"><span>'
             f'<span class="label">{html.escape(c["label"])}</span> '
-            f'<span class="cid">{html.escape(c["name"])}</span></span>'
+            f'<span class="cid">{html.escape(c["name"])}</span>'
+            f"{desc_html}</span>"
             f'<input class="toggle" type="checkbox" name="collector:{html.escape(c["name"])}"{checked}{disabled}>'
             f"</label>"
         )

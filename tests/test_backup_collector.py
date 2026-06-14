@@ -10,10 +10,10 @@ def _config(path, **overrides):
     return {"paths": [item]}
 
 
-def test_no_paths_is_unknown():
-    checks = backup_collector.collect({"paths": []})
-    assert checks[0].id == "backups_not_configured"
-    assert checks[0].status == "unknown"
+def test_no_paths_reports_nothing():
+    # Enabled-but-unconfigured is calm by default — the guidance lives in
+    # `guardian doctor` (preflight), not as noise on the live dashboard.
+    assert backup_collector.collect({"paths": []}) == []
 
 
 def test_fresh_backup_is_ok(tmp_path):

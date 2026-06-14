@@ -1,11 +1,10 @@
 from homelab_guardian.collectors import network_collector
 
 
-def test_no_checks_configured_reports_unknown():
-    checks = network_collector.collect({})
-    assert len(checks) == 1
-    assert checks[0].id == "network_not_configured"
-    assert checks[0].status == "unknown"
+def test_no_checks_configured_reports_nothing():
+    # Enabled-but-unconfigured is calm by default — the guidance lives in
+    # `guardian doctor` (preflight), not as noise on the live dashboard.
+    assert network_collector.collect({}) == []
 
 
 def test_dns_check_missing_hostname_is_unknown():
