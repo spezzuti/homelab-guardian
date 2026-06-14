@@ -211,6 +211,13 @@ connection details in `docs/mcp.md`.
       reversible mute as `guardian ack`. Plus a read-only `list_acknowledgments`.
       Data layer unit-tested without the mcp dep (218 tests); gating + write
       round-trip dogfooded on Marcus (7 tools off / 9 on; ack→DB→unack verified).
+- [x] **Fail-to-ACK fallback (Step 2b)** (done 2026-06-14): agent-mode
+      critical-fallback upgraded from fails-to-deliver to true fails-to-ack.
+      `pending_alerts` table; `acknowledge_alert_received` / `list_pending_alerts`
+      MCP tools (always on); criticals the agent accepts get a deadline
+      (`agent.ack_timeout_minutes`, default 10) and go to Telegram if not
+      confirmed relayed. Serve loop rechecks every 60s. 227 tests; both paths
+      dogfooded live on Marcus (webhook prompt now tells Marcus to call back).
 - [ ] **Approval-gated repair playbooks** (whitelisted, never raw shell).
 - [ ] **HTTP transport + auth** once the dashboard auth foundation lands.
 
