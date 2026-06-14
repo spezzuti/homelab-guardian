@@ -11,6 +11,7 @@ from urllib.parse import urlparse
 from homelab_guardian import db
 from homelab_guardian.diff import ScanDiff, diff_scans
 from homelab_guardian.models import HealthCheck
+from homelab_guardian.webauth import Authenticator, NoAuth, build_authenticator
 
 # Read-only web view rendered from SQLite snapshots. Stdlib http.server only:
 # no web framework dependency, no write endpoints, no JavaScript required.
@@ -506,24 +507,50 @@ class GuardianRequestHandler(BaseHTTPRequestHandler):
     database_path: str = "data/guardian.sqlite"
     refresh_seconds: int = 60
     history_limit: int = 30
+    auth: Authenticator = NoAuth()
 
     # quiet default request logging; the scan loop output matters more
     def log_message(self, format: str, *args: Any) -> None:  # noqa: A002
         pass
 
-    def _send(self, body: str, status: int = 200, content_type: str = "text/html; charset=utf-8") -> None:
+    def _send(
+        self,
+        body: str,
+        status: int = 200,
+        content_type: str = "text/html; charset=utf-8",
+        extra_headers: list[tuple[str, str]] | None = None,
+    ) -> None:
         payload = body.encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(payload)))
         self.send_header("Cache-Control", "no-store")
+        for key, value in extra_headers or []:
+            self.send_header(key, value)
         self.end_headers()
         self.wfile.write(payload)
 
+    def _redirect(self, location: str, extra_headers: list[tuple[str, str]] | None = None) -> None:
+        self.send_response(302)
+        self.send_header("Location", location)
+        self.send_header("Content-Length", "0")
+        self.send_header("Cache-Control", "no-store")
+        for key, value in extra_headers or []:
+            self.send_header(key, value)
+        self.end_headers()
+
     def do_GET(self) -> None:  # noqa: N802
         path = urlparse(self.path).path
+        # Health check stays open so uptime monitors don't need credentials.
         if path == "/healthz":
             self._send("ok", content_type="text/plain; charset=utf-8")
+            return
+        # Auth-owned routes (e.g. OIDC login/callback) run before the gate.
+        if self.auth.owns(path):
+            self.auth.handle(self, path)
+            return
+        if self.auth.identify(self) is None:
+            self.auth.challenge(self)
             return
         if path == "/":
             self._render_scan(None)
@@ -569,10 +596,16 @@ def serve(
 ) -> int:
     database_path = config.get("app", {}).get("database_path", "data/guardian.sqlite")
 
+    from homelab_guardian.secrets import build_store
+
+    secrets = build_store(config.get("secrets", {}))
+    authenticator = build_authenticator(config, secrets)
+    auth_mode = str((config.get("web") or {}).get("auth", {}).get("mode", "none")).lower()
+
     handler = type(
         "BoundGuardianHandler",
         (GuardianRequestHandler,),
-        {"database_path": database_path},
+        {"database_path": database_path, "auth": authenticator},
     )
 
     if scan_interval > 0 and scan_loop is not None:
@@ -583,8 +616,9 @@ def serve(
     server = ThreadingHTTPServer((host, port), handler)
     shown_host = "localhost" if host in {"127.0.0.1", "::1"} else host
     print(f"Guardian web view on http://{shown_host}:{port} (read-only). Press Ctrl+C to stop.")
-    if host == "0.0.0.0":
-        print("Listening on all interfaces — anyone on your network can view reports.")
+    print(f"Auth: {auth_mode}.")
+    if host == "0.0.0.0" and auth_mode == "none":
+        print("Listening on all interfaces with no auth — anyone on your network can view reports.")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

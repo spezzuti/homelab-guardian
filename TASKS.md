@@ -142,6 +142,29 @@ Marcus** (box `main`, new collectors enabled in the production config.yaml):
       already suppresses the Telegram page; the gap is the web view + the
       wasted scan. Add a `network-ready` preflight the scan loop awaits.
 
+## Sprint 10 — dashboard auth foundation (2026-06-13)
+
+The prerequisite for guided config-edits-from-the-dashboard (and, later, an HTTP
+MCP transport — same auth layer). Mechanisms, not per-provider code. See
+`docs/auth.md`.
+
+- [x] **`basic`** — built-in HTTP Basic username/password (constant-time
+      compare; `password_env` preferred over plaintext). Zero deps.
+- [x] **`forward_auth`** — trust identity headers from an upstream proxy, but
+      ONLY from a source IP in `trusted_proxies` (spoof-proof). One mode covers
+      Authelia, Authentik, oauth2-proxy, Cloudflare Access, Traefik/Caddy/nginx.
+- [x] **`oidc`** — native OpenID Connect (Authentik/Keycloak/Zitadel/…),
+      auth-code flow + PKCE, in-memory cookie sessions. No crypto dep: the
+      id_token is trusted via the direct back-channel TLS token exchange, with
+      aud/iss/exp/nonce validated. `requests` only (already a dep).
+- [x] `web.auth` config (mode + per-mode keys), `/healthz` left open, gate wired
+      into the stdlib handler. 170 tests incl. end-to-end server-thread gating.
+- [ ] **Guided config edits** on top of auth: enable/disable a collector, edit a
+      threshold, add a target — writes validated changes back to config.yaml
+      (the source of truth). The actual beginner feature this unlocked.
+- [ ] OIDC end-to-end dogfood: register a Guardian client in the user's
+      Authentik, set `web.auth.mode: oidc`, confirm login.
+
 ## Sprint 9 — MCP server (2026-06-13)
 
 Expose Guardian over the Model Context Protocol so any agent (Marcus, Claude)
