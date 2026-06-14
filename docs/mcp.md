@@ -39,8 +39,20 @@ separately about the same thing.
 | `get_recent_changes()` | regressions / improvements / new / removed since the previous scan |
 | `list_scan_history(limit)` | recent scans with per-scan overall status and counts |
 | `list_acknowledgments()` | checks currently muted (acknowledged), with note + expiry |
+| `list_pending_alerts()` | criticals pushed to this agent awaiting its relay-confirmation |
+| `acknowledge_alert_received(check_ids)` | the agent confirms it relayed these criticals (clears the fail-to-ack fallback) — see below |
 
 Plus one resource: `guardian://health` (the summary as JSON).
+
+`acknowledge_alert_received` is always available (not behind `allow_writes`): it
+only clears Guardian's fallback bookkeeping, not health state, and the
+fail-to-ack safety net depends on it working whenever an agent is attached. In
+agent-delivery mode (`notifications.mode: agent`), Guardian pushes a confirmed
+critical to the agent's webhook and starts a timer; the agent should call
+`acknowledge_alert_received([...])` once it has relayed the critical to the user.
+If no callback arrives within `notifications.agent.ack_timeout_minutes`, Guardian
+sends the critical over Telegram itself — so a critical is never silently lost
+even if the agent accepted it but failed to act.
 
 ### Write tools (opt-in, `mcp.allow_writes: true`)
 

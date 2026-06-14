@@ -41,6 +41,20 @@ def connect(database_path: str | Path) -> sqlite3.Connection:
         )
         """
     )
+    # Criticals pushed to an attached agent that are awaiting the agent's
+    # confirmation it relayed them. If the deadline passes unacknowledged, the
+    # scan loop fires the Telegram fallback so a critical is never silently lost.
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS pending_alerts (
+            check_id TEXT PRIMARY KEY,
+            status TEXT NOT NULL,
+            summary TEXT NOT NULL DEFAULT '',
+            pushed_at TEXT NOT NULL,
+            deadline TEXT NOT NULL
+        )
+        """
+    )
     conn.commit()
     return conn
 
@@ -75,6 +89,49 @@ def remove_ack(conn: sqlite3.Connection, check_id: str) -> bool:
 def list_acks(conn: sqlite3.Connection) -> list[dict[str, Any]]:
     rows = conn.execute("SELECT check_id, note, created_at, expires_at FROM acks ORDER BY check_id").fetchall()
     return [{"check_id": r[0], "note": r[1], "created_at": r[2], "expires_at": r[3]} for r in rows]
+
+
+def record_pending_alert(
+    conn: sqlite3.Connection, check_id: str, status: str, summary: str, deadline: str
+) -> None:
+    """Mark a critical as pushed-to-agent and awaiting its acknowledgement."""
+    conn.execute(
+        "INSERT INTO pending_alerts (check_id, status, summary, pushed_at, deadline) "
+        "VALUES (?, ?, ?, ?, ?) "
+        "ON CONFLICT(check_id) DO UPDATE SET status = excluded.status, "
+        "summary = excluded.summary, pushed_at = excluded.pushed_at, deadline = excluded.deadline",
+        (check_id, status, summary, datetime.now(timezone.utc).isoformat(), deadline),
+    )
+    conn.commit()
+
+
+def clear_pending_alerts(conn: sqlite3.Connection, check_ids: list[str]) -> int:
+    """Remove pending alerts for the given check ids (the agent acknowledged, or
+    the fallback fired). Returns rows removed."""
+    if not check_ids:
+        return 0
+    placeholders = ",".join("?" for _ in check_ids)
+    cursor = conn.execute(f"DELETE FROM pending_alerts WHERE check_id IN ({placeholders})", check_ids)
+    conn.commit()
+    return cursor.rowcount
+
+
+def list_pending_alerts(conn: sqlite3.Connection) -> list[dict[str, Any]]:
+    rows = conn.execute(
+        "SELECT check_id, status, summary, pushed_at, deadline FROM pending_alerts ORDER BY deadline"
+    ).fetchall()
+    return [{"check_id": r[0], "status": r[1], "summary": r[2], "pushed_at": r[3], "deadline": r[4]} for r in rows]
+
+
+def overdue_pending_alerts(conn: sqlite3.Connection, now: datetime | None = None) -> list[dict[str, Any]]:
+    """Pending alerts whose acknowledgement deadline has passed."""
+    current = (now or datetime.now(timezone.utc)).isoformat()
+    rows = conn.execute(
+        "SELECT check_id, status, summary, pushed_at, deadline FROM pending_alerts "
+        "WHERE deadline <= ? ORDER BY deadline",
+        (current,),
+    ).fetchall()
+    return [{"check_id": r[0], "status": r[1], "summary": r[2], "pushed_at": r[3], "deadline": r[4]} for r in rows]
 
 
 def load_active_acks(conn: sqlite3.Connection, now: datetime | None = None) -> dict[str, dict[str, Any]]:
