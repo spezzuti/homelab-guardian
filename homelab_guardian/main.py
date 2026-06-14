@@ -286,6 +286,7 @@ def main() -> int:
             port=args.port,
             scan_interval=args.interval,
             scan_loop=(lambda: run_scan_loop(args.config, args.interval)) if args.interval > 0 else None,
+            config_path=args.config,
         )
     if args.command == "mcp":
         from homelab_guardian.mcp_server import run_stdio

@@ -159,9 +159,15 @@ MCP transport — same auth layer). Mechanisms, not per-provider code. See
       aud/iss/exp/nonce validated. `requests` only (already a dep).
 - [x] `web.auth` config (mode + per-mode keys), `/healthz` left open, gate wired
       into the stdlib handler. 170 tests incl. end-to-end server-thread gating.
-- [ ] **Guided config edits** on top of auth: enable/disable a collector, edit a
-      threshold, add a target — writes validated changes back to config.yaml
-      (the source of truth). The actual beginner feature this unlocked.
+- [x] **Guided config edits (v1)**: a `/settings` page (gear link in the
+      dashboard header) with collector enable/disable toggles. Auth-gated +
+      CSRF-protected; editing requires auth to be ON (read-only, with a notice,
+      when mode=none — you can't rewrite the host config over an unauthenticated
+      network surface). Writes are comment-preserving surgical edits to
+      config.yaml (the source of truth), validated + atomic with a .bak. The
+      running scan picks up changes automatically. `configedit.py` + 12 tests.
+- [ ] Guided edits v2: thresholds, add/remove targets, app settings — likely
+      wants a comment-preserving round-trip lib (ruamel) for nested edits.
 - [ ] OIDC end-to-end dogfood: register a Guardian client in the user's
       Authentik, set `web.auth.mode: oidc`, confirm login.
 
