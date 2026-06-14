@@ -214,28 +214,43 @@ it worked.
 - **Loop guard** as above.
 - A failed repair never silently retries.
 
-## Phased rollout
+## Self-healing (scan-loop auto-repair)
 
-- **3a — this doc + sign-off.** ← we are here.
-- **3b — framework + the one playbook.** Registry, `propose`/`execute`/`verify`,
-  audit store, gating (`repair.enabled`), and `restart_systemd_unit` with
-  `require_approval: true` and `auto_approve: false`. Dogfood on Marcus against a
-  real failed unit (the openipmi case), approving via CLI first.
-- **3c — approval UX (done).** Dashboard `/repairs` Approve/Deny (auth+CSRF),
-  🔧 header link with pending badge. (Optional Telegram buttons still future.)
-- **3d — breadth.** More playbooks; opt-in `auto_approve` for vetted, idempotent,
-  narrowly-scoped actions only.
+A playbook with `auto_approve: true` lets Guardian act on its own. When a scan
+produces a **confirmed** critical (already flap-damped by `confirm_scans`),
+Guardian's reflex tier proposes → executes → verifies the applicable
+auto-approved repair with no human in the loop — the same gated, audited path,
+just with approval pre-granted to that one narrow action. Destructive playbooks
+**can never** auto-approve (enforced in `execute`, not just by config), so
+self-healing is limited to safe, idempotent recoveries (restart, reclaim).
 
-## Open questions for sign-off
+What it does each scan is carried to the attached agent as `auto_repaired`, so
+the agent narrates "Guardian already restarted X" instead of re-alarming.
 
-1. **Approval channel** to build first: dashboard button, CLI, Telegram inline,
-   or rely on the agent's own hermes approval layer? (Recommendation: CLI for 3b
-   to keep it simple, dashboard for 3c.)
-2. **Privilege:** stand up a scoped sudoers allowlist for the specific repair
-   argv (recommended), versus leaning on the existing passwordless sudo (not
-   recommended)?
-3. **Auto-approve:** keep `auto_approve` strictly off for the first release and
-   require human approval for everything, or pre-authorize `restart_systemd_unit`
-   for a named unit or two from the start?
-4. **First playbook scope:** is `restart_systemd_unit` the right and only
-   starting action, or do you want `restart_container` in the first cut too?
+### Escalation (reflex → specialist → human)
+
+The reflex tier knows its own limits. Anything Guardian tried to self-heal but
+**couldn't** is surfaced separately to the agent as `escalations`:
+
+- `reflex_failed` — the repair ran but the check did not return to `ok`. A
+  restart wasn't enough; this needs a level up.
+- `blocked` — the loop guard has spent its hourly budget (it keeps not
+  recovering) or a precondition is unmet, so the reflex can't even run.
+
+These stay alert-worthy (they are *not* excluded from the critical-fallback the
+way a recovered auto-repair is), so the agent — or, failing that, the Telegram
+fallback — still reaches the human. The division of labor: **Guardian is the
+reflex** (restart, reclaim), the **agent is the specialist** (config surgery,
+root-cause), and an unrecoverable escalation is exactly the hand-off line.
+
+## Status
+
+The feature is shipped and dogfooded on a live homelab. Settled decisions:
+approval is enforced out-of-band by Guardian (the agent can propose/execute but
+**never** approve); privilege is a scoped sudoers allowlist for the exact repair
+argv (never broad ambient sudo); `restart_systemd_unit` and `restart_container`
+shipped first, with reclaim (`docker_prune` / `journal_vacuum` / `apt_clean` /
+`prune_dir`) and `remount` following. `auto_approve` is opt-in per playbook and
+off by default. Candidates still ahead — each its own design pass — include
+`renew_cert` (deliberately deferred: an expiring cert means auto-renewal
+*broke*, which is specialist judgment, not a reflex restart).

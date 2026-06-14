@@ -651,13 +651,22 @@ def auto_repair_confirmed(config, conn, events, runner: Callable[..., subprocess
                 if prop.get("status") != "approved":
                     continue  # e.g. destructive — never auto-approved
                 res = execute(config, conn, prop["proposal_id"], executed_by="auto", runner=runner)
+                recovered = bool(res["verify"].get("verified"))
                 results.append({
                     "check_id": check.id, "action": action, "status": res["status"],
-                    "recovered": bool(res["verify"].get("verified")),
+                    "recovered": recovered,
+                    # The reflex ran but the check did not return to ok — this is
+                    # no longer a reflex-fixable problem. Flag it so the agent
+                    # escalates (specialist tier) or hands it to the human.
+                    "escalate": None if recovered else "reflex_failed",
                     "summary": res["verify"].get("summary", ""),
                 })
             except RepairError as exc:
+                # The reflex could not even run — most often the loop guard has
+                # tripped (it keeps failing) or a precondition is unmet. Either
+                # way Guardian is out of safe automatic moves: escalate.
                 results.append({"check_id": check.id, "action": action,
-                                "status": "refused", "recovered": False, "summary": str(exc)})
+                                "status": "refused", "recovered": False,
+                                "escalate": "blocked", "summary": str(exc)})
             break  # at most one auto-repair attempt per check per scan
     return results

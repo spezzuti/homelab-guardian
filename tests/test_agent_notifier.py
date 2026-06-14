@@ -59,6 +59,28 @@ def test_build_payload_enriches_with_evidence_and_action():
     assert item["group"] == "Applications"
 
 
+def test_build_payload_surfaces_escalations():
+    checks = [_check("svc_a", "critical", "down")]
+    auto = [
+        {"check_id": "svc_a", "action": "restart", "status": "executed",
+         "recovered": False, "escalate": "reflex_failed", "summary": "still down"},
+        {"check_id": "svc_b", "action": "restart", "status": "executed",
+         "recovered": True, "escalate": None, "summary": "back"},
+    ]
+    payload = agent_notifier.build_payload(
+        checks, AlertEvents(confirmed=[_event("svc_a")]), scan_id=1, auto_repairs=auto)
+    assert len(payload["auto_repaired"]) == 2
+    # Only the unrecovered one is escalated to the top level.
+    assert [e["check_id"] for e in payload["escalations"]] == ["svc_a"]
+
+
+def test_build_payload_no_escalations_key_when_all_recovered():
+    auto = [{"check_id": "svc_b", "action": "restart", "status": "executed",
+             "recovered": True, "escalate": None, "summary": "back"}]
+    payload = agent_notifier.build_payload([], AlertEvents(), scan_id=1, auto_repairs=auto)
+    assert "escalations" not in payload
+
+
 # --- delivery --------------------------------------------------------------
 
 def test_notify_disabled_does_not_post(monkeypatch):

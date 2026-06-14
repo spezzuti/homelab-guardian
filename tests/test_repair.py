@@ -540,6 +540,34 @@ def test_auto_repair_ignores_non_critical_and_recovered(tmp_path):
     assert repair.auto_repair_confirmed(config, conn, AlertEvents(), runner=_runner()) == []
 
 
+def test_auto_repair_recovered_does_not_escalate(tmp_path):
+    conn = _seed(tmp_path)
+    config = _config(tmp_path, auto_approve=True)
+    results = repair.auto_repair_confirmed(config, conn, _confirmed(CHECK_ID), runner=_runner(active="active"))
+    assert results[0]["recovered"] is True and results[0]["escalate"] is None
+
+
+def test_auto_repair_escalates_when_fix_does_not_recover(tmp_path):
+    # The reflex ran (restart returned 0) but the unit is still failed on verify:
+    # Guardian is out of reflex moves — flag it for the agent to escalate.
+    conn = _seed(tmp_path)
+    config = _config(tmp_path, auto_approve=True)
+    results = repair.auto_repair_confirmed(config, conn, _confirmed(CHECK_ID), runner=_runner(active="failed"))
+    assert len(results) == 1
+    assert results[0]["recovered"] is False and results[0]["escalate"] == "reflex_failed"
+
+
+def test_auto_repair_escalates_blocked_when_loop_guard_trips(tmp_path):
+    # Once the loop guard has spent the hourly budget the next auto-repair can't
+    # even run — that is an escalation ("it keeps not recovering"), not a skip.
+    conn = _seed(tmp_path)
+    config = _config(tmp_path, auto_approve=True, max_attempts_per_hour=1)
+    repair.auto_repair_confirmed(config, conn, _confirmed(CHECK_ID), runner=_runner(active="failed"))
+    results = repair.auto_repair_confirmed(config, conn, _confirmed(CHECK_ID), runner=_runner(active="failed"))
+    assert len(results) == 1
+    assert results[0]["status"] == "refused" and results[0]["escalate"] == "blocked"
+
+
 def test_typed_confirmation_blocks_then_allows(tmp_path, monkeypatch):
     conn = db.connect(str(tmp_path / "g.sqlite"))
     db.save_scan(conn, {"app": "HG", "checks": [_disk_check().to_dict(), _backup_check("ok").to_dict()]})
