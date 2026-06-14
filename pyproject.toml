@@ -4,16 +4,33 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "homelab-guardian"
-version = "0.2.0"
-description = "Local-first, read-only homelab health reports in plain English"
+version = "0.3.0"
+description = "Local-first homelab health monitoring with optional AI-agent integration and approval-gated repair"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "AGPL-3.0-or-later"}
+keywords = ["homelab", "monitoring", "health-check", "self-hosted", "mcp", "docker", "systemd"]
+authors = [{name = "spezzuti"}]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: System :: Monitoring",
+    "Topic :: System :: Systems Administration",
+]
 dependencies = [
     "PyYAML>=6.0.1",
     "requests>=2.31.0",
     "docker>=7.0.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/spezzuti/homelab-guardian"
+Repository = "https://github.com/spezzuti/homelab-guardian"
+Changelog = "https://github.com/spezzuti/homelab-guardian/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0.0"]

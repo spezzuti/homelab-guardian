@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased (v0.3 in development)
+## v0.3.0 — 2026-06-14
 
 The "safe actuator" arc: Guardian grew from a read-only doctor into something an
 AI agent can attach to and, with human approval, act through — without ever
