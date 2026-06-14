@@ -247,6 +247,13 @@ ai:
   api_key_env: "GUARDIAN_AI_API_KEY"
 
 notifications:
+  # Delivery mode:
+  #   direct — Guardian messages you over Telegram itself (standalone, no AI).
+  #   agent  — Guardian hands each confirmed change to an attached AI agent's
+  #            webhook (below) so the AGENT is the single voice: it reports the
+  #            change and offers to fix it. In agent mode Telegram is dormant,
+  #            used only as the critical-fallback (see notifications.agent).
+  mode: direct
   telegram:
     # Optional. Sends a short summary message after each scan.
     # The bot token and chat id come from environment variables; never put
@@ -264,3 +271,20 @@ notifications:
     # it is announced. 1 = immediate. 2 is recommended once scans run on a
     # schedule — one network blip will no longer page you.
     confirm_scans: 1
+  # Used only when mode: agent. Guardian POSTs the same flap-damped, confirmed
+  # transitions (enriched with each check's evidence + recommended_action) to
+  # the agent's intake webhook as a structured JSON event — Guardian decides
+  # WHAT is alert-worthy; the agent decides how to tell you and offers to fix.
+  agent:
+    enabled: false
+    webhook_url: ""              # the agent's inbound webhook (e.g. a hermes webhook route)
+    # Optional auth: token resolved from env/secrets, sent as a header.
+    # token_env: "GUARDIAN_AGENT_WEBHOOK_TOKEN"
+    # auth_header: "Authorization"   # default
+    # auth_scheme: "Bearer"          # default; set "" to send the raw token
+    send_on: changes             # same semantics as telegram.send_on
+    # If a CRITICAL can't be delivered to the agent (it's down/unreachable),
+    # send it to you directly over the Telegram config above (same shared bot),
+    # labeled so it doubles as an agent-down signal. Keeps a down agent from
+    # silently swallowing a critical. Set false to opt out.
+    critical_fallback: true

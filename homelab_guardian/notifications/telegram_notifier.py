@@ -31,13 +31,21 @@ def should_notify(send_on: str, events: AlertEvents) -> bool:
     return events.any
 
 
-def build_message(checks: list[HealthCheck], events: AlertEvents, scan_id: int | None) -> str:
+def build_message(
+    checks: list[HealthCheck],
+    events: AlertEvents,
+    scan_id: int | None,
+    prefix: str | None = None,
+) -> str:
     overall = overall_status(checks)
     visible = [c for c in checks if not c.acknowledged]
     icon = STATUS_ICON.get(overall, "•")
     counts = {status: sum(1 for c in visible if c.status == status) for status in STATUS_ICON}
 
-    lines = [
+    lines = []
+    if prefix:
+        lines.append(f"<b>{html.escape(prefix)}</b>")
+    lines += [
         f"{icon} <b>Homelab Guardian — {overall.upper()}</b>",
         f"Scan #{scan_id} • {counts['critical']} critical, {counts['warning']} warning, "
         f"{counts['unknown']} unknown, {counts['ok']} ok",
@@ -83,9 +91,16 @@ def notify(
     events: AlertEvents,
     scan_id: int | None,
     secrets: Any = None,
+    force: bool = False,
+    prefix: str | None = None,
 ) -> bool:
     """Send a Telegram summary if configured to. Never raises; a failed
-    notification must not fail the scan that produced the report."""
+    notification must not fail the scan that produced the report.
+
+    `force` bypasses the send_on gate (used by the agent-mode critical-fallback,
+    which must send regardless of send_on); `prefix` prepends a label line
+    (e.g. "Guardian · agent unreachable") so a fallback message is recognizable
+    and doubles as an agent-down signal."""
     if not config.get("enabled", False):
         return False
 
@@ -94,7 +109,7 @@ def notify(
         print(f"Telegram notifier: invalid send_on '{send_on}', expected one of {sorted(VALID_SEND_ON)}.")
         return False
 
-    if not should_notify(send_on, events):
+    if not force and not should_notify(send_on, events):
         return False
 
     def _resolve(name: str) -> str:
@@ -113,7 +128,7 @@ def notify(
             f"https://api.telegram.org/bot{token}/sendMessage",
             json={
                 "chat_id": chat_id,
-                "text": build_message(checks, events, scan_id),
+                "text": build_message(checks, events, scan_id, prefix=prefix),
                 "parse_mode": "HTML",
                 "disable_web_page_preview": True,
             },
