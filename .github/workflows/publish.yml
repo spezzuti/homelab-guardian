@@ -1,25 +1,18 @@
 name: Publish to PyPI
 
-# Publishes on a version tag (e.g. v0.3.0) via PyPI Trusted Publishing (OIDC) —
-# no API token is stored anywhere. ONE-TIME SETUP on pypi.org before the first
-# publish succeeds: Account → Publishing → "Add a pending publisher":
-#   PyPI project name: homelab-guardian
-#   Owner:             spezzuti
-#   Repository name:   homelab-guardian
-#   Workflow name:     publish.yml
-#   Environment:       pypi
-# After that, pushing a v* tag builds and publishes automatically.
+# Releases are published with `twine` using the PyPI API token (PYPI_PASSWORD in
+# the homelab vault). Trusted Publishing (OIDC) was tried but the pending-
+# publisher handshake never matched, so this workflow is MANUAL-ONLY (no
+# tag-trigger) to avoid failing runs — run it from the Actions tab after adding
+# the repo secret `PYPI_API_TOKEN` (your pypi-... token). Until then, publish
+# locally:  python -m build  &&  TWINE_USERNAME=__token__ TWINE_PASSWORD=<token> twine upload dist/*
 
 on:
-  push:
-    tags: ["v*"]
+  workflow_dispatch:
 
 jobs:
   publish:
     runs-on: ubuntu-latest
-    environment: pypi
-    permissions:
-      id-token: write   # required for Trusted Publishing (OIDC)
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -28,5 +21,8 @@ jobs:
       - run: pip install build twine
       - run: python -m build
       - run: python -m twine check dist/*
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+      - name: Publish
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: python -m twine upload dist/*
