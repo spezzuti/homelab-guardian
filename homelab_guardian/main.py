@@ -132,8 +132,43 @@ def run_scan(config_path: str) -> int:
     print(f"Wrote report: {written}")
     print(f"Checks: {len(checks)}")
 
-    telegram_notifier.notify(telegram_config, checks, events, scan_id, secrets=secrets)
+    _dispatch_notifications(config, checks, events, scan_id, secrets)
     return 0
+
+
+def _dispatch_notifications(config, checks, events, scan_id, secrets) -> None:
+    """Route confirmed transitions to the right channel.
+
+    direct mode (default): Guardian messages the user over Telegram itself —
+    the standalone, no-AI behavior.
+    agent mode: Guardian hands the event to the attached agent's webhook so the
+    *agent* is the single voice. Telegram is dormant, used only as the
+    critical-fallback: if a critical could not be delivered to the agent,
+    Guardian sends it directly over the same (shared) Telegram bot, labeled so
+    it doubles as an agent-down signal."""
+    from homelab_guardian.notifications import agent_notifier
+
+    notifications = config.get("notifications", {})
+    telegram_config = notifications.get("telegram", {})
+    mode = str(notifications.get("mode", "direct")).lower()
+
+    if mode != "agent":
+        telegram_notifier.notify(telegram_config, checks, events, scan_id, secrets=secrets)
+        return
+
+    agent_config = notifications.get("agent", {})
+    delivered = agent_notifier.notify(agent_config, checks, events, scan_id, secrets=secrets)
+    if delivered or not agent_notifier.has_critical(events):
+        return
+    if not agent_config.get("critical_fallback", True):
+        return
+    # A critical was confirmed but the agent didn't take it — fall back to the
+    # user directly so it is never silently swallowed. Reuses the existing
+    # Telegram config (same shared bot), forced past send_on, with a label.
+    telegram_notifier.notify(
+        telegram_config, checks, events, scan_id, secrets=secrets,
+        force=True, prefix="⚠️ Guardian · agent unreachable",
+    )
 
 
 def load_dotenv(path: str | Path = ".env") -> int:
