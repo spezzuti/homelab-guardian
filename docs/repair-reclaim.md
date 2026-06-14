@@ -179,6 +179,30 @@ This is a sequencing decision, not a blocker for *building* the playbooks: we ca
 scope + build the disk-reclaim machinery now, and run the Marcus deconfliction
 pass when we actually arm repairs on the box.
 
+## Security-review hardening (post-3d-c)
+
+An independent security review of the repair surfaces drove these fixes (the core
+guarantees — no shell, argv-only, allowlist-before-build, human-only approval, no
+MCP approve tool, atomic state machine, destructive≠auto-approve — were confirmed
+intact):
+
+- **Execute re-validates (closes a propose→execute TOCTOU).** `execute` now
+  rebuilds the plan from current config/state and refuses if the target left the
+  allowlist, the check recovered, repairs were disabled, or the resolved argv
+  drifted from what was approved — an approved-but-stale destructive proposal
+  can no longer fire after the blessing is revoked.
+- **Backup interlock checks freshness, not just status.** `require_fresh_backup_hours`
+  refuses an ok-but-stale backup (the "deleting the last fresh copy" hazard), and
+  destructive preconditions now **fail closed** if current state is unavailable.
+- **Loop guard survives a crash.** A `running` row is recorded before the
+  side-effecting action, so an interrupted execute still counts against the cap.
+- **`older_than_days` is floored at 1** (a 0/negative value can no longer widen a
+  delete to "everything").
+
+Still open (lower severity, noted for later): bind reclaim applicability to the
+*failing* filesystem (not any disk check); a `guardian doctor` preflight that the
+sudoers grant is scoped (not passwordless-ALL); per-form/expiring CSRF tokens.
+
 ## Open questions for sign-off
 
 1. **Stronger confirmation for destructive?** Is human approval (via CLI/dashboard,

@@ -247,8 +247,12 @@ connection details in `docs/mcp.md`.
             + framework (preview/preconditions/risk-tiers) + cache/log playbooks
             (docker_prune/journal_vacuum/apt_clean). 259 tests; preview dogfooded
             read-only on the box. Reclaim stays disabled on live.
-      - [ ] 3d-c: prune_dir (user-data) + mandatory-narrow backup precondition
-            + optional require_typed_confirmation knob
+      - [x] 3d-c (done 2026-06-14, commit aecff7d): prune_dir (find -delete over
+            allowed_paths + age filter) + backup interlock (not-ok Backups →
+            hard refuse; no Backups → warn unless require_fresh_backup) + warn
+            hook + optional require_typed_confirmation (CLI --confirm / MCP).
+            266 tests; dogfooded live on a throwaway dir (real find -delete,
+            backup warning, typed-confirm all proven). Reclaim family complete.
       - [x] ARMED on Marcus (go-live 2026-06-14): mcp.allow_writes + repair
             (restart_systemd_unit[hermes-dashboard], auto_approve off); live
             end-to-end dogfood on hermes-dashboard. Running as intended.
