@@ -128,10 +128,13 @@ step) and changes nothing. The agent relays this to the user in plain language.
 
 Approval is **not** an MCP tool the agent can call. It happens out-of-band:
 
-- **Dashboard** — an authenticated *Approve / Deny* control on the proposal,
-  reusing the Step 1.5 auth + CSRF surface (the same gate that already guards the
-  settings write surface).
-- **CLI** — `guardian repair approve <proposal_id>` / `guardian repair deny`.
+- **Dashboard (implemented)** — a `/repairs` page with an authenticated
+  *Approve / Deny* control per proposal, reusing the Step 1.5 auth + CSRF surface
+  (the same gate that guards the settings write surface). A 🔧 header link with a
+  pending-count badge appears when repairs are enabled. The page is an approval
+  channel only — it never executes a repair (execution stays MCP/CLI), so the
+  network surface decides but does not actuate.
+- **CLI (implemented)** — `guardian repair approve <proposal_id>` / `guardian repair deny`.
 - **Telegram (optional)** — Guardian sends the proposal with inline
   Approve/Deny buttons, reusing the notification path.
 
@@ -218,8 +221,8 @@ it worked.
   audit store, gating (`repair.enabled`), and `restart_systemd_unit` with
   `require_approval: true` and `auto_approve: false`. Dogfood on Marcus against a
   real failed unit (the openipmi case), approving via CLI first.
-- **3c — approval UX.** Dashboard Approve/Deny (reuse auth+CSRF); optional
-  Telegram buttons; repairs panel in the dashboard.
+- **3c — approval UX (done).** Dashboard `/repairs` Approve/Deny (auth+CSRF),
+  🔧 header link with pending badge. (Optional Telegram buttons still future.)
 - **3d — breadth.** More playbooks; opt-in `auto_approve` for vetted, idempotent,
   narrowly-scoped actions only.
 

@@ -155,6 +155,28 @@ button.save {
   background: var(--ok); color: #fff; border: none; border-radius: 8px;
   padding: 8px 18px; font-size: 0.95rem; font-weight: 650; cursor: pointer;
 }
+a.repairs-link { right: 98px; }
+.rbadge {
+  background: var(--critical); color: #fff; border-radius: 999px;
+  font-size: 0.7rem; font-weight: 700; padding: 1px 6px; margin-left: 3px; vertical-align: top;
+}
+.rcard {
+  border: 1px solid var(--border); border-left: 5px solid var(--accent, var(--border));
+  border-radius: 10px; padding: 12px 14px; margin-top: 12px;
+}
+.rcard .rhead { font-size: 1.02rem; }
+.rcard .cid { color: var(--muted); font-size: 0.82rem; margin-top: 2px; }
+.rcard .rplan { margin-top: 6px; }
+.rcard .notice { margin-top: 6px; }
+.rstatus {
+  background: var(--accent, var(--unknown)); color: #fff; border-radius: 999px;
+  font-size: 0.7rem; font-weight: 700; text-transform: uppercase; padding: 2px 9px; margin-left: 6px;
+}
+.rform { margin-top: 10px; display: flex; gap: 10px; }
+button.deny {
+  background: var(--bg); color: var(--critical); border: 1px solid var(--critical);
+  border-radius: 8px; padding: 8px 18px; font-size: 0.95rem; font-weight: 650; cursor: pointer;
+}
 .banner { border-radius: 10px; padding: 10px 14px; margin-bottom: 14px;
   background: var(--card); border: 1px solid var(--border); }
 .banner.ok { border-left: 5px solid var(--ok); }
@@ -480,11 +502,21 @@ def _render_history(history: list[tuple[int, str, dict[str, Any]]], current_id: 
     return f'<div class="card"><h2>Scan history</h2>{body}</div>'
 
 
+def _repairs_link(repairs_pending: int | None) -> str:
+    """The 🔧 header link, shown only when repairs are enabled. A badge shows the
+    count of proposals awaiting approval."""
+    if repairs_pending is None:
+        return ""
+    badge = f'<span class="rbadge">{repairs_pending}</span>' if repairs_pending else ""
+    return f'<a class="settings-link repairs-link" href="/repairs" title="Repairs">🔧{badge}</a>'
+
+
 def render_scan_page(
     scan: tuple[int, str, dict[str, Any]],
     diff: ScanDiff,
     history: list[tuple[int, str, dict[str, Any]]],
     refresh_seconds: int = 60,
+    repairs_pending: int | None = None,
 ) -> str:
     scan_id, created_at, snapshot = scan
     checks = checks_from_snapshot(snapshot)
@@ -510,6 +542,7 @@ def render_scan_page(
 <body><main>
 <header class="overall {_STATUS_CLASS.get(overall, 'unk')}">
 <a class="settings-link" href="/settings" title="Settings">⚙</a>
+{_repairs_link(repairs_pending)}
 <button class="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark theme">🌓</button>
 <h1>{app_name}</h1>
 <div class="status">{icon} {label.upper()}</div>
@@ -604,6 +637,93 @@ def render_settings_page(
 </main></body></html>"""
 
 
+_REPAIR_STATUS_CLASS = {
+    "proposed": "warn", "approved": "okc", "denied": "unk", "executed": "okc", "failed": "crit",
+}
+
+
+def _render_proposal(p: dict[str, Any], *, editable: bool, csrf_token: str) -> str:
+    plan = p.get("plan_json") if isinstance(p.get("plan_json"), dict) else {}
+    argv = " ".join(p.get("argv") or plan.get("argv") or [])
+    status = str(p.get("status", "proposed"))
+    status_cls = _REPAIR_STATUS_CLASS.get(status, "unk")
+    badge = f'<span class="rstatus">{html.escape(status)}</span>'
+    parts = [
+        f'<div class="rhead"><b>#{p.get("id")}</b> {html.escape(str(p.get("action", "")))} {badge}</div>',
+        f'<div class="cid">on {html.escape(str(p.get("check_id", "")))}</div>',
+    ]
+    if argv:
+        parts.append(f'<div class="rplan">Will run: <code>{html.escape(argv)}</code></div>')
+    if plan.get("blast_radius"):
+        parts.append(f'<div class="notice">{html.escape(str(plan["blast_radius"]))}</div>')
+    meta = f'proposed by {html.escape(str(p.get("proposed_by") or "—"))} · {html.escape(str(p.get("proposed_at") or ""))}'
+    if p.get("approved_by"):
+        verb = "denied" if status == "denied" else "approved"
+        meta += f' · {verb} by {html.escape(str(p["approved_by"]))}'
+    parts.append(f'<div class="cid">{meta}</div>')
+    verify = p.get("verify_json") if isinstance(p.get("verify_json"), dict) else None
+    if verify and p.get("executed_at"):
+        parts.append(f'<div class="notice">Verify: <b>{html.escape(str(verify.get("status")))}</b> — {html.escape(str(verify.get("summary", "")))}</div>')
+
+    if status == "proposed":
+        if editable:
+            parts.append(
+                '<form method="post" action="/repairs" class="rform">'
+                f'<input type="hidden" name="csrf" value="{html.escape(csrf_token)}">'
+                f'<input type="hidden" name="proposal_id" value="{p.get("id")}">'
+                '<button class="save" name="decision" value="approve" type="submit">Approve</button>'
+                '<button class="deny" name="decision" value="deny" type="submit">Deny</button>'
+                "</form>"
+            )
+        else:
+            parts.append('<div class="notice">Enable <code>web.auth</code> to approve or deny here.</div>')
+    elif status == "approved":
+        parts.append(f'<div class="notice">Approved — run <code>guardian repair execute {p.get("id")}</code> (or the agent will).</div>')
+    return f'<div class="rcard {status_cls}">' + "".join(parts) + "</div>"
+
+
+def render_repairs_page(
+    proposals: list[dict[str, Any]],
+    *,
+    editable: bool,
+    csrf_token: str,
+    repair_enabled: bool = True,
+    notice: str | None = None,
+    error: str | None = None,
+) -> str:
+    if not repair_enabled:
+        body = ('<div class="card"><h2>Repairs</h2><p class="notice">Repairs are disabled. '
+                "Set <code>repair.enabled: true</code> in config.yaml to use approval-gated repair "
+                "playbooks (see docs/repair.md).</p></div>")
+        banner = ""
+    else:
+        cards = "".join(_render_proposal(p, editable=editable, csrf_token=csrf_token) for p in proposals)
+        notice_html = "" if editable else '<div class="banner err">Authentication is off — approvals are read-only here.</div>'
+        empty = "" if proposals else '<p class="notice">No repair proposals yet. An agent or <code>guardian repair propose</code> creates them; approve here or with <code>guardian repair approve &lt;id&gt;</code>.</p>'
+        body = f'{notice_html}<div class="card"><h2>Repair proposals</h2>{empty}{cards}</div>'
+        if notice:
+            banner = f'<div class="banner ok">{html.escape(notice)}</div>'
+        elif error:
+            banner = f'<div class="banner err">{html.escape(error)}</div>'
+        else:
+            banner = ""
+
+    return f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Homelab Guardian — Repairs</title><style>{PAGE_STYLE}</style>{THEME_SCRIPT}</head>
+<body><main>
+<header class="overall okc">
+<button class="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark theme">🌓</button>
+<h1>Repairs</h1>
+<div class="meta"><a href="/">← Back to dashboard</a></div>
+</header>
+{banner}
+{body}
+<footer>Homelab Guardian — repairs · approval-gated, never raw shell</footer>
+</main></body></html>"""
+
+
 class GuardianRequestHandler(BaseHTTPRequestHandler):
     database_path: str = "data/guardian.sqlite"
     config_path: str = "config.yaml"
@@ -662,6 +782,9 @@ class GuardianRequestHandler(BaseHTTPRequestHandler):
         if path == "/settings":
             self._render_settings()
             return
+        if path == "/repairs":
+            self._render_repairs()
+            return
         if path.startswith("/scan/"):
             try:
                 self._render_scan(int(path.removeprefix("/scan/")))
@@ -692,6 +815,9 @@ class GuardianRequestHandler(BaseHTTPRequestHandler):
             return
         if path == "/settings":
             self._save_settings()
+            return
+        if path == "/repairs":
+            self._save_repair_decision()
             return
         self._send("not found", status=404, content_type="text/plain; charset=utf-8")
 
@@ -755,6 +881,67 @@ class GuardianRequestHandler(BaseHTTPRequestHandler):
                 return
         self._redirect("/settings?saved=1")
 
+    # --- repairs: approval-gated repair proposals ----------------------
+
+    def _render_repairs(self) -> None:
+        config = load_config(self.config_path)
+        identity = self.auth.identify(self)
+        query = parse_qs(urlparse(self.path).query)
+        enabled = bool(config.get("repair", {}).get("enabled", False))
+        proposals: list[dict[str, Any]] = []
+        if enabled:
+            conn = db.connect(self.database_path)
+            try:
+                proposals = db.list_repair_proposals(conn, limit=50)
+            finally:
+                conn.close()
+        self._send(render_repairs_page(
+            proposals,
+            editable=self._editable(),
+            csrf_token=self._csrf_token(identity.user) if identity else "",
+            repair_enabled=enabled,
+            notice=(query.get("ok") or [None])[0],
+            error=(query.get("error") or [None])[0],
+        ))
+
+    def _save_repair_decision(self) -> None:
+        if not self._editable():
+            self._send("Approving repairs requires authentication — enable web.auth in config.yaml.",
+                       status=403, content_type="text/plain; charset=utf-8")
+            return
+        config = load_config(self.config_path)
+        if not config.get("repair", {}).get("enabled", False):
+            self._send("Repairs are disabled.", status=403, content_type="text/plain; charset=utf-8")
+            return
+        identity = self.auth.identify(self)
+        form = parse_qs(self._post_body)
+        if not self._check_csrf(identity.user, (form.get("csrf") or [""])[0]):
+            self._send("Invalid form token — reload the repairs page and try again.",
+                       status=403, content_type="text/plain; charset=utf-8")
+            return
+        from homelab_guardian import repair
+
+        decision = (form.get("decision") or [""])[0]
+        try:
+            proposal_id = int((form.get("proposal_id") or ["0"])[0])
+        except ValueError:
+            self._redirect("/repairs?error=" + quote("Invalid proposal id."))
+            return
+        conn = db.connect(self.database_path)
+        try:
+            if decision == "approve":
+                repair.approve(conn, proposal_id, approved_by=identity.user)
+                self._redirect("/repairs?ok=" + quote(f"Proposal #{proposal_id} approved."))
+            elif decision == "deny":
+                repair.deny(conn, proposal_id, denied_by=identity.user)
+                self._redirect("/repairs?ok=" + quote(f"Proposal #{proposal_id} denied."))
+            else:
+                self._redirect("/repairs?error=" + quote("Unknown decision."))
+        except repair.RepairError as exc:
+            self._redirect("/repairs?error=" + quote(str(exc)[:200]))
+        finally:
+            conn.close()
+
     def _render_scan(self, scan_id: int | None) -> None:
         conn = db.connect(self.database_path)
         try:
@@ -772,11 +959,14 @@ class GuardianRequestHandler(BaseHTTPRequestHandler):
             else:
                 diff = diff_scans(None, checks)
             history = db.list_scans(conn, limit=self.history_limit)
+            repairs_pending = None
+            if load_config(self.config_path).get("repair", {}).get("enabled", False):
+                repairs_pending = sum(1 for p in db.list_repair_proposals(conn, limit=200) if p["status"] == "proposed")
         finally:
             conn.close()
         # only the live view auto-refreshes; historical scans are static
         refresh = self.refresh_seconds if scan_id is None else 0
-        self._send(render_scan_page(scan, diff, history, refresh_seconds=refresh))
+        self._send(render_scan_page(scan, diff, history, refresh_seconds=refresh, repairs_pending=repairs_pending))
 
 
 def serve(
