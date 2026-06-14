@@ -93,7 +93,7 @@ header.overall .meta { color: var(--muted); font-size: 0.85rem; margin-top: 4px;
 .unk { --accent: var(--unknown); } .okc { --accent: var(--ok); }
 .tilegrid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 12px; margin-top: 4px; align-items: start;
+  gap: 12px; margin: 4px 0 16px; align-items: start;
 }
 details.tile {
   background: var(--card); border: 1px solid var(--border);
