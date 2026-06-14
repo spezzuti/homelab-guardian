@@ -3,13 +3,16 @@ from pathlib import Path
 
 from homelab_guardian import db
 from homelab_guardian.mcp_server import (
+    acknowledge_check_payload,
     changes_payload,
     check_payload,
     checks_payload,
     history_payload,
+    list_acks_payload,
     problems_payload,
     resolve_database_path,
     summary_payload,
+    unacknowledge_check_payload,
 )
 from homelab_guardian.models import HealthCheck
 
@@ -131,3 +134,37 @@ def test_resolve_database_path_independent_of_cwd(tmp_path, monkeypatch):
     monkeypatch.chdir(elsewhere)  # launch from a foreign cwd
     resolved = resolve_database_path(config, config_path)
     assert Path(resolved) == tmp_path / "data" / "g.sqlite"
+
+
+# --- write tools (Step 2: gated ack tools) ---------------------------------
+
+def test_acknowledge_check_mutes_and_round_trips(tmp_path):
+    path = _db(tmp_path, _snap(HealthCheck("disk_root", "Root disk", "warning", "92% full")))
+    res = acknowledge_check_payload(path, "disk_root", note="known, cleanup scheduled", days=7)
+    assert res["acknowledged"] is True
+    assert res["known_check"] is True          # the id matched a real check
+    assert res["expires_at"] is not None        # days=7 set an expiry
+    acks = {a["check_id"]: a for a in list_acks_payload(path)}
+    assert acks["disk_root"]["note"] == "known, cleanup scheduled"
+
+
+def test_acknowledge_unknown_id_flags_it_but_still_sets(tmp_path):
+    path = _db(tmp_path, _snap(HealthCheck("disk_root", "Root disk", "ok", "ok")))
+    res = acknowledge_check_payload(path, "typo_id", note="x")
+    assert res["acknowledged"] is True
+    assert res["known_check"] is False          # surfaces a likely typo
+    assert res["expires_at"] is None            # no days → indefinite
+
+
+def test_acknowledge_requires_check_id(tmp_path):
+    path = _db(tmp_path, _snap(HealthCheck("a", "A", "ok", "ok")))
+    assert acknowledge_check_payload(path, "")["acknowledged"] is False
+
+
+def test_unacknowledge_removes_and_reports(tmp_path):
+    path = _db(tmp_path, _snap(HealthCheck("disk_root", "Root disk", "warning", "full")))
+    acknowledge_check_payload(path, "disk_root", note="x")
+    assert unacknowledge_check_payload(path, "disk_root")["unacknowledged"] is True
+    assert list_acks_payload(path) == []
+    # removing again reports nothing to remove
+    assert unacknowledge_check_payload(path, "disk_root")["unacknowledged"] is False

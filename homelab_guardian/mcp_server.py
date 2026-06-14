@@ -14,9 +14,12 @@ from homelab_guardian.diff import diff_scans
 # "eyes" instead of re-deriving homelab state itself. This is the same read-only
 # data the web view renders, surfaced over the Model Context Protocol.
 #
-# Read-only by design: every tool reads the SQLite snapshot the scanner writes;
-# nothing here runs a scan, mutates an ack, or touches a host. Acknowledgement
-# and repair tools are a deliberately separate, gated future phase.
+# Read-only by default: every read tool reads the SQLite snapshot the scanner
+# writes; nothing runs a scan or touches a host. The acknowledge/unacknowledge
+# WRITE tools (the only mutation: muting a check, exactly what `guardian ack`
+# does) are registered ONLY when config `mcp.allow_writes` is true — opt-in, so
+# an agent attached with the default posture cannot change Guardian's state.
+# Repair tools remain a separate, more strongly gated future phase.
 #
 # The data layer below is plain functions returning JSON-friendly dicts, so it is
 # unit-testable without the `mcp` dependency. The thin FastMCP wiring in
@@ -172,9 +175,69 @@ def history_payload(database_path: str, limit: int = 20) -> list[dict[str, Any]]
     return out
 
 
-def build_server(database_path: str):
+def list_acks_payload(database_path: str) -> list[dict[str, Any]]:
+    """Currently muted (acknowledged) checks with their note and expiry. Read-only."""
+    conn = db.connect(database_path)
+    try:
+        return db.list_acks(conn)
+    finally:
+        conn.close()
+
+
+def acknowledge_check_payload(
+    database_path: str, check_id: str, note: str = "", days: float | None = None
+) -> dict[str, Any]:
+    """Mute a check: it stops counting toward overall status and stops alerting.
+    WRITE. `days` sets an auto-expiry; omit for an indefinite mute. Surfaces
+    whether the id matched a check in the latest scan so a typo'd id is visible."""
+    if not check_id:
+        return {"acknowledged": False, "error": "A check_id is required."}
+    from datetime import datetime, timedelta, timezone
+
+    latest = _latest_checks(database_path)
+    known = check_id in {c.id for c in latest[2]} if latest else False
+    expires_at = None
+    if days is not None and float(days) > 0:
+        expires_at = (datetime.now(timezone.utc) + timedelta(days=float(days))).isoformat()
+
+    conn = db.connect(database_path)
+    try:
+        db.set_ack(conn, check_id, note=note or "", expires_at=expires_at)
+    finally:
+        conn.close()
+    return {
+        "acknowledged": True,
+        "check_id": check_id,
+        "note": note or "",
+        "expires_at": expires_at,
+        "known_check": known,
+    }
+
+
+def unacknowledge_check_payload(database_path: str, check_id: str) -> dict[str, Any]:
+    """Un-mute a previously acknowledged check so it counts and alerts again. WRITE."""
+    if not check_id:
+        return {"unacknowledged": False, "error": "A check_id is required."}
+    conn = db.connect(database_path)
+    try:
+        removed = db.remove_ack(conn, check_id)
+    finally:
+        conn.close()
+    return {
+        "unacknowledged": removed,
+        "check_id": check_id,
+        "message": "Ack removed." if removed else "No active acknowledgment for that check id.",
+    }
+
+
+def build_server(database_path: str, allow_writes: bool = False):
     """Construct the FastMCP server. Imports `mcp` lazily so core Guardian never
-    depends on it; raises ModuleNotFoundError if the optional extra is missing."""
+    depends on it; raises ModuleNotFoundError if the optional extra is missing.
+
+    Read tools are always registered. The acknowledge/unacknowledge WRITE tools
+    are registered only when `allow_writes` is true (config `mcp.allow_writes`),
+    keeping the default posture read-only — an agent attached with writes off
+    cannot mutate Guardian's state because the tools simply do not exist."""
     from mcp.server.fastmcp import FastMCP
 
     server = FastMCP("homelab-guardian")
@@ -218,10 +281,33 @@ def build_server(database_path: str):
         """Recent scan history, newest first, with each scan's overall status and status counts."""
         return history_payload(database_path, limit)
 
+    @server.tool()
+    def list_acknowledgments() -> list:
+        """List checks that are currently muted (acknowledged): their id, the note
+        explaining why, when it was set, and any expiry. Use to see what is being
+        deliberately silenced before acknowledging or un-acknowledging anything."""
+        return list_acks_payload(database_path)
+
     @server.resource("guardian://health")
     def health_resource() -> str:
         """The latest health summary as JSON."""
         return json.dumps(summary_payload(database_path), indent=2, default=str)
+
+    if allow_writes:
+        @server.tool()
+        def acknowledge_check(check_id: str, note: str = "", days: float = 0) -> dict:
+            """Mute (acknowledge) a health check so it stops counting toward overall
+            status and stops alerting — for a known, accepted, or being-worked-on issue.
+            Set `note` to record WHY (always do this). Set `days` to auto-expire the mute
+            after that many days; 0 means no expiry. WRITE: this changes Guardian's state,
+            so only do it when the user explicitly asks to silence or accept a check."""
+            return acknowledge_check_payload(database_path, check_id, note, days or None)
+
+        @server.tool()
+        def unacknowledge_check(check_id: str) -> dict:
+            """Un-mute a previously acknowledged check so it counts toward overall status
+            and alerts again. WRITE: only when the user wants a silenced check active again."""
+            return unacknowledge_check_payload(database_path, check_id)
 
     return server
 
@@ -243,8 +329,9 @@ def run_stdio(config_path: str) -> int:
     """CLI entry: serve Guardian over MCP on stdio (a client launches this process)."""
     config = load_config(config_path)
     database_path = resolve_database_path(config, config_path)
+    allow_writes = bool(config.get("mcp", {}).get("allow_writes", False))
     try:
-        server = build_server(database_path)
+        server = build_server(database_path, allow_writes=allow_writes)
     except ModuleNotFoundError:
         print(
             "The MCP server needs the optional 'mcp' dependency.\n"
