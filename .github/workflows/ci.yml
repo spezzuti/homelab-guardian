@@ -7,9 +7,14 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
+      # Don't let one platform's failure cancel the others — platform-specific
+      # bugs (e.g. a Windows-only socket reset) must surface, not hide behind a
+      # cancelled Linux run.
+      fail-fast: false
       matrix:
+        os: [ubuntu-latest, windows-latest]
         python-version: ["3.11", "3.12"]
     steps:
       - uses: actions/checkout@v4
