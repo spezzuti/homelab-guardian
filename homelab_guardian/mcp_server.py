@@ -254,16 +254,19 @@ def acknowledge_alerts_payload(database_path: str, check_ids: list[str]) -> dict
     return {"acknowledged_receipt": cleared, "check_ids": ids}
 
 
-def build_server(database_path: str, allow_writes: bool = False):
+def build_server(database_path: str, allow_writes: bool = False, config: dict[str, Any] | None = None):
     """Construct the FastMCP server. Imports `mcp` lazily so core Guardian never
     depends on it; raises ModuleNotFoundError if the optional extra is missing.
 
     Read tools are always registered. The acknowledge/unacknowledge WRITE tools
     are registered only when `allow_writes` is true (config `mcp.allow_writes`),
-    keeping the default posture read-only — an agent attached with writes off
-    cannot mutate Guardian's state because the tools simply do not exist."""
+    keeping the default posture read-only. The repair tools are registered only
+    when `repair.enabled` is true (a separate, stronger gate) — and even then the
+    agent only gets propose/execute/list, never approve (human-only, see
+    docs/repair.md)."""
     from mcp.server.fastmcp import FastMCP
 
+    config = config or {}
     server = FastMCP("homelab-guardian")
 
     @server.tool()
@@ -350,6 +353,68 @@ def build_server(database_path: str, allow_writes: bool = False):
             and alerts again. WRITE: only when the user wants a silenced check active again."""
             return unacknowledge_check_payload(database_path, check_id)
 
+    if config.get("repair", {}).get("enabled", False):
+        from homelab_guardian import repair as _repair
+
+        @server.tool()
+        def list_repair_actions(check_id: str) -> dict:
+            """Repair actions available for a failing check, each with a dry-run plan
+            (exactly what would run, its blast radius, reversibility). Changes nothing.
+            Use to see what could fix a problem before proposing it."""
+            conn = db.connect(database_path)
+            try:
+                check = _repair._load_check(conn, check_id)
+                if check is None:
+                    return {"error": f"No check '{check_id}' in the latest scan."}
+                actions = _repair.applicable_actions(config, check)
+                plans = []
+                for a in actions:
+                    try:
+                        plans.append(_repair.build_plan(config, check, a))
+                    except _repair.RepairError as exc:
+                        plans.append({"action": a, "blocked": str(exc)})
+                return {"check_id": check_id, "status": check.status, "actions": actions, "plans": plans}
+            finally:
+                conn.close()
+
+        @server.tool()
+        def propose_repair(check_id: str, action: str) -> dict:
+            """Propose a repair for a failing check. Returns a proposal id and the exact
+            plan but DOES NOT execute it. Relay the plan to the user in plain language and
+            ask them to approve — approval happens out-of-band (a human runs
+            `guardian repair approve <id>`); you cannot approve it yourself. After they
+            approve, call execute_repair."""
+            conn = db.connect(database_path)
+            try:
+                return _repair.propose(config, conn, check_id, action, proposed_by="agent")
+            except _repair.RepairError as exc:
+                return {"error": str(exc)}
+            finally:
+                conn.close()
+
+        @server.tool()
+        def execute_repair(proposal_id: int) -> dict:
+            """Execute a repair proposal that a human has APPROVED, then verify recovery.
+            Fails unless the proposal is approved (it is refused otherwise). Only call this
+            after the user has approved the specific proposal."""
+            conn = db.connect(database_path)
+            try:
+                return _repair.execute(config, conn, proposal_id, executed_by="agent")
+            except _repair.RepairError as exc:
+                return {"error": str(exc)}
+            finally:
+                conn.close()
+
+        @server.tool()
+        def get_repair_log(limit: int = 20) -> list:
+            """Recent repair proposals and their outcomes (proposed / approved / denied /
+            executed / failed), newest first — the audit trail."""
+            conn = db.connect(database_path)
+            try:
+                return db.list_repair_proposals(conn, limit=limit)
+            finally:
+                conn.close()
+
     return server
 
 
@@ -372,7 +437,7 @@ def run_stdio(config_path: str) -> int:
     database_path = resolve_database_path(config, config_path)
     allow_writes = bool(config.get("mcp", {}).get("allow_writes", False))
     try:
-        server = build_server(database_path, allow_writes=allow_writes)
+        server = build_server(database_path, allow_writes=allow_writes, config=config)
     except ModuleNotFoundError:
         print(
             "The MCP server needs the optional 'mcp' dependency.\n"
