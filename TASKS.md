@@ -85,8 +85,8 @@ exposing `collect(config, secrets=None) -> list[HealthCheck]`, registered in
 `status/summary/evidence/recommended_action` shape. Real findings that would
 have been caught automatically are noted per item.
 
-Shipped 2026-06-13 (built + tested + dogfooded; not yet committed or deployed
-to the live Marcus service):
+Shipped 2026-06-13 — built, tested (142), committed, and **deployed live on
+Marcus** (box `main`, new collectors enabled in the production config.yaml):
 
 - [x] **firewall collector** (`firewall`): root-free — reads ufw/nftables/
       firewalld service state + the world-readable `/etc/default/ufw` policy.
@@ -106,24 +106,30 @@ to the live Marcus service):
       unit's last result/finish). *(Dogfood: restic mode reported the 1.3h-old
       Marcus snapshot `ok`; systemd mode correctly flagged that a oneshot's
       run-time is cleared by reboot — message now says so explicitly.)*
-- [x] **Dashboard grouping**: `group` field on `HealthCheck`; web view is now
-      group-primary — collapsible worst-of-children cards, problem groups
-      auto-open and sort first, healthy groups collapse (calm by default).
-      Network targets take a `group:` so a service's reachability + cert roll
-      up together (e.g. "Core services"). Falls back to id-category grouping.
+- [x] **Dashboard grouping**: `group` field on `HealthCheck`; problem groups
+      render as full-width worst-of-children roll-up cards (auto-open, sorted
+      first); healthy groups render as **collapsible 2-column tiles** (collapsed
+      by default, open/closed state persisted in localStorage across the
+      auto-refresh, largest-first). Live taxonomy: **Host** (disks+updates+
+      systemd), **Infrastructure**, **Applications**, **Network**, Security,
+      Backups — the infra/app split is via per-target `group:` in config.
 - [x] `config.example.yaml` entries for all five collectors + `group:` docs;
       142 tests pass (5 new collector test files + grouping tests).
 - [x] Dogfood against Marcus (isolated /tmp copy, temp DB): firewall ok, ssh
       ok, updates ok, backups ok (restic), Core services rolled up, exposed
       services warned. Grouping + collectors validated end-to-end.
+- [x] **Deploy to the live Marcus service** + enable the new collectors in the
+      production config.yaml. Done; dashboard live with the new taxonomy.
+- [x] **Calm-by-default cleanup**: all collectors now default `enabled: False`
+      in `config.py` DEFAULT_CONFIG, so an unconfigured host no longer emits
+      `*_not_configured` "unknown" tiles.
+- [x] **Acted on exposed-services findings (Marcus host)**: retired the VNC
+      server (`vncserver@1`), Samba server (smbd/nmbd, was sharing /home), and
+      rpcbind (NFSv4 backup mount verified fine without it). Security group is
+      now green. *User action: repoint Guacamole from VNC to SSH.*
 - [ ] **Wizard** (`guardian init`): not yet updated to offer the five new
       collectors interactively.
-- [ ] **Deploy to the live Marcus service** (currently runs the old code) and
-      enable the new collectors in the production config.yaml.
-- [ ] **Calm-by-default cleanup**: `backups` and `network` default to
-      `enabled: True` in `config.py` DEFAULT_CONFIG, so an unconfigured host
-      emits `*_not_configured` "unknown" tiles — noise. Either default them
-      off, or have collectors return no checks when enabled-but-empty.
+- [ ] **Push box `main` to GitHub** (origin lives on the box; not yet pushed).
 - [ ] **First-scan-after-boot is spurious** (found 2026-06-13): the service
       runs a scan immediately on startup with no wait-for-network gate, so
       after any reboot the first scan fires before DNS/NetworkManager is up
