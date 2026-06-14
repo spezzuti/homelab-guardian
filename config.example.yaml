@@ -6,6 +6,15 @@ app:
   database_path: data/guardian.sqlite
   # Scan snapshots older than this are pruned automatically. 0 disables pruning.
   retention_days: 60
+  # Gate ONLY the first scan after startup on network readiness, so a reboot's
+  # scan-before-DNS doesn't flip every network/TLS check to a false warning.
+  # Later scans run ungated (a real outage must surface). Probe hosts are
+  # auto-derived from the network collector's checks; override with `hosts:`.
+  network_ready:
+    enabled: true
+    # hosts: [example.com]      # optional explicit probe hosts
+    timeout_seconds: 120        # give up waiting after this and scan anyway
+    interval_seconds: 3         # retry probe this often while waiting
 
 collectors:
   docker:

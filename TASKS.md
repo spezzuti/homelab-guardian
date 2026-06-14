@@ -55,10 +55,15 @@
 
 ## Backup checker dogfood
 
-- [ ] Test backup freshness using only a dummy local folder
-- [ ] Confirm fresh dummy marker reports `ok`
-- [ ] Confirm stale dummy marker reports warning without touching real backup paths
-- [ ] Confirm dummy runtime folder, `config.yaml`, reports, and SQLite files are not committed
+- [x] Test backup freshness using only a dummy local folder (covered by
+      `test_backup_collector.py`, which exercises every status on pytest
+      `tmp_path` dummy folders — never real backup paths)
+- [x] Confirm fresh dummy marker reports `ok` (`test_fresh_backup_is_ok`)
+- [x] Confirm stale dummy marker reports warning without touching real backup
+      paths (`test_stale_backup_is_warning`, uses `tmp_path` only)
+- [x] Confirm dummy runtime folder, `config.yaml`, reports, and SQLite files
+      are not committed (`.gitignore` covers config.yaml, reports/*.md,
+      data/*.sqlite, .env; pytest tmp_path lives outside the repo)
 
 ## v0.1/v0.2 cleanup and carried-forward tasks
 
@@ -127,20 +132,23 @@ Marcus** (box `main`, new collectors enabled in the production config.yaml):
       server (`vncserver@1`), Samba server (smbd/nmbd, was sharing /home), and
       rpcbind (NFSv4 backup mount verified fine without it). Security group is
       now green. *User action: repoint Guacamole from VNC to SSH.*
-- [ ] **Wizard** (`guardian init`): not yet updated to offer the five new
-      collectors interactively.
-- [ ] **Push box `main` to GitHub** (origin lives on the box; not yet pushed).
-- [ ] **First-scan-after-boot is spurious** (found 2026-06-13): the service
-      runs a scan immediately on startup with no wait-for-network gate, so
-      after any reboot the first scan fires before DNS/NetworkManager is up
-      and flips every network/TLS check `ok -> warning` (even the host's own
-      loopback SSH). The dashboard then shows ~19 false warnings until the
-      next interval. Fix options: gate the first scan on a DNS/network-ready
-      probe (resolve a known host, retry with backoff) before scanning;
-      and/or have the web view de-emphasize a scan where *all* network checks
-      fail simultaneously (likely-environmental, not real). Flap damping
-      already suppresses the Telegram page; the gap is the web view + the
-      wasted scan. Add a `network-ready` preflight the scan loop awaits.
+- [x] **Wizard** (`guardian init`): offers the five host-hardening collectors
+      (fixed 2026-06-14, Linux-host gated). One prompt enables the four
+      zero-config ones (firewall, exposed_services, ssh, updates); a follow-up
+      optionally adds backup_health watching a named systemd backup unit.
+      `build_config` gained `host_checks`/`backup_unit` params; 3 wizard tests.
+- [x] **Push box `main` to GitHub** (done 2026-06-14: GitHub origin was stale
+      at b10a4ae; pushed up through 32f6808, fast-forwarding the interim
+      b4e1fab/8fcaffb/0fe0033 commits. GitHub now current).
+- [x] **First-scan-after-boot is spurious** (fixed 2026-06-14): added a
+      `network-ready` preflight (`homelab_guardian/network_ready.py`) that the
+      scan loop awaits **before the first scan only** — later scans run ungated
+      so a real outage still surfaces. Probe hosts auto-derive from the network
+      collector's dns/tcp/tls/http checks (loopback skipped, de-duped) or an
+      explicit `app.network_ready.hosts`; retries with backoff until a probe
+      resolves or `timeout_seconds` (default 120) elapses, then scans anyway.
+      Best-effort: never blocks the loop on error. 7 tests; config knob
+      documented in `config.example.yaml`.
 
 ## Sprint 10 — dashboard auth foundation (2026-06-13)
 
@@ -168,8 +176,11 @@ MCP transport — same auth layer). Mechanisms, not per-provider code. See
       running scan picks up changes automatically. `configedit.py` + 12 tests.
 - [ ] Guided edits v2: thresholds, add/remove targets, app settings — likely
       wants a comment-preserving round-trip lib (ruamel) for nested edits.
-- [ ] OIDC end-to-end dogfood: register a Guardian client in the user's
-      Authentik, set `web.auth.mode: oidc`, confirm login.
+- [x] OIDC end-to-end dogfood (done 2026-06-14): Guardian client registered in
+      the user's Authentik, live config set to `web.auth.mode: oidc`
+      (guardian.example.com via Cloudflare tunnel → Marcus:8674), browser
+      login round-trip confirmed by the user, client_secret moved to the
+      hermes-keys Bitwarden vault.
 
 ## Sprint 9 — MCP server (2026-06-13)
 

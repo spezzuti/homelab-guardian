@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import socket
+import sys
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
@@ -130,6 +131,8 @@ def build_config(
     telegram: dict[str, Any] | None = None,
     ai: dict[str, Any] | None = None,
     secrets_provider: str = "env",
+    host_checks: bool = False,
+    backup_unit: str | None = None,
 ) -> dict[str, Any]:
     """Assemble the config.yaml structure from wizard answers. Pure function:
     no prompts, no filesystem, fully unit-testable."""
@@ -182,6 +185,22 @@ def build_config(
             "disks": {"enabled": True, "paths": []},
         },
     }
+
+    if host_checks:
+        # The host-hardening collectors are read-only and need no configuration
+        # when Guardian runs on the Linux host it's watching — enable the four
+        # zero-config ones. backup_health needs a target, so it's added only
+        # when the user names a backup unit.
+        config["collectors"]["firewall"] = {"enabled": True}
+        config["collectors"]["exposed_services"] = {"enabled": True}
+        config["collectors"]["ssh"] = {"enabled": True}
+        config["collectors"]["updates"] = {"enabled": True}
+
+    if backup_unit:
+        config["collectors"]["backup_health"] = {
+            "enabled": True,
+            "repos": [{"id": "backup_job", "name": "Backup job", "tool": "systemd", "unit": backup_unit}],
+        }
 
     if secrets_provider != "env":
         config["secrets"] = {"provider": secrets_provider}
@@ -320,6 +339,20 @@ def run_init(output_path: str = "config.yaml", force: bool = False, discover_net
             _collect_env_secret(env_lines, "GUARDIAN_AI_API_KEY", "the API key (skip if none needed)")
     print()
 
+    host_checks = False
+    backup_unit: str | None = None
+    if sys.platform.startswith("linux"):
+        if _ask_yes_no(
+            "Is Guardian running on the Linux host you want to keep an eye on?\n"
+            "(enables read-only host checks: firewall, SSH config, pending updates, exposed services)",
+            default=True,
+        ):
+            host_checks = True
+            if _ask_yes_no("  Watch a backup job's health via its systemd unit?", default=False):
+                unit = _ask("  Backup unit name (e.g. restic-backup.service)")
+                backup_unit = unit or None
+    print()
+
     secrets_provider = "env"
     if _ask_yes_no("Use Bitwarden Secrets Manager instead of a local .env file? (advanced)", default=False):
         secrets_provider = "bitwarden"
@@ -327,7 +360,8 @@ def run_init(output_path: str = "config.yaml", force: bool = False, discover_net
         print("  should match the names Guardian uses (HOMEASSISTANT_TOKEN, ...).")
 
     config = build_config(
-        discovered, homeassistant=ha or None, telegram=telegram, ai=ai, secrets_provider=secrets_provider
+        discovered, homeassistant=ha or None, telegram=telegram, ai=ai,
+        secrets_provider=secrets_provider, host_checks=host_checks, backup_unit=backup_unit,
     )
     output.write_text(render_config_yaml(config), encoding="utf-8")
     print(f"\nWrote {output}")

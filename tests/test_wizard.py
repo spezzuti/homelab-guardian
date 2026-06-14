@@ -77,6 +77,24 @@ def test_build_config_optional_sections_absent_by_default():
     assert "notifications" not in config
     assert "ai" not in config
     assert "secrets" not in config
+    # Host-hardening collectors are opt-in (Linux-host only).
+    for name in ("firewall", "exposed_services", "ssh", "updates", "backup_health"):
+        assert name not in config["collectors"]
+
+
+def test_build_config_host_checks_enables_zero_config_collectors():
+    config = build_config([], host_checks=True)
+    for name in ("firewall", "exposed_services", "ssh", "updates"):
+        assert config["collectors"][name]["enabled"] is True
+    # backup_health needs a target, so it's not added without a unit.
+    assert "backup_health" not in config["collectors"]
+
+
+def test_build_config_backup_unit_adds_systemd_backup_health():
+    config = build_config([], host_checks=True, backup_unit="restic-backup.service")
+    repos = config["collectors"]["backup_health"]["repos"]
+    assert repos[0]["tool"] == "systemd"
+    assert repos[0]["unit"] == "restic-backup.service"
 
 
 def test_build_config_with_all_sections():
