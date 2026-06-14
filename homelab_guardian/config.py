@@ -23,6 +23,11 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "systemd": {"enabled": False, "include_user": False, "units": []},
         "disks": {"enabled": False, "paths": []},
     },
+    "web": {
+        # Dashboard authentication. mode: none | basic | forward_auth | oidc.
+        # Defaults to none so existing deployments are unchanged until opted in.
+        "auth": {"mode": "none"},
+    },
     "secrets": {
         "provider": "env",
         "bitwarden": {

@@ -160,6 +160,42 @@ collectors:
     #     max_age_hours: 36
     repos: []
 
+web:
+  # Authentication for the `guardian serve` dashboard. /healthz stays open for
+  # uptime monitors. Pick the mechanism that fits your setup — options are the
+  # point. Default is "none" (open, the historical behaviour).
+  auth:
+    mode: none   # none | basic | forward_auth | oidc
+
+    # --- mode: basic --- built-in username/password (easiest; use over HTTPS/LAN)
+    # mode: basic
+    # username: admin
+    # password_env: GUARDIAN_WEB_PASSWORD   # preferred: set in .env, never here
+    # password: ""                          # plaintext fallback (discouraged)
+
+    # --- mode: forward_auth --- trust identity headers from an upstream proxy.
+    # ONE mode covers Authelia, Authentik, oauth2-proxy, Traefik/Caddy/nginx
+    # auth_request, Cloudflare Access, ... Headers are trusted ONLY from a
+    # source IP in trusted_proxies, so they can't be spoofed by direct hits.
+    # mode: forward_auth
+    # forward_auth is read from these keys at the web.auth level:
+    # trusted_proxies: ["127.0.0.1", "::1"]   # the proxy's source IP(s)/CIDRs
+    # user_header: Remote-User                # Authelia/Authentik default
+    # email_header: Remote-Email
+    # groups_header: Remote-Groups
+    # required_groups: []                     # optional allow-list of groups
+
+    # --- mode: oidc --- native OpenID Connect login (Authentik, Keycloak,
+    # Zitadel, ... any OIDC provider). Authorization-code flow with PKCE; the
+    # id_token is obtained over a direct back-channel TLS call to the issuer.
+    # mode: oidc
+    # issuer: "https://auth.example.com/application/o/guardian/"
+    # client_id: "homelab-guardian"
+    # client_secret_env: GUARDIAN_OIDC_CLIENT_SECRET
+    # redirect_url: "http://192.168.0.77:8674/auth/callback"  # must match the IdP
+    # required_groups: []        # optional; requires the IdP to send a groups claim
+    # cookie_secure: false       # set true when served over HTTPS
+
 secrets:
   # Where Guardian looks up named secrets (tokens, API keys, chat ids).
   # Every *_env setting in this file names a secret; the provider decides
