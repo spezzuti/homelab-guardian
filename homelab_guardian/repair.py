@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import subprocess
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
@@ -148,6 +149,24 @@ def _disk_applies(check) -> bool:
         and check.status in {"warning", "critical"}
         and isinstance(check.evidence, dict)
     )
+
+
+def _fs_id(path: str):
+    try:
+        return os.stat(path).st_dev
+    except OSError:
+        return None
+
+
+def _reclaim_targets(action: str, pcfg: dict[str, Any]) -> list[str]:
+    """The filesystem path(s) a reclaim action actually frees space on."""
+    if action == "prune_dir":
+        return [str(p) if isinstance(p, str) else str((p or {}).get("path", "")) for p in (pcfg.get("allowed_paths") or [])]
+    return {
+        "docker_prune": ["/var/lib/docker"],
+        "journal_vacuum": ["/var/log/journal", "/var/log"],
+        "apt_clean": ["/var/cache/apt"],
+    }.get(action, [])
 
 
 def _disk_verify(config: dict[str, Any], check_id: str, runner) -> Any:
@@ -390,6 +409,22 @@ def build_plan(
         raise RepairError(f"Check '{check.id}' is not failing; nothing to repair.")
     if not pb["applies_to"](check):
         raise RepairError(f"'{action}' does not apply to check '{check.id}'.")
+
+    # Filesystem binding: a reclaim must free space on the SAME filesystem whose
+    # disk check is failing — a full /boot must not authorize pruning /srv on a
+    # healthy device. Best-effort (skips if devices can't be resolved).
+    targets = _reclaim_targets(action, pcfg)
+    failing_path = (getattr(check, "evidence", {}) or {}).get("path")
+    if targets and failing_path:
+        fdev = _fs_id(str(failing_path))
+        if fdev is not None:
+            tdevs = [_fs_id(t) for t in targets if t]
+            determinable = [d for d in tdevs if d is not None]
+            if determinable and all(d != fdev for d in determinable):
+                raise RepairError(
+                    f"'{action}' frees space on a different filesystem than the failing "
+                    f"check ({failing_path}) — it would not relieve that disk."
+                )
 
     # Preconditions: cross-collector interlocks against Guardian's own state.
     # Fail CLOSED for destructive actions — never skip the interlock just because
