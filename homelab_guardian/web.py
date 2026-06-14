@@ -1,14 +1,19 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
 import html
 import json
+import secrets as secrets_mod
 import threading
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, quote, urlparse
 
 from homelab_guardian import db
+from homelab_guardian.config import load_config
+from homelab_guardian.configedit import apply_collector_toggles, toggleable_collectors, write_config
 from homelab_guardian.diff import ScanDiff, diff_scans
 from homelab_guardian.models import HealthCheck
 from homelab_guardian.webauth import Authenticator, NoAuth, build_authenticator
@@ -131,6 +136,29 @@ table.history th { color: var(--muted); font-weight: 600; }
 table.history tr.current td { font-weight: 650; }
 footer { color: var(--muted); font-size: 0.8rem; margin-top: 28px; text-align: center; }
 h2.sectionhead { margin: 22px 2px 10px; font-size: 1.02rem; }
+a.settings-link {
+  position: absolute; top: 14px; right: 56px; text-decoration: none;
+  background: var(--bg); color: var(--text); border: 1px solid var(--border);
+  border-radius: 8px; font-size: 1.05rem; padding: 4px 9px; line-height: 1;
+}
+.settings-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 11px 4px; border-bottom: 1px solid var(--border);
+}
+.settings-row:last-child { border-bottom: none; }
+.settings-row .label { font-weight: 600; }
+.settings-row .cid { color: var(--muted); font-size: 0.82rem; }
+input.toggle { width: 18px; height: 18px; }
+.savebar { margin-top: 18px; display: flex; gap: 14px; align-items: center; }
+button.save {
+  background: var(--ok); color: #fff; border: none; border-radius: 8px;
+  padding: 8px 18px; font-size: 0.95rem; font-weight: 650; cursor: pointer;
+}
+.banner { border-radius: 10px; padding: 10px 14px; margin-bottom: 14px;
+  background: var(--card); border: 1px solid var(--border); }
+.banner.ok { border-left: 5px solid var(--ok); }
+.banner.err { border-left: 5px solid var(--critical); }
+.notice { color: var(--muted); }
 details.group {
   background: var(--card); border: 1px solid var(--border);
   border-left: 8px solid var(--accent, var(--border)); border-radius: 12px;
@@ -480,6 +508,7 @@ def render_scan_page(
 <title>{app_name} — {label}</title><style>{PAGE_STYLE}</style>{THEME_SCRIPT}</head>
 <body><main>
 <header class="overall {_STATUS_CLASS.get(overall, 'unk')}">
+<a class="settings-link" href="/settings" title="Settings">⚙</a>
 <button class="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark theme">🌓</button>
 <h1>{app_name}</h1>
 <div class="status">{icon} {label.upper()}</div>
@@ -503,11 +532,82 @@ def render_empty_page() -> str:
     )
 
 
+def render_settings_page(
+    collectors: list[dict[str, Any]],
+    *,
+    editable: bool,
+    csrf_token: str,
+    identity: Any = None,
+    saved: bool = False,
+    error: str | None = None,
+    auth_mode: str = "none",
+) -> str:
+    rows = []
+    for c in collectors:
+        checked = " checked" if c["enabled"] else ""
+        disabled = "" if editable else " disabled"
+        rows.append(
+            f'<label class="settings-row"><span>'
+            f'<span class="label">{html.escape(c["label"])}</span> '
+            f'<span class="cid">{html.escape(c["name"])}</span></span>'
+            f'<input class="toggle" type="checkbox" name="collector:{html.escape(c["name"])}"{checked}{disabled}>'
+            f"</label>"
+        )
+    rows_html = "".join(rows)
+
+    if saved:
+        banner = '<div class="banner ok">Saved. Changes take effect on the next scan.</div>'
+    elif error:
+        banner = f'<div class="banner err">Could not save: {html.escape(error)}</div>'
+    else:
+        banner = ""
+
+    if editable:
+        who = f"Signed in as <b>{html.escape(identity.user)}</b>." if identity else ""
+        logout = ' · <a href="/auth/logout">Sign out</a>' if auth_mode == "oidc" else ""
+        body = (
+            f'<form method="post" action="/settings">'
+            f'<input type="hidden" name="csrf" value="{html.escape(csrf_token)}">'
+            f'<div class="card"><h2>Collectors</h2>'
+            f'<p class="notice">Turn checks on or off. Saved to config.yaml; the running scan picks up changes automatically.</p>'
+            f"{rows_html}"
+            f'<div class="savebar"><button class="save" type="submit">Save</button>'
+            f'<span class="notice">{who}{logout}</span></div></div></form>'
+        )
+    else:
+        body = (
+            '<div class="banner err">Authentication is off — settings are read-only here.</div>'
+            '<div class="card"><h2>Collectors</h2>'
+            '<p class="notice">Editing the host config over the network needs a login. '
+            "Set <code>web.auth.mode</code> in config.yaml (basic / forward_auth / oidc), then reload. "
+            "Current configuration:</p>"
+            f"{rows_html}</div>"
+        )
+
+    return f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Homelab Guardian — Settings</title><style>{PAGE_STYLE}</style>{THEME_SCRIPT}</head>
+<body><main>
+<header class="overall okc">
+<button class="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark theme">🌓</button>
+<h1>Settings</h1>
+<div class="meta"><a href="/">← Back to dashboard</a></div>
+</header>
+{banner}
+{body}
+<footer>Homelab Guardian — settings</footer>
+</main></body></html>"""
+
+
 class GuardianRequestHandler(BaseHTTPRequestHandler):
     database_path: str = "data/guardian.sqlite"
+    config_path: str = "config.yaml"
     refresh_seconds: int = 60
     history_limit: int = 30
     auth: Authenticator = NoAuth()
+    auth_mode: str = "none"
+    csrf_secret: bytes = b"guardian-dev-csrf-secret"
 
     # quiet default request logging; the scan loop output matters more
     def log_message(self, format: str, *args: Any) -> None:  # noqa: A002
@@ -555,6 +655,9 @@ class GuardianRequestHandler(BaseHTTPRequestHandler):
         if path == "/":
             self._render_scan(None)
             return
+        if path == "/settings":
+            self._render_settings()
+            return
         if path.startswith("/scan/"):
             try:
                 self._render_scan(int(path.removeprefix("/scan/")))
@@ -562,6 +665,78 @@ class GuardianRequestHandler(BaseHTTPRequestHandler):
                 self._send("not found", status=404, content_type="text/plain; charset=utf-8")
             return
         self._send("not found", status=404, content_type="text/plain; charset=utf-8")
+
+    def do_POST(self) -> None:  # noqa: N802
+        path = urlparse(self.path).path
+        if self.auth.identify(self) is None:
+            self.auth.challenge(self)
+            return
+        if path == "/settings":
+            self._save_settings()
+            return
+        self._send("not found", status=404, content_type="text/plain; charset=utf-8")
+
+    # --- settings / guided config edits --------------------------------
+
+    def _editable(self) -> bool:
+        # Editing the host config over the network requires auth to be enabled.
+        return not isinstance(self.auth, NoAuth)
+
+    def _csrf_token(self, user: str) -> str:
+        return hmac.new(self.csrf_secret, user.encode("utf-8"), hashlib.sha256).hexdigest()[:32]
+
+    def _check_csrf(self, user: str, token: str) -> bool:
+        return bool(token) and hmac.compare_digest(self._csrf_token(user), token)
+
+    def _render_settings(self) -> None:
+        config = load_config(self.config_path)
+        identity = self.auth.identify(self)
+        query = parse_qs(urlparse(self.path).query)
+        csrf = self._csrf_token(identity.user) if identity else ""
+        self._send(render_settings_page(
+            toggleable_collectors(config),
+            editable=self._editable(),
+            csrf_token=csrf,
+            identity=identity,
+            saved=query.get("saved") == ["1"],
+            error=(query.get("error") or [None])[0],
+            auth_mode=self.auth_mode,
+        ))
+
+    def _save_settings(self) -> None:
+        if not self._editable():
+            self._send(
+                "Editing requires authentication — enable web.auth in config.yaml.",
+                status=403,
+                content_type="text/plain; charset=utf-8",
+            )
+            return
+        identity = self.auth.identify(self)
+        length = int(self.headers.get("Content-Length", 0) or 0)
+        body = self.rfile.read(length).decode("utf-8") if length else ""
+        form = parse_qs(body)
+        if not self._check_csrf(identity.user, (form.get("csrf") or [""])[0]):
+            self._send(
+                "Invalid form token — reload the settings page and try again.",
+                status=403,
+                content_type="text/plain; charset=utf-8",
+            )
+            return
+        config = load_config(self.config_path)
+        desired = {}
+        for col in toggleable_collectors(config):
+            now = f"collector:{col['name']}" in form
+            if now != col["enabled"]:
+                desired[col["name"]] = now
+        if desired:
+            try:
+                with open(self.config_path, "r", encoding="utf-8") as handle:
+                    text = handle.read()
+                write_config(self.config_path, apply_collector_toggles(text, desired))
+            except Exception as exc:
+                self._redirect("/settings?error=" + quote(str(exc)[:200]))
+                return
+        self._redirect("/settings?saved=1")
 
     def _render_scan(self, scan_id: int | None) -> None:
         conn = db.connect(self.database_path)
@@ -593,6 +768,7 @@ def serve(
     port: int = 8674,
     scan_interval: int = 0,
     scan_loop: Any = None,
+    config_path: str = "config.yaml",
 ) -> int:
     database_path = config.get("app", {}).get("database_path", "data/guardian.sqlite")
 
@@ -605,7 +781,13 @@ def serve(
     handler = type(
         "BoundGuardianHandler",
         (GuardianRequestHandler,),
-        {"database_path": database_path, "auth": authenticator},
+        {
+            "database_path": database_path,
+            "config_path": config_path,
+            "auth": authenticator,
+            "auth_mode": auth_mode,
+            "csrf_secret": secrets_mod.token_bytes(32),
+        },
     )
 
     if scan_interval > 0 and scan_loop is not None:
