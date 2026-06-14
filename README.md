@@ -19,9 +19,11 @@ flap-damped notifications.
 
 - Local-first
 - Read-only against homelab infrastructure by default
-- No destructive infrastructure actions
-- No self-healing yet
-- No AI shell execution
+- Any action is opt-in, whitelisted, reversible-minded, and **human-approved** —
+  Guardian proposes; a person approves; Guardian verifies. (See *Approval-gated
+  repair*.)
+- **Never raw shell, never an AI-generated command** — actions are named,
+  parameterized argv only; the model is never the authority
 - No cloud dependency required
 - Useful without AI
 - Secrets stay local
@@ -441,6 +443,43 @@ Note: each config file should point at its own `database_path`. Scan diffing
 compares against the previous snapshot in that database, so two configs
 sharing one database will see each other's checks as added/removed noise.
 
+## Attach an AI agent (MCP + agent-mode)
+
+Guardian's collectors and the `status/summary/evidence/recommended_action`
+contract are the moat; you can hand that view to any model.
+
+- **`guardian mcp`** serves Guardian over the [Model Context Protocol](https://modelcontextprotocol.io)
+  so an agent (Claude, a local agent, ...) reads your *verified* homelab state
+  instead of re-deriving it. Read-only by default; optional gated write tools.
+  See [docs/mcp.md](docs/mcp.md).
+- **Agent-delivery mode** (`notifications.mode: agent`) makes Guardian feed each
+  confirmed change to the agent's webhook so the **agent is the single voice**,
+  with a deterministic Telegram fallback for criticals if the agent is
+  unreachable.
+
+The division of labor: Guardian is the deterministic source of truth and the
+"reflex" actuator; the agent narrates, reasons, and handles the deep, judgment-
+heavy fixes Guardian deliberately won't.
+
+## Approval-gated repair
+
+Optional, off by default (`repair.enabled`). Guardian can *propose* a fix for a
+detected problem and, **after a human approves it**, *execute* it and verify
+recovery — closing the detect → diagnose → propose → approve → repair → verify
+loop. The whole point is to do this safely:
+
+- **Never raw shell.** Only named, whitelisted, parameterized actions, built as
+  argv lists. Targets come from validated check evidence or admin allowlists.
+- **The agent is never the authority.** It can propose and execute, but approval
+  is human-only (CLI `guardian repair approve`, or the dashboard `/repairs`
+  page). Destructive actions can never auto-approve.
+- Built-ins: restart a watched systemd unit or container; reclaim disk
+  (`docker_prune` / `journal_vacuum` / `apt_clean` / `prune_dir`, with read-only
+  previews and a backup interlock). Everything is audited and loop-guarded.
+
+Design and threat model: [docs/repair.md](docs/repair.md) and
+[docs/repair-reclaim.md](docs/repair-reclaim.md).
+
 ## Telegram notifications
 
 Optional and disabled by default. Configure under `notifications.telegram` in
@@ -503,17 +542,22 @@ The Markdown report includes:
 
 ## Safety notes
 
-Homelab Guardian's safety boundary has three parts:
+Homelab Guardian's safety boundary has four parts:
 
-- **Infrastructure collectors are read-only.** Guardian does not modify
-  services, containers, DNS records, Home Assistant entities, backup contents,
-  systemd units, certificates, disks, or remote hosts.
+- **Collectors are read-only.** Detection never modifies services, containers,
+  DNS, Home Assistant entities, backup contents, systemd units, certificates,
+  disks, or remote hosts.
 - **Local runtime state is writable.** Guardian writes reports, SQLite scan
   snapshots, acknowledgments, alert state, and optional retention pruning under
   the configured report/database paths.
 - **Outbound integrations are opt-in.** Telegram notifications and AI briefings
-  send structured status data only when explicitly enabled; Guardian still works
-  with both disabled.
+  send structured status data only when explicitly enabled.
+- **Repair is opt-in and human-gated.** With `repair.enabled` (off by default),
+  Guardian may *propose* a whitelisted, parameterized fix and execute it **only
+  after a human approves the specific proposal** — never raw shell, never an
+  AI-generated command, always followed by a verify and an audit record.
+  Destructive actions can never auto-approve. See *Approval-gated repair* and
+  [docs/repair.md](docs/repair.md).
 
-No self-healing workflows are implemented. Recommended actions are diagnostic
-next steps for the operator, not commands Guardian runs automatically.
+Recommended actions in reports are diagnostic next steps for the operator;
+nothing executes automatically without the approval flow above.

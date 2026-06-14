@@ -1,5 +1,62 @@
 # Changelog
 
+## Unreleased (v0.3 in development)
+
+The "safe actuator" arc: Guardian grew from a read-only doctor into something an
+AI agent can attach to and, with human approval, act through — without ever
+giving the model a shell. Dogfooded live on a real homelab throughout.
+
+### Added
+
+- **MCP server** (`guardian mcp`) — exposes Guardian's structured health view to
+  any agent over the Model Context Protocol (Claude, a local agent, ...), so the
+  agent reasons over verified state instead of re-deriving it. Read tools are
+  always available; optional acknowledgement *write* tools sit behind
+  `mcp.allow_writes` (off by default — the tools aren't even registered).
+- **Agent-delivery notifications** (`notifications.mode: agent`) — Guardian hands
+  each confirmed change to an attached agent's webhook so the **agent is the
+  single voice**, with a critical-fallback to Telegram over the same shared bot
+  if the agent is unreachable or doesn't confirm it relayed a critical in time.
+- **Approval-gated repair** (`guardian repair`, `repair.enabled`) — Guardian can
+  *propose* and, after **human approval**, *execute* whitelisted, bounded repairs
+  (restart a watched systemd unit or container; reclaim disk via `docker_prune` /
+  `journal_vacuum` / `apt_clean` / `prune_dir`), then **verify** recovery. Never
+  raw shell (argv only); targets come from validated check evidence or admin
+  allowlists; every step is audited and loop-guarded. Destructive actions can
+  never auto-approve, carry read-only previews ("would free ≈X"), and a cross-
+  collector **backup interlock** refuses to delete user files while backups are
+  not ok-and-fresh. Approve via CLI (`guardian repair approve`) or the dashboard
+  `/repairs` page; an attached agent can propose/execute but **never approve**.
+- **Dashboard authentication** — `web.auth.mode`: `basic` / `forward_auth` /
+  `oidc` (mechanisms, not per-provider code). `/healthz` stays open.
+- **Guided config edits** — a `/settings` page (auth + CSRF gated) to toggle
+  collectors, with comment-preserving writes to `config.yaml`.
+- **Host-hardening collectors** — `firewall`, `exposed_services`, `ssh`,
+  `updates`, and `backup_health` (restic snapshot age or a systemd backup unit).
+- **Group-primary dashboard** — problem groups roll up first and auto-open;
+  healthy groups collapse. Calm by default, deep on demand.
+
+### Security
+
+- The repair feature is the safety showcase: **propose → approve → execute →
+  verify**, with approval enforced by Guardian out-of-band so the LLM is never
+  the authority. An independent security review confirmed the core guarantees
+  and drove hardening — execute-time re-validation (closes a propose→execute
+  TOCTOU), a backup-*freshness* interlock, loop-guard crash survival, and input
+  bounds. `guardian doctor` self-validates the repair config (unwatched allowed
+  units, risky prune paths, passwordless-ALL sudo); a no-shell invariant test
+  locks the argv-only guarantee.
+
+### Changed / Fixed
+
+- **Calm by default** — enabled-but-unconfigured collectors stay quiet; the
+  "you turned this on but didn't configure it" guidance lives in `guardian
+  doctor`, not as dashboard noise.
+- **Network-ready first scan** — after a reboot, the first scan waits for the
+  network so it no longer flips every network/TLS check to a false warning.
+- **Cross-platform fix** — POST handlers drain the request body on early errors
+  (a Windows-only connection-reset bug); CI now covers Windows + Python 3.10–3.12.
+
 ## v0.2.0 — 2026-06-13
 
 The "from scaffold to product" release. Everything below was dogfooded
