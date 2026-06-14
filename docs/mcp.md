@@ -75,10 +75,18 @@ each tool, which materially improves should-call behaviour on recent models.
 - **stdio (v1, default).** The client launches `guardian mcp` as a subprocess and
   talks over stdin/stdout. No network, no port, no auth — process-level trust.
   Ideal when the agent runs on the same host as Guardian (e.g. Marcus).
-- **Streamable HTTP (future).** For a remote agent, FastMCP can serve over HTTP
-  (`mcp.run(transport="streamable-http")`). That exposes a network surface and
-  therefore needs auth first — the same auth prerequisite as the web dashboard.
-  Not enabled in v1.
+- **Streamable HTTP (`guardian mcp --http`).** For a *remote* agent. Serves over
+  streamable HTTP, gated by a **bearer token** (`mcp.http.token_env`) — clients
+  send `Authorization: Bearer <token>`. It **refuses to start without a token**,
+  so the network surface is never unauthenticated. Default bind `127.0.0.1:8675`
+  (override with `--host`/`--port`). For SSO/OIDC, front it with a reverse proxy
+  (same mechanisms-not-providers stance as the dashboard).
+
+```yaml
+mcp:
+  http:
+    token_env: GUARDIAN_MCP_TOKEN   # the bearer token, from env or the secrets provider
+```
 
 ## Connecting a client
 
@@ -166,5 +174,6 @@ Verify with hermes's own tooling: `hermes mcp test guardian` should report
 3. **Approval-gated repair playbooks:** whitelisted, never raw shell — the
    detect→diagnose→approve→repair→verify loop, exposed as tools an agent proposes
    and a human confirms.
-4. **HTTP transport + auth:** once the dashboard auth foundation lands, reuse it
-   to serve MCP to remote agents.
+4. **HTTP transport + auth (done):** `guardian mcp --http` serves streamable HTTP
+   gated by a bearer token, refusing to start unauthenticated — so a remote agent
+   can consume Guardian, not just a same-host one.

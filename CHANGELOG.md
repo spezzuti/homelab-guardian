@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **HTTP MCP transport** — `guardian mcp --http` serves Guardian over streamable
+  HTTP for a *remote* agent (stdio stays the default for same-host). Gated by a
+  bearer token (`mcp.http.token_env`); it refuses to start without one, so the
+  network surface is never unauthenticated. For SSO, front it with a reverse
+  proxy. Default bind `127.0.0.1:8675`.
+
 ## v0.3.0 — 2026-06-14
 
 The "safe actuator" arc: Guardian grew from a read-only doctor into something an
