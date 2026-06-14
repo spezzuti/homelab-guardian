@@ -259,6 +259,13 @@ mcp:
   # Off by default: with it false the write tools are not even registered, so an
   # attached agent cannot change Guardian's state.
   allow_writes: false
+  # Optional HTTP transport for a REMOTE agent (stdio stays the default for a
+  # same-host agent). `guardian mcp --http` serves streamable HTTP and REQUIRES a
+  # bearer token (it refuses to start without one) so the network surface is never
+  # unauthenticated. Clients send `Authorization: Bearer <token>`. For SSO/OIDC,
+  # front it with a reverse proxy. Default bind 127.0.0.1:8675.
+  http:
+    token_env: ""             # env/secret name holding the bearer token, e.g. GUARDIAN_MCP_TOKEN
 
 repair:
   # Approval-gated repair playbooks (see docs/repair.md). OFF by default and a
