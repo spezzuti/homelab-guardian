@@ -307,3 +307,9 @@ notifications:
     # labeled so it doubles as an agent-down signal. Keeps a down agent from
     # silently swallowing a critical. Set false to opt out.
     critical_fallback: true
+    # Fail-to-ACK window: after a critical is delivered to the agent, it must
+    # confirm it relayed it (the acknowledge_alert_received MCP tool) within this
+    # many minutes — otherwise Guardian sends the critical over Telegram itself.
+    # Catches "agent accepted it but never told me" (vs. critical_fallback above,
+    # which catches "agent was unreachable"). Needs the agent wired to call back.
+    ack_timeout_minutes: 10

@@ -164,53 +164,63 @@ def _spy(monkeypatch):
     return calls
 
 
-def _dispatch(config, checks, events):
+def _dispatch(config, checks, events, db_path):
+    config.setdefault("app", {})["database_path"] = str(db_path)
     from homelab_guardian import main
     main._dispatch_notifications(config, checks, events, 1, None)
 
 
-def test_direct_mode_uses_telegram_only(monkeypatch):
+def _pending_ids(db_path):
+    from homelab_guardian import db
+    return [p["check_id"] for p in db.list_pending_alerts(db.connect(str(db_path)))]
+
+
+def test_direct_mode_uses_telegram_only(monkeypatch, tmp_path):
     calls = _spy(monkeypatch)
     _dispatch({"notifications": {"telegram": {"enabled": True}}},
-              [_check("a", "critical")], AlertEvents(confirmed=[_event()]))
+              [_check("a", "critical")], AlertEvents(confirmed=[_event()]), tmp_path / "g.sqlite")
     assert len(calls["telegram"]) == 1
     assert calls["telegram"][0].get("force") is None  # normal send, not forced
 
 
-def test_agent_mode_delivered_no_fallback(monkeypatch):
+def test_agent_mode_delivered_records_pending_no_fallback(monkeypatch, tmp_path):
     calls = _spy(monkeypatch)
     calls["agent_delivered"] = True
+    dbp = tmp_path / "g.sqlite"
     _dispatch({"notifications": {"mode": "agent", "agent": {"enabled": True},
                                  "telegram": {"enabled": True}}},
-              [_check("a", "critical")], AlertEvents(confirmed=[_event(to="critical")]))
-    assert calls["telegram"] == []  # agent took it; Guardian stays quiet
+              [_check("a", "critical")], AlertEvents(confirmed=[_event("svc_a", to="critical")]), dbp)
+    assert calls["telegram"] == []           # agent took it; Guardian stays quiet
+    assert _pending_ids(dbp) == ["svc_a"]    # but the critical now awaits the agent's ack
 
 
-def test_agent_mode_critical_undelivered_triggers_fallback(monkeypatch):
+def test_agent_mode_critical_undelivered_triggers_fallback(monkeypatch, tmp_path):
     calls = _spy(monkeypatch)
     calls["agent_delivered"] = False  # agent unreachable
+    dbp = tmp_path / "g.sqlite"
     _dispatch({"notifications": {"mode": "agent", "agent": {"enabled": True},
                                  "telegram": {"enabled": True}}},
-              [_check("a", "critical")], AlertEvents(confirmed=[_event(to="critical")]))
+              [_check("a", "critical")], AlertEvents(confirmed=[_event(to="critical")]), dbp)
     assert len(calls["telegram"]) == 1
     assert calls["telegram"][0]["force"] is True
     assert "agent unreachable" in calls["telegram"][0]["prefix"]
+    assert _pending_ids(dbp) == []  # delivery failed → immediate fallback, nothing pending
 
 
-def test_agent_mode_noncritical_undelivered_no_fallback(monkeypatch):
+def test_agent_mode_noncritical_undelivered_no_fallback(monkeypatch, tmp_path):
     calls = _spy(monkeypatch)
     calls["agent_delivered"] = False
     _dispatch({"notifications": {"mode": "agent", "agent": {"enabled": True},
                                  "telegram": {"enabled": True}}},
-              [_check("a", "warning")], AlertEvents(confirmed=[_event(to="warning")]))
+              [_check("a", "warning")], AlertEvents(confirmed=[_event(to="warning")]), tmp_path / "g.sqlite")
     assert calls["telegram"] == []  # only criticals fall back
 
 
-def test_agent_mode_fallback_disabled(monkeypatch):
+def test_agent_mode_fallback_disabled(monkeypatch, tmp_path):
     calls = _spy(monkeypatch)
     calls["agent_delivered"] = False
     _dispatch({"notifications": {"mode": "agent",
                                  "agent": {"enabled": True, "critical_fallback": False},
                                  "telegram": {"enabled": True}}},
-              [_check("a", "critical")], AlertEvents(confirmed=[_event(to="critical")]))
+              [_check("a", "critical")], AlertEvents(confirmed=[_event(to="critical")]), tmp_path / "g.sqlite")
     assert calls["telegram"] == []  # fallback opted out

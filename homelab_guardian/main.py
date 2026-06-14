@@ -49,6 +49,12 @@ COLLECTORS: dict[str, CollectorFn] = {
 }
 
 
+# How often the serve loop wakes between scans to fire the agent fail-to-ack
+# fallback. The ack deadline is in minutes, so a ~minute recheck keeps a
+# never-acknowledged critical from waiting a whole scan interval.
+OVERDUE_RECHECK_SECONDS = 60
+
+
 def run_collector(
     name: str, collector: CollectorFn, config: dict[str, Any], secrets: SecretStore
 ) -> list[HealthCheck]:
@@ -71,6 +77,12 @@ def run_collector(
 
 def run_scan(config_path: str) -> int:
     config = load_config(config_path)
+    # Fire the agent fail-to-ack fallback for anything overdue from a prior push
+    # before this scan records new ones (also covers one-shot/external-cron runs).
+    try:
+        check_overdue_alerts(config_path)
+    except Exception:
+        traceback.print_exc()
     collector_config = config.get("collectors", {})
     secrets = build_store(config.get("secrets", {}))
 
@@ -158,17 +170,88 @@ def _dispatch_notifications(config, checks, events, scan_id, secrets) -> None:
 
     agent_config = notifications.get("agent", {})
     delivered = agent_notifier.notify(agent_config, checks, events, scan_id, secrets=secrets)
-    if delivered or not agent_notifier.has_critical(events):
+
+    if delivered:
+        # The agent ACCEPTED the push. Any confirmed criticals now await the
+        # agent's callback (the acknowledge_alert_received MCP tool, called once
+        # it has relayed them). If no callback arrives before the deadline, the
+        # scan loop's overdue check fires the Telegram fallback — true
+        # fails-to-ACK, not just fails-to-deliver.
+        _record_pending_criticals(config, events)
+        return
+
+    if not agent_notifier.has_critical(events):
         return
     if not agent_config.get("critical_fallback", True):
         return
-    # A critical was confirmed but the agent didn't take it — fall back to the
-    # user directly so it is never silently swallowed. Reuses the existing
-    # Telegram config (same shared bot), forced past send_on, with a label.
+    # Delivery itself failed (agent unreachable) — fall back immediately, no
+    # point waiting for an ack. Same shared Telegram bot, forced, labeled.
     telegram_notifier.notify(
         telegram_config, checks, events, scan_id, secrets=secrets,
         force=True, prefix="⚠️ Guardian · agent unreachable",
     )
+
+
+def _ack_timeout_minutes(config) -> float:
+    agent = config.get("notifications", {}).get("agent", {})
+    return float(agent.get("ack_timeout_minutes", 10))
+
+
+def _record_pending_criticals(config, events) -> None:
+    """Track criticals the agent accepted but must still confirm it relayed."""
+    from datetime import datetime, timedelta, timezone
+
+    crits = [e for e in events.confirmed if e.get("current_status") == "critical"]
+    if not crits:
+        return
+    deadline = (datetime.now(timezone.utc) + timedelta(minutes=_ack_timeout_minutes(config))).isoformat()
+    conn = db.connect(config.get("app", {}).get("database_path", "data/guardian.sqlite"))
+    try:
+        for e in crits:
+            db.record_pending_alert(conn, e["id"], e["current_status"], e.get("summary", ""), deadline)
+    finally:
+        conn.close()
+
+
+def _overdue_message(overdue: list) -> str:
+    import html
+
+    lines = [
+        "<b>⚠️ Guardian · agent did not acknowledge</b>",
+        "These confirmed criticals were sent to your agent, but it never confirmed it relayed them:",
+    ]
+    for o in overdue[:10]:
+        lines.append(f"🔴 <b>{html.escape(o['check_id'])}</b>: {html.escape(o.get('summary', ''))}")
+    if len(overdue) > 10:
+        lines.append(f"…and {len(overdue) - 10} more.")
+    return "\n".join(lines)
+
+
+def check_overdue_alerts(config_path: str) -> None:
+    """Agent-mode safety net: if a critical pushed to the agent wasn't
+    acknowledged before its deadline, send it to the user over Telegram so it is
+    never silently lost. Cleared on a successful send; left pending to retry if
+    Telegram itself is failing. No-op unless in agent mode with the fallback on."""
+    config = load_config(config_path)
+    notifications = config.get("notifications", {})
+    if str(notifications.get("mode", "direct")).lower() != "agent":
+        return
+    agent_config = notifications.get("agent", {})
+    if not agent_config.get("critical_fallback", True):
+        return
+
+    conn = db.connect(config.get("app", {}).get("database_path", "data/guardian.sqlite"))
+    try:
+        overdue = db.overdue_pending_alerts(conn)
+        if not overdue:
+            return
+        secrets = build_store(config.get("secrets", {}))
+        sent = telegram_notifier.send_text(notifications.get("telegram", {}), _overdue_message(overdue), secrets=secrets)
+        if sent:
+            db.clear_pending_alerts(conn, [o["check_id"] for o in overdue])
+            print(f"Agent fallback: {len(overdue)} unacknowledged critical(s) sent to Telegram.")
+    finally:
+        conn.close()
 
 
 def load_dotenv(path: str | Path = ".env") -> int:
@@ -271,8 +354,19 @@ def run_scan_loop(config_path: str, interval_seconds: int) -> int:
         except Exception:
             print("Scan failed; will retry on the next interval.")
             traceback.print_exc()
+        # Sleep until the next scan, but wake periodically to fire the agent
+        # fail-to-ack fallback for any critical the agent didn't confirm in time
+        # (the ack deadline is usually minutes, far shorter than the scan interval).
         try:
-            time.sleep(interval_seconds)
+            slept = 0.0
+            while slept < interval_seconds:
+                nap = min(OVERDUE_RECHECK_SECONDS, interval_seconds - slept)
+                time.sleep(nap)
+                slept += nap
+                try:
+                    check_overdue_alerts(config_path)
+                except Exception:
+                    traceback.print_exc()
         except KeyboardInterrupt:
             print("Stopped.")
             return 0

@@ -112,6 +112,16 @@ def notify(
     if not force and not should_notify(send_on, events):
         return False
 
+    return send_text(config, build_message(checks, events, scan_id, prefix=prefix), secrets=secrets)
+
+
+def send_text(config: dict[str, Any], text: str, secrets: Any = None) -> bool:
+    """Low-level: send one HTML message to the configured Telegram chat,
+    resolving token/chat id from env or the secrets provider. Never raises.
+    Used by notify() and by the agent-mode overdue-acknowledgement fallback."""
+    if not config.get("enabled", False):
+        return False
+
     def _resolve(name: str) -> str:
         if secrets is not None:
             return secrets.get(name) or ""
@@ -128,7 +138,7 @@ def notify(
             f"https://api.telegram.org/bot{token}/sendMessage",
             json={
                 "chat_id": chat_id,
-                "text": build_message(checks, events, scan_id, prefix=prefix),
+                "text": text,
                 "parse_mode": "HTML",
                 "disable_web_page_preview": True,
             },

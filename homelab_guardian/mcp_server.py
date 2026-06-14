@@ -230,6 +230,30 @@ def unacknowledge_check_payload(database_path: str, check_id: str) -> dict[str, 
     }
 
 
+def pending_alerts_payload(database_path: str) -> list[dict[str, Any]]:
+    """Criticals Guardian pushed to this agent that are awaiting the agent's
+    confirmation it relayed them (call acknowledge_alert_received once relayed)."""
+    conn = db.connect(database_path)
+    try:
+        return db.list_pending_alerts(conn)
+    finally:
+        conn.close()
+
+
+def acknowledge_alerts_payload(database_path: str, check_ids: list[str]) -> dict[str, Any]:
+    """Clear pending-alert tracking for the given criticals: the agent confirms it
+    relayed them, so Guardian must NOT fire its Telegram fail-to-ack fallback."""
+    ids = [c for c in (check_ids or []) if c]
+    if not ids:
+        return {"acknowledged_receipt": 0, "error": "At least one check_id is required."}
+    conn = db.connect(database_path)
+    try:
+        cleared = db.clear_pending_alerts(conn, ids)
+    finally:
+        conn.close()
+    return {"acknowledged_receipt": cleared, "check_ids": ids}
+
+
 def build_server(database_path: str, allow_writes: bool = False):
     """Construct the FastMCP server. Imports `mcp` lazily so core Guardian never
     depends on it; raises ModuleNotFoundError if the optional extra is missing.
@@ -287,6 +311,23 @@ def build_server(database_path: str, allow_writes: bool = False):
         explaining why, when it was set, and any expiry. Use to see what is being
         deliberately silenced before acknowledging or un-acknowledging anything."""
         return list_acks_payload(database_path)
+
+    @server.tool()
+    def list_pending_alerts() -> list:
+        """Criticals Guardian pushed to you that you have NOT yet confirmed relaying.
+        Each one will be sent to the user over Telegram (the fail-to-ack fallback) if
+        you don't call acknowledge_alert_received before its deadline."""
+        return pending_alerts_payload(database_path)
+
+    @server.tool()
+    def acknowledge_alert_received(check_ids: list[str]) -> dict:
+        """Confirm you have RELAYED these criticals to the user, so Guardian does not
+        also send them over Telegram. Call this right after you message the user about
+        a critical Guardian pushed to you. Pass the check ids from the event payload.
+        Not gated by mcp.allow_writes: it only clears Guardian's fallback bookkeeping
+        (it does not change any health state), and the fail-to-ack safety net depends
+        on it working whenever an agent is attached."""
+        return acknowledge_alerts_payload(database_path, check_ids)
 
     @server.resource("guardian://health")
     def health_resource() -> str:
