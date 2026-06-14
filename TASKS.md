@@ -232,8 +232,15 @@ connection details in `docs/mcp.md`.
             unapproved→approve→real `sudo systemctl restart`→verify recovered→
             audit; agent (MCP) proved unable to self-approve. Artifacts cleaned
             up; live config untouched (repair stays disabled).
+      - [x] restart_container playbook (done 2026-06-14, commit d9c6ba0):
+            same propose/approve/execute/verify shape; container name from the
+            failing docker_container_* check's evidence, allowlisted, `docker
+            restart <name>` (or sudo). 243 tests. No live Docker dogfood — Marcus
+            runs no containers; rides the framework already proven live in 3b.
       - [ ] 3c: dashboard Approve/Deny UX (reuse auth+CSRF)
-      - [ ] 3d: more playbooks; opt-in auto_approve for vetted actions
+      - [ ] 3d: opt-in auto_approve for vetted actions; prune_path / renew_cert
+      - [ ] arm repairs on Marcus (enable + allowlist + scoped sudoers) — later,
+            user's call, as the system is fleshed out
 - [ ] **HTTP transport + auth** once the dashboard auth foundation lands.
 
 ## Sprint 7 — reliability quartet (2026-06-13)
