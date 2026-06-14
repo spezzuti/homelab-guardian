@@ -256,6 +256,16 @@ connection details in `docs/mcp.md`.
       - [x] ARMED on Marcus (go-live 2026-06-14): mcp.allow_writes + repair
             (restart_systemd_unit[hermes-dashboard], auto_approve off); live
             end-to-end dogfood on hermes-dashboard. Running as intended.
+      - [x] independent security review + hardening (2026-06-14, commit 0004ca7):
+            confirmed core guarantees; fixed execute-TOCTOU (re-validate),
+            backup-freshness interlock, loop-guard crash survival, days clamp.
+      - [x] repair self-validation (commit 58a564f): `guardian doctor` repair
+            preflight (unwatched units / risky prune paths / passwordless-ALL
+            sudo); filesystem-binding for reclaim; no-shell invariant test;
+            Python 3.10 added to CI matrix. 279 tests.
+      - [x] docs consolidation (commit 22f0b47): CHANGELOG Unreleased(v0.3)
+            section + README MCP/agent/repair sections + corrected Core
+            principles/Safety notes.
       - [ ] expand repair coverage on Marcus (more watched units/allowlist +
             scoped sudoers) as the system is fleshed out
 - [ ] **HTTP transport + auth** once the dashboard auth foundation lands.
