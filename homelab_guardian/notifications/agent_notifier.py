@@ -36,7 +36,8 @@ def has_critical(events: AlertEvents) -> bool:
 
 
 def build_payload(
-    checks: list[HealthCheck], events: AlertEvents, scan_id: int | None
+    checks: list[HealthCheck], events: AlertEvents, scan_id: int | None,
+    auto_repairs: list | None = None,
 ) -> dict[str, Any]:
     """A structured event the agent can reason over and act on. Each transition
     is enriched from the full check with the evidence and recommended action so
@@ -59,7 +60,7 @@ def build_payload(
             item["recommended_action"] = check.recommended_action
         return item
 
-    return {
+    payload = {
         "source": "homelab-guardian",
         "event": "health_change",
         "scan_id": scan_id,
@@ -67,6 +68,11 @@ def build_payload(
         "confirmed": [enrich(e) for e in events.confirmed],
         "recovered": [enrich(e) for e in events.recovered],
     }
+    # What Guardian already auto-handled this scan, so the agent narrates "I fixed
+    # it" rather than re-alarming or trying to repair an already-resolved issue.
+    if auto_repairs:
+        payload["auto_repaired"] = auto_repairs
+    return payload
 
 
 def notify(
@@ -75,6 +81,7 @@ def notify(
     events: AlertEvents,
     scan_id: int | None,
     secrets: Any = None,
+    auto_repairs: list | None = None,
 ) -> bool:
     """POST confirmed transitions to the agent's webhook. Returns True only if
     an event was actually delivered; False if there was nothing to send OR the
@@ -111,7 +118,7 @@ def notify(
             headers[header_name] = f"{scheme} {token}".strip()
 
     # Serialize once so the bytes we sign are exactly the bytes we send.
-    body = json.dumps(build_payload(checks, events, scan_id))
+    body = json.dumps(build_payload(checks, events, scan_id, auto_repairs=auto_repairs))
 
     # GitHub-style HMAC, the scheme hermes (and most webhook receivers) verify:
     # X-Hub-Signature-256: sha256=<hmac_sha256(secret, raw_body)>.

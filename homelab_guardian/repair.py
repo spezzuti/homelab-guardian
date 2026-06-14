@@ -584,3 +584,39 @@ def execute(
     status = "executed" if (result.get("ok") and verify.get("verified")) else "failed"
     db.record_repair_execution(conn, proposal_id, status, result, verify)
     return {"proposal_id": proposal_id, "status": status, "result": result, "verify": verify}
+
+
+def auto_repair_confirmed(config, conn, events, runner: Callable[..., subprocess.CompletedProcess] = subprocess.run):
+    """Guardian's deterministic reflex self-healing. For each NEWLY-CONFIRMED
+    critical (already flap-damped), run an auto-approvable repair if one applies.
+    Only playbooks with `auto_approve: true` act; destructive actions never
+    qualify (they can't auto-approve, enforced in propose/execute). Loop-guarded
+    and audited like any repair. Returns a list of
+    {check_id, action, status, recovered, summary} for the notification layer."""
+    if not is_enabled(config):
+        return []
+    results = []
+    for event in getattr(events, "confirmed", []) or []:
+        if event.get("current_status") != "critical":
+            continue
+        check = _load_check(conn, event.get("id"))
+        if check is None:
+            continue
+        for action in applicable_actions(config, check):
+            if not _playbook_config(config, action).get("auto_approve", False):
+                continue
+            try:
+                prop = propose(config, conn, check.id, action, proposed_by="auto")
+                if prop.get("status") != "approved":
+                    continue  # e.g. destructive — never auto-approved
+                res = execute(config, conn, prop["proposal_id"], executed_by="auto", runner=runner)
+                results.append({
+                    "check_id": check.id, "action": action, "status": res["status"],
+                    "recovered": bool(res["verify"].get("verified")),
+                    "summary": res["verify"].get("summary", ""),
+                })
+            except RepairError as exc:
+                results.append({"check_id": check.id, "action": action,
+                                "status": "refused", "recovered": False, "summary": str(exc)})
+            break  # at most one auto-repair attempt per check per scan
+    return results

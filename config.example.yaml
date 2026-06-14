@@ -282,7 +282,11 @@ repair:
       # the units the systemd collector watches. The unit to restart is read from
       # the failing check's evidence, then checked against this list.
       allowed_units: []         # e.g. [marcus-backup.service]
-      auto_approve: false       # true skips per-instance approval — leave off until you trust it
+      # auto_approve: true makes this a self-healing reflex — on a CONFIRMED
+      # critical (flap-damped), Guardian auto-proposes, executes, and verifies
+      # the repair with no human in the loop (still loop-guarded + audited).
+      # Destructive actions ignore this and always need human approval.
+      auto_approve: false
       max_attempts_per_hour: 3  # loop guard: after this, Guardian escalates to you instead of restarting again
       timeout: 60
     restart_container:
