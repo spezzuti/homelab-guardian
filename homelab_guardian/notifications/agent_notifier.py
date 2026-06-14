@@ -72,6 +72,13 @@ def build_payload(
     # it" rather than re-alarming or trying to repair an already-resolved issue.
     if auto_repairs:
         payload["auto_repaired"] = auto_repairs
+        # The reflex tier's escape hatch: anything Guardian tried to self-heal
+        # but couldn't (the fix didn't take, or the loop guard blocked it). These
+        # need a level up — the agent's specialist skills or the human. Surfaced
+        # at the top level so it is impossible for the agent to miss.
+        escalations = [r for r in auto_repairs if r.get("escalate")]
+        if escalations:
+            payload["escalations"] = escalations
     return payload
 
 
