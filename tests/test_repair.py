@@ -3,6 +3,7 @@ import subprocess
 import pytest
 
 from homelab_guardian import db, repair
+from homelab_guardian.alerting import AlertEvents
 from homelab_guardian.models import HealthCheck
 
 UNIT = "marcus-backup.service"
@@ -460,6 +461,41 @@ def test_destructive_fails_closed_without_state(tmp_path):
     config = _prune_config(tmp_path)
     with pytest.raises(repair.RepairError, match="fail closed"):
         repair.build_plan(config, _disk_check(), "prune_dir", latest_checks=None)  # no state → refuse
+
+
+# --- auto-repair (scan-loop reflex self-healing) ---------------------------
+
+def _confirmed(check_id, status="critical"):
+    return AlertEvents(confirmed=[{"id": check_id, "name": "x", "current_status": status, "summary": "down"}])
+
+
+def test_auto_repair_executes_when_auto_approved(tmp_path):
+    conn = _seed(tmp_path)
+    config = _config(tmp_path, auto_approve=True)
+    results = repair.auto_repair_confirmed(config, conn, _confirmed(CHECK_ID), runner=_runner(active="active"))
+    assert len(results) == 1
+    assert results[0]["status"] == "executed" and results[0]["recovered"] is True
+    assert db.list_repair_proposals(conn)[0]["status"] == "executed"  # audited
+
+
+def test_auto_repair_skips_when_not_auto_approved(tmp_path):
+    conn = _seed(tmp_path)
+    config = _config(tmp_path)  # auto_approve defaults off
+    assert repair.auto_repair_confirmed(config, conn, _confirmed(CHECK_ID), runner=_runner()) == []
+
+
+def test_auto_repair_never_runs_destructive(tmp_path):
+    conn = db.connect(str(tmp_path / "g.sqlite"))
+    db.save_scan(conn, {"app": "HG", "checks": [_disk_check("critical").to_dict()]})
+    config = _rconfig(tmp_path, "docker_prune", auto_approve=True)  # destructive + opt-in
+    assert repair.auto_repair_confirmed(config, conn, _confirmed(DISK_CHECK_ID), runner=_reclaim_runner()) == []
+
+
+def test_auto_repair_ignores_non_critical_and_recovered(tmp_path):
+    conn = _seed(tmp_path)
+    config = _config(tmp_path, auto_approve=True)
+    assert repair.auto_repair_confirmed(config, conn, _confirmed(CHECK_ID, status="warning"), runner=_runner()) == []
+    assert repair.auto_repair_confirmed(config, conn, AlertEvents(), runner=_runner()) == []
 
 
 def test_typed_confirmation_blocks_then_allows(tmp_path, monkeypatch):

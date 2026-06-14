@@ -91,6 +91,7 @@ def run_scan(config_path: str) -> int:
         checks.extend(run_collector(name, collector, collector_config.get(name, {}), secrets))
 
     database_path = config.get("app", {}).get("database_path", "data/guardian.sqlite")
+    auto_repairs: list = []
     conn = db.connect(database_path)
     try:
         acks = db.load_active_acks(conn)
@@ -131,6 +132,16 @@ def run_scan(config_path: str) -> int:
         telegram_config = config.get("notifications", {}).get("telegram", {})
         events = update_alert_states(conn, checks, int(telegram_config.get("confirm_scans", 1)))
 
+        # Deterministic reflex self-healing: for any newly-confirmed critical that
+        # has an auto-approvable repair, Guardian fixes it now (loop-guarded,
+        # audited). The results flow into the notification so the agent/user is
+        # told what was auto-handled rather than just alarmed.
+        from homelab_guardian import repair as _repair
+        auto_repairs = _repair.auto_repair_confirmed(config, conn, events)
+        for r in auto_repairs:
+            print(f"Auto-repair: {r['action']} on {r['check_id']} -> {r['status']}"
+                  f"{' (recovered)' if r['recovered'] else ''}.")
+
         retention_days = float(config.get("app", {}).get("retention_days", 60))
         if retention_days > 0:
             pruned = db.prune_scans(conn, retention_days)
@@ -144,11 +155,11 @@ def run_scan(config_path: str) -> int:
     print(f"Wrote report: {written}")
     print(f"Checks: {len(checks)}")
 
-    _dispatch_notifications(config, checks, events, scan_id, secrets)
+    _dispatch_notifications(config, checks, events, scan_id, secrets, auto_repairs=auto_repairs)
     return 0
 
 
-def _dispatch_notifications(config, checks, events, scan_id, secrets) -> None:
+def _dispatch_notifications(config, checks, events, scan_id, secrets, auto_repairs=None) -> None:
     """Route confirmed transitions to the right channel.
 
     direct mode (default): Guardian messages the user over Telegram itself —
@@ -169,7 +180,7 @@ def _dispatch_notifications(config, checks, events, scan_id, secrets) -> None:
         return
 
     agent_config = notifications.get("agent", {})
-    delivered = agent_notifier.notify(agent_config, checks, events, scan_id, secrets=secrets)
+    delivered = agent_notifier.notify(agent_config, checks, events, scan_id, secrets=secrets, auto_repairs=auto_repairs)
 
     if delivered:
         # The agent ACCEPTED the push. Any confirmed criticals now await the
@@ -177,7 +188,7 @@ def _dispatch_notifications(config, checks, events, scan_id, secrets) -> None:
         # it has relayed them). If no callback arrives before the deadline, the
         # scan loop's overdue check fires the Telegram fallback — true
         # fails-to-ACK, not just fails-to-deliver.
-        _record_pending_criticals(config, events)
+        _record_pending_criticals(config, events, auto_repairs)
         return
 
     if not agent_notifier.has_critical(events):
@@ -197,11 +208,15 @@ def _ack_timeout_minutes(config) -> float:
     return float(agent.get("ack_timeout_minutes", 10))
 
 
-def _record_pending_criticals(config, events) -> None:
-    """Track criticals the agent accepted but must still confirm it relayed."""
+def _record_pending_criticals(config, events, auto_repairs=None) -> None:
+    """Track criticals the agent accepted but must still confirm it relayed.
+    Criticals Guardian already auto-repaired to recovery are excluded — they are
+    resolved, so there is nothing to fall back on."""
     from datetime import datetime, timedelta, timezone
 
-    crits = [e for e in events.confirmed if e.get("current_status") == "critical"]
+    resolved = {r["check_id"] for r in (auto_repairs or []) if r.get("recovered")}
+    crits = [e for e in events.confirmed
+             if e.get("current_status") == "critical" and e.get("id") not in resolved]
     if not crits:
         return
     deadline = (datetime.now(timezone.utc) + timedelta(minutes=_ack_timeout_minutes(config))).isoformat()
