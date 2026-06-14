@@ -215,8 +215,21 @@ def run_scan_loop(config_path: str, interval_seconds: int) -> int:
     and the loop continues — a transient collector error must not stop a
     long-running Guardian."""
     print(f"Running a scan every {interval_seconds} seconds. Press Ctrl+C to stop.")
+    first = True
     while True:
         try:
+            if first:
+                # Gate ONLY the first scan on network readiness, so a reboot's
+                # scan-before-DNS doesn't flip every network check to a false
+                # warning. Later scans run ungated — a real outage must surface.
+                from homelab_guardian.network_ready import wait_for_network_ready
+                from homelab_guardian.config import load_config
+
+                try:
+                    wait_for_network_ready(load_config(config_path))
+                except Exception:
+                    pass  # readiness is best-effort; never block the scan loop
+                first = False
             run_scan(config_path)
         except KeyboardInterrupt:
             raise
