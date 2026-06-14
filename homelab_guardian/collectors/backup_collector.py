@@ -69,16 +69,11 @@ def collect(config: dict[str, Any], secrets: Any = None) -> list[HealthCheck]:
     paths = config.get("paths", []) or []
 
     if not paths:
-        return [
-            HealthCheck(
-                "backups_not_configured",
-                "Backup checks",
-                "unknown",
-                "Backup checks are enabled, but no backup paths are configured yet.",
-                {"configured_paths": 0, "configuration_complete": False},
-                "This is configuration incomplete, not a detected backup failure. Add backup paths to config.yaml, or disable backup checks until ready.",
-            )
-        ]
+        # Enabled-but-unconfigured is not a finding — it's calm by default.
+        # The "you turned this on but added no paths" guidance lives in
+        # `guardian doctor` (preflight), so an empty backups section reports
+        # nothing here rather than dragging the Backups group to "unknown".
+        return []
 
     now = datetime.now(timezone.utc)
     for item in paths:

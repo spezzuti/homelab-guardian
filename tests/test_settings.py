@@ -90,8 +90,22 @@ def test_settings_renders_for_authed_user(tmp_path):
         resp, body = _req(port, "GET", "/settings", {"Authorization": _basic()})
         assert resp.status == 200
         assert "Collectors" in body and 'name="collector:docker"' in body
+        # The two backup collectors are easy to confuse — their descriptions
+        # must spell out the difference (folder freshness vs. the job itself).
+        assert "Checks a backup folder for recent files." in body
+        assert "Checks a backup job" in body
     finally:
         server.shutdown()
+
+
+def test_toggleable_collectors_carry_descriptions():
+    from homelab_guardian.configedit import toggleable_collectors
+
+    rows = {c["name"]: c for c in toggleable_collectors({"collectors": {}})}
+    assert rows["backups"]["description"] == "Checks a backup folder for recent files."
+    assert rows["backup_health"]["description"].startswith("Checks a backup job")
+    # Every registered collector should carry a non-empty description.
+    assert all(c["description"] for c in rows.values())
 
 
 def test_save_toggles_collector_in_config_file(tmp_path):

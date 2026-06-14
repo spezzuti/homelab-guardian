@@ -30,9 +30,31 @@ _FRIENDLY = {
     "docker": "Docker",
 }
 
+# One-line descriptions so similar-sounding collectors are unmistakable in the
+# settings page. The two backup collectors in particular watch different things:
+# `backups` looks at a destination *folder*; `backup_health` watches the backup
+# *job* itself. Keep these short — they render under the label.
+_DESCRIPTIONS = {
+    "ssh": "Checks SSH is hardened (password auth off, key-only).",
+    "homeassistant": "Checks Home Assistant is reachable and its entities are healthy.",
+    "backup_health": "Checks a backup job — restic snapshot age or a systemd unit.",
+    "exposed_services": "Flags services listening on non-loopback addresses.",
+    "disks": "Checks free space on watched filesystems.",
+    "backups": "Checks a backup folder for recent files.",
+    "systemd": "Checks for failed or restart-looping systemd units.",
+    "updates": "Checks for pending OS package updates.",
+    "firewall": "Checks the host firewall is active and default-deny.",
+    "network": "Checks DNS, TCP, HTTP, and TLS reachability targets.",
+    "docker": "Checks container health (running / exited / unhealthy).",
+}
+
 
 def _friendly(name: str) -> str:
     return _FRIENDLY.get(name, name.replace("_", " ").title())
+
+
+def _describe(name: str) -> str:
+    return _DESCRIPTIONS.get(name, "")
 
 
 def toggleable_collectors(config: dict[str, Any]) -> list[dict[str, Any]]:
@@ -43,7 +65,7 @@ def toggleable_collectors(config: dict[str, Any]) -> list[dict[str, Any]]:
     out = []
     for name in COLLECTORS:
         cfg = collectors.get(name) or {}
-        out.append({"name": name, "label": _friendly(name), "enabled": bool(cfg.get("enabled", False))})
+        out.append({"name": name, "label": _friendly(name), "description": _describe(name), "enabled": bool(cfg.get("enabled", False))})
     return out
 
 

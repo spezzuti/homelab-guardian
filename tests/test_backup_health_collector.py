@@ -19,10 +19,10 @@ def _systemd_cfg(**over):
     return {"repos": [repo]}
 
 
-def test_no_repos_is_unknown():
-    checks = backup_health_collector.collect({})
-    assert checks[0].status == "unknown"
-    assert checks[0].group == "Backups"
+def test_no_repos_reports_nothing():
+    # Enabled-but-unconfigured is calm by default — the guidance lives in
+    # `guardian doctor` (preflight), not as noise on the live dashboard.
+    assert backup_health_collector.collect({}) == []
 
 
 def test_restic_fresh_snapshot_is_ok():

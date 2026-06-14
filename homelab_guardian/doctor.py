@@ -225,6 +225,21 @@ def _check_network_config(config: dict[str, Any]) -> HealthCheck | None:
     )
 
 
+def _check_backup_health_config(config: dict[str, Any]) -> HealthCheck | None:
+    health_config = config.get("collectors", {}).get("backup_health", {})
+    if not health_config.get("enabled", False):
+        return None
+    repos = health_config.get("repos", []) or []
+    return HealthCheck(
+        "preflight_backup_health_repos",
+        "Backup health repos configured",
+        "ok" if repos else "warning",
+        f"{len(repos)} backup repo(s) monitored." if repos else "Backup health collector is enabled, but no repos are configured to watch.",
+        {"configured_repos": len(repos), "configuration_complete": bool(repos)},
+        "No action required." if repos else "Add repos: with a restic repository or a systemd backup unit, or disable the backup_health collector.",
+    )
+
+
 def run_doctor(config_path: str | Path) -> int:
     checks: list[HealthCheck] = [_check_python()]
     config, config_check = _check_config(config_path)
@@ -235,6 +250,7 @@ def run_doctor(config_path: str | Path) -> int:
             _check_secrets(config),
             _check_docker(config),
             _check_backup_config(config),
+            _check_backup_health_config(config),
             _check_network_config(config),
         ]
         checks.extend(check for check in optional_checks if check is not None)
