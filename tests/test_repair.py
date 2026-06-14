@@ -415,6 +415,53 @@ def test_prune_dir_clean_when_backup_ok(tmp_path):
     assert "warning" not in plan  # healthy backup → no warning, allowed
 
 
+# --- security-review hardening ---------------------------------------------
+
+def test_execute_revalidates_allowlist_drift(tmp_path):
+    conn = _seed(tmp_path)
+    config = _config(tmp_path)
+    pid = repair.propose(config, conn, CHECK_ID, "restart_systemd_unit")["proposal_id"]
+    repair.approve(conn, pid, "alice")
+    config["repair"]["playbooks"]["restart_systemd_unit"]["allowed_units"] = []  # revoke after approval
+    with pytest.raises(repair.RepairError, match="no longer valid"):
+        repair.execute(config, conn, pid, runner=_runner())
+
+
+def test_execute_revalidates_recovered_check(tmp_path):
+    conn = _seed(tmp_path)
+    config = _config(tmp_path)
+    pid = repair.propose(config, conn, CHECK_ID, "restart_systemd_unit")["proposal_id"]
+    repair.approve(conn, pid, "alice")
+    recovered = HealthCheck(CHECK_ID, "Service", "ok", "active again",
+                            evidence={"unit": UNIT, "bus": "system"})
+    db.save_scan(conn, {"app": "HG", "checks": [recovered.to_dict()]})  # came back on its own
+    with pytest.raises(repair.RepairError, match="no longer valid"):
+        repair.execute(config, conn, pid, runner=_runner())
+
+
+def test_prune_dir_refuses_stale_backup(tmp_path):
+    config = _prune_config(tmp_path, require_fresh_backup_hours=24)
+    fresh = HealthCheck("backup_health_main", "Backup", "ok", "fresh", evidence={"age_hours": 2}, group="Backups")
+    stale = HealthCheck("backup_health_main", "Backup", "ok", "old", evidence={"age_hours": 100}, group="Backups")
+    assert repair.build_plan(config, _disk_check(), "prune_dir",
+                             latest_checks=[_disk_check(), fresh], runner=_prune_runner())["argv"][0] == "find"
+    with pytest.raises(repair.RepairError, match="not verifiably fresh"):
+        repair.build_plan(config, _disk_check(), "prune_dir",
+                          latest_checks=[_disk_check(), stale], runner=_prune_runner())
+
+
+def test_prune_dir_days_floored_to_one(tmp_path):
+    config = _prune_config(tmp_path, older_than_days=0)  # would otherwise delete everything >24h
+    plan = repair.build_plan(config, _disk_check(), "prune_dir", latest_checks=[_disk_check()], runner=_prune_runner())
+    assert "+1" in plan["argv"]
+
+
+def test_destructive_fails_closed_without_state(tmp_path):
+    config = _prune_config(tmp_path)
+    with pytest.raises(repair.RepairError, match="fail closed"):
+        repair.build_plan(config, _disk_check(), "prune_dir", latest_checks=None)  # no state → refuse
+
+
 def test_typed_confirmation_blocks_then_allows(tmp_path, monkeypatch):
     conn = db.connect(str(tmp_path / "g.sqlite"))
     db.save_scan(conn, {"app": "HG", "checks": [_disk_check().to_dict(), _backup_check("ok").to_dict()]})

@@ -236,11 +236,20 @@ def _backup_checks(latest_checks) -> list:
     return [c for c in latest_checks if getattr(c, "group", "") == "Backups"]
 
 
+def _prune_dir_days(pcfg) -> int:
+    # Floor at 1 day: a destructive delete must never be widened to "everything"
+    # by a 0 / negative / non-numeric config value.
+    try:
+        return max(1, int(pcfg.get("older_than_days", 14)))
+    except (TypeError, ValueError):
+        raise RepairError("prune_dir: older_than_days must be a positive integer.")
+
+
 def _prune_dir_plan(config, pcfg, check) -> dict[str, Any]:
     paths = [str(p) for p in (pcfg.get("allowed_paths") or [])]
     if not paths:
         raise RepairError("prune_dir has no allowed_paths configured; nothing is permitted.")
-    days = int(pcfg.get("older_than_days", 14))
+    days = _prune_dir_days(pcfg)
     argv = ["find", *paths, "-type", "f", "-mtime", f"+{days}", "-delete"]
     return {
         "action": "prune_dir", "check_id": check.id,
@@ -254,7 +263,7 @@ def _prune_dir_plan(config, pcfg, check) -> dict[str, Any]:
 
 def _prune_dir_preview(config, pcfg, check, runner) -> dict[str, Any]:
     paths = [str(p) for p in (pcfg.get("allowed_paths") or [])]
-    days = int(pcfg.get("older_than_days", 14))
+    days = _prune_dir_days(pcfg)
     if not paths:
         return {"error": "no allowed_paths"}
     out = _run_read(runner, ["find", *paths, "-type", "f", "-mtime", f"+{days}", "-printf", "%s\\n"], 30)
@@ -263,15 +272,36 @@ def _prune_dir_preview(config, pcfg, check, runner) -> dict[str, Any]:
     return {"files": len(sizes), "bytes": total, "approx": _human_bytes(total), "older_than_days": days}
 
 
+def _backup_age_hours(check):
+    """Best-effort snapshot/run age from a Backups check's evidence, or None."""
+    ev = getattr(check, "evidence", {}) or {}
+    val = ev.get("age_hours")
+    try:
+        return float(val) if val is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
 def _prune_dir_precond(config, pcfg, check, latest_checks):
     """Mandatory-but-narrow backup interlock. Configured-but-not-ok backup → hard
-    refuse. No backup signal at all → allow unless require_fresh_backup (then
-    refuse). Healthy backup → allow."""
+    refuse. Configured-but-stale (older than require_fresh_backup_hours, if set)
+    → refuse. No backup signal at all → allow unless require_fresh_backup (then
+    refuse). Healthy + fresh backup → allow."""
     backups = _backup_checks(latest_checks)
     if backups:
         if any(c.status != "ok" for c in backups):
             return ("prune_dir refused: a Backups check is not ok — do not delete user files "
                     "while the backup safety net is down.")
+        max_hours = pcfg.get("require_fresh_backup_hours")
+        if max_hours is not None:
+            # ok-and-RECENT: every backup whose age is unknown or older than the
+            # window fails the freshness gate (a passing-but-stale snapshot is
+            # exactly the "deleting the last fresh copy" hazard).
+            stale = [c for c in backups
+                     if _backup_age_hours(c) is None or _backup_age_hours(c) > float(max_hours)]
+            if stale:
+                return (f"prune_dir refused: backups are ok but not verifiably fresh within "
+                        f"{max_hours}h — refusing to delete user files against a stale safety net.")
         return None
     if bool(pcfg.get("require_fresh_backup", False)):
         return ("prune_dir requires a verified backup, but no Backups check is configured. "
@@ -340,6 +370,7 @@ def applicable_actions(config: dict[str, Any], check) -> list[str]:
 def build_plan(
     config: dict[str, Any], check, action: str, latest_checks=None,
     runner: Callable[..., subprocess.CompletedProcess] = subprocess.run,
+    with_preview: bool = True,
 ) -> dict[str, Any]:
     """Validate everything and resolve a concrete plan. Raises RepairError if the
     repair is not permitted. Changes nothing — this is the dry run. Carries the
@@ -361,11 +392,20 @@ def build_plan(
         raise RepairError(f"'{action}' does not apply to check '{check.id}'.")
 
     # Preconditions: cross-collector interlocks against Guardian's own state.
+    # Fail CLOSED for destructive actions — never skip the interlock just because
+    # the caller didn't supply current state.
     precond = pb.get("preconditions")
-    if precond is not None and latest_checks is not None:
-        reason = precond(config, pcfg, check, latest_checks)
-        if reason:
-            raise RepairError(reason)
+    if precond is not None:
+        if latest_checks is None:
+            if pb.get("risk") == "destructive":
+                raise RepairError(
+                    f"'{action}': cannot evaluate its safety preconditions without current "
+                    "scan state — refusing (destructive actions fail closed)."
+                )
+        else:
+            reason = precond(config, pcfg, check, latest_checks)
+            if reason:
+                raise RepairError(reason)
 
     plan = pb["plan"](config, pcfg, check)
     plan["risk"] = pb.get("risk", "moderate")
@@ -379,7 +419,7 @@ def build_plan(
 
     # Preview: a read-only estimate of the concrete effect, best-effort.
     preview_fn = pb.get("preview")
-    if preview_fn is not None:
+    if preview_fn is not None and with_preview:
         try:
             plan["preview"] = preview_fn(config, pcfg, check, runner)
         except Exception as exc:
@@ -465,7 +505,27 @@ def execute(
             "It keeps not recovering — this needs a human, not another restart."
         )
 
-    argv = p["argv"] if isinstance(p["argv"], list) else []
+    # TOCTOU: re-validate against CURRENT config/state. The allowlist may have
+    # been tightened, the target may have recovered, or repair disabled since
+    # approval. Rebuild the plan now and refuse if it no longer validates or the
+    # resolved argv has drifted from what was approved.
+    try:
+        fresh = build_plan(config, _load_check(conn, p["check_id"]), p["action"],
+                           latest_checks=_all_latest_checks(conn), with_preview=False)
+    except RepairError as exc:
+        raise RepairError(f"Proposal #{proposal_id} is no longer valid to execute: {exc}")
+    stored_argv = p["argv"] if isinstance(p["argv"], list) else []
+    if fresh.get("argv") != stored_argv:
+        raise RepairError(
+            f"Proposal #{proposal_id} has drifted from current config (target/allowlist changed "
+            "since approval) — re-propose and re-approve."
+        )
+
+    # Record a 'running' row BEFORE the side-effecting action so a crash mid-run
+    # still counts against the loop guard (the command may already have fired).
+    db.record_repair_execution(conn, proposal_id, "running", {"ran": False}, {})
+
+    argv = stored_argv
     try:
         completed = runner(argv, capture_output=True, text=True, timeout=float(plan.get("timeout", 60)))
         result = {

@@ -312,8 +312,11 @@ repair:
       # allows unless require_fresh_backup is true.
       enabled: false
       allowed_paths: []         # e.g. [/srv/downloads/tmp] — never derived from input
-      older_than_days: 14
+      older_than_days: 14       # floored at 1; deletes files older than this
       require_fresh_backup: false   # true → refuse unless a healthy Backups check exists
+      # require_fresh_backup_hours: 24  # when a Backups check IS present, also require
+                                        # its snapshot age (evidence.age_hours) within this
+                                        # window — an ok-but-stale backup is refused
       auto_approve: false
       max_attempts_per_hour: 2
       timeout: 120
