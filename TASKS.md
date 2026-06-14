@@ -205,9 +205,12 @@ connection details in `docs/mcp.md`.
       Remaining: the *behavioural* half — make Marcus actually prefer Guardian
       for health questions / stop double-alerting (a hermes agent-policy change,
       not transport). Capability is now in place.
-- [ ] **Acknowledgement tools (gated write phase):** `acknowledge_check` /
-      `unacknowledge_check` behind an explicit opt-in (config flag / MCP
-      `always_ask`). First write surface — never on by default.
+- [x] **Acknowledgement tools (gated write phase)** (done 2026-06-14, Step 2):
+      `acknowledge_check` / `unacknowledge_check` MCP tools, gated by
+      `mcp.allow_writes` (default false → tools not even registered). Same
+      reversible mute as `guardian ack`. Plus a read-only `list_acknowledgments`.
+      Data layer unit-tested without the mcp dep (218 tests); gating + write
+      round-trip dogfooded on Marcus (7 tools off / 9 on; ack→DB→unack verified).
 - [ ] **Approval-gated repair playbooks** (whitelisted, never raw shell).
 - [ ] **HTTP transport + auth** once the dashboard auth foundation lands.
 
