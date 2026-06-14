@@ -493,8 +493,9 @@ def main() -> int:
     parser.add_argument(
         "--no-discover", action="store_true", help="init: skip the local network service discovery step"
     )
-    parser.add_argument("--host", default="127.0.0.1", help="serve: address to bind (default localhost only)")
-    parser.add_argument("--port", type=int, default=8674, help="serve: port for the web view")
+    parser.add_argument("--host", default="127.0.0.1", help="serve / mcp --http: address to bind (default localhost only)")
+    parser.add_argument("--port", type=int, default=0, help="serve / mcp --http: port (default 8674 for serve, 8675 for mcp --http)")
+    parser.add_argument("--http", action="store_true", help="mcp: serve over streamable HTTP (bearer-token auth) instead of stdio")
     parser.add_argument(
         "--interval",
         type=int,
@@ -523,12 +524,16 @@ def main() -> int:
         return serve(
             load_config(args.config),
             host=args.host,
-            port=args.port,
+            port=args.port or 8674,
             scan_interval=args.interval,
             scan_loop=(lambda: run_scan_loop(args.config, args.interval)) if args.interval > 0 else None,
             config_path=args.config,
         )
     if args.command == "mcp":
+        if args.http:
+            from homelab_guardian.mcp_server import run_http
+
+            return run_http(args.config, host=args.host, port=args.port or 8675)
         from homelab_guardian.mcp_server import run_stdio
 
         return run_stdio(args.config)

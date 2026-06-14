@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import hmac
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -447,4 +449,72 @@ def run_stdio(config_path: str) -> int:
         )
         return 1
     server.run()  # stdio transport (default); blocks until the client disconnects
+    return 0
+
+
+class BearerAuthMiddleware:
+    """Minimal ASGI middleware: require `Authorization: Bearer <token>` on every
+    HTTP request, constant-time compared. Keeps the MCP network surface from ever
+    being unauthenticated. Stronger auth (SSO/OIDC) is delegated to a reverse
+    proxy in front, the same 'mechanisms not providers' stance as the dashboard."""
+
+    def __init__(self, app, token: str):
+        self.app = app
+        self._expected = f"Bearer {token}".encode()
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") != "http":
+            return await self.app(scope, receive, send)
+        provided = dict(scope.get("headers") or []).get(b"authorization", b"")
+        if provided and hmac.compare_digest(provided, self._expected):
+            return await self.app(scope, receive, send)
+        await send({"type": "http.response.start", "status": 401,
+                    "headers": [(b"content-type", b"text/plain; charset=utf-8"),
+                                (b"www-authenticate", b"Bearer")]})
+        await send({"type": "http.response.body", "body": b"Unauthorized"})
+
+
+def _resolve_http_token(config: dict[str, Any]) -> str:
+    token_env = (config.get("mcp", {}).get("http", {}) or {}).get("token_env")
+    if not token_env:
+        return ""
+    from homelab_guardian.secrets import build_store
+
+    store = build_store(config.get("secrets", {}))
+    return (store.get(token_env) if store is not None else None) or os.getenv(token_env, "") or ""
+
+
+def run_http(config_path: str, host: str = "127.0.0.1", port: int = 8675) -> int:
+    """CLI entry: serve Guardian over MCP via streamable HTTP for a REMOTE agent.
+    Gated by a bearer token (mcp.http.token_env) — refuses to start without one
+    so a network surface is never unauthenticated."""
+    config = load_config(config_path)
+    token = _resolve_http_token(config)
+    if not token:
+        print(
+            "MCP HTTP transport needs a bearer token so the network surface is authenticated.\n"
+            "Set mcp.http.token_env to an env/secret name holding the token, then have clients send\n"
+            "  Authorization: Bearer <token>.  Refusing to start unauthenticated."
+        )
+        return 1
+
+    database_path = resolve_database_path(config, config_path)
+    allow_writes = bool(config.get("mcp", {}).get("allow_writes", False))
+    try:
+        server = build_server(database_path, allow_writes=allow_writes, config=config)
+    except ModuleNotFoundError:
+        print("The MCP server needs the optional 'mcp' dependency.\n"
+              "Install it with:  pip install 'homelab-guardian[mcp]'")
+        return 1
+
+    server.settings.host = host
+    server.settings.port = port
+    app = BearerAuthMiddleware(server.streamable_http_app(), token)
+
+    import uvicorn
+
+    path = server.settings.streamable_http_path
+    print(f"Guardian MCP (streamable-http) on http://{host}:{port}{path} — bearer-token auth"
+          f"{' + writes' if allow_writes else ''}. Press Ctrl+C to stop.")
+    uvicorn.run(app, host=host, port=port, log_level="warning")
     return 0
