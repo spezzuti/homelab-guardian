@@ -238,7 +238,11 @@ connection details in `docs/mcp.md`.
             restart <name>` (or sudo). 243 tests. Dogfooded live on Marcus with a
             throwaway alpine container: detect(exited)→propose→refuse-unapproved
             →approve→real `docker restart`→verify(running)→audit; cleaned up.
-      - [ ] 3c: dashboard Approve/Deny UX (reuse auth+CSRF)
+      - [x] 3c (done 2026-06-14, commit 42ee1cb): `/repairs` dashboard page,
+            Approve/Deny per proposal (auth + CSRF, reusing the settings write
+            surface); 🔧 header link with pending-count badge when repairs
+            enabled. Approval channel ONLY — never executes (execution stays
+            MCP/CLI). 251 tests (8 real-HTTP); box-smoked on an isolated serve.
       - [ ] 3d: opt-in auto_approve for vetted actions; prune_path / renew_cert
       - [ ] arm repairs on Marcus (enable + allowlist + scoped sudoers) — later,
             user's call, as the system is fleshed out
