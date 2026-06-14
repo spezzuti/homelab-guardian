@@ -143,6 +143,24 @@ def test_save_rejects_bad_csrf(tmp_path):
         server.shutdown()
 
 
+def test_post_body_to_error_paths_gets_clean_status(tmp_path):
+    # An early error response (403/404) must still consume the POST body, or
+    # closing the socket with the body unread resets the connection (Windows
+    # WinError 10053) and the client never sees the status. Send a sizeable
+    # body to widen the window for a reset.
+    server, _ = _start(tmp_path, CONFIG_NONE)
+    port = server.server_address[1]
+    big = urllib.parse.urlencode({"csrf": "x", "payload": "z" * 50_000})
+    hdr = {"Content-Type": "application/x-www-form-urlencoded"}
+    try:
+        resp, _ = _req(port, "POST", "/settings", hdr, big)  # 403: editing needs auth
+        assert resp.status == 403
+        resp, _ = _req(port, "POST", "/does-not-exist", hdr, big)  # 404
+        assert resp.status == 404
+    finally:
+        server.shutdown()
+
+
 def test_no_auth_mode_is_read_only(tmp_path):
     server, _ = _start(tmp_path, CONFIG_NONE)
     port = server.server_address[1]

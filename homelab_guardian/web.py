@@ -670,8 +670,23 @@ class GuardianRequestHandler(BaseHTTPRequestHandler):
             return
         self._send("not found", status=404, content_type="text/plain; charset=utf-8")
 
+    def _read_body(self) -> str:
+        length = int(self.headers.get("Content-Length", 0) or 0)
+        if length <= 0:
+            return ""
+        try:
+            return self.rfile.read(length).decode("utf-8", "replace")
+        except (OSError, ValueError):
+            return ""
+
     def do_POST(self) -> None:  # noqa: N802
         path = urlparse(self.path).path
+        # Drain the request body up front, before any branching. If we send an
+        # early error (401/403/404) while the client's POST body still sits
+        # unread in the socket, closing the connection makes the OS reset it
+        # (RST) — on Windows the client then sees WinError 10053 instead of our
+        # status. Read once here; downstream handlers reuse it.
+        self._post_body = self._read_body()
         if self.auth.identify(self) is None:
             self.auth.challenge(self)
             return
@@ -716,9 +731,7 @@ class GuardianRequestHandler(BaseHTTPRequestHandler):
             )
             return
         identity = self.auth.identify(self)
-        length = int(self.headers.get("Content-Length", 0) or 0)
-        body = self.rfile.read(length).decode("utf-8") if length else ""
-        form = parse_qs(body)
+        form = parse_qs(self._post_body)
         if not self._check_csrf(identity.user, (form.get("csrf") or [""])[0]):
             self._send(
                 "Invalid form token — reload the settings page and try again.",

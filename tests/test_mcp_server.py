@@ -1,3 +1,6 @@
+import os
+from pathlib import Path
+
 from homelab_guardian import db
 from homelab_guardian.mcp_server import (
     changes_payload,
@@ -5,6 +8,7 @@ from homelab_guardian.mcp_server import (
     checks_payload,
     history_payload,
     problems_payload,
+    resolve_database_path,
     summary_payload,
 )
 from homelab_guardian.models import HealthCheck
@@ -100,3 +104,30 @@ def test_summary_with_no_scans(tmp_path):
     db.connect(path).close()
     assert summary_payload(path)["overall"] == "unknown"
     assert problems_payload(path) == []
+
+
+def test_resolve_database_path_relative_to_config_dir(tmp_path):
+    # An MCP client launches the server from its own cwd, so a relative db path
+    # must resolve against the config file's directory, not the process cwd.
+    config_path = str(tmp_path / "sub" / "config.yaml")
+    config = {"app": {"database_path": "data/guardian.sqlite"}}
+    resolved = resolve_database_path(config, config_path)
+    assert Path(resolved) == tmp_path / "sub" / "data" / "guardian.sqlite"
+    assert Path(resolved).is_absolute()
+
+
+def test_resolve_database_path_absolute_is_unchanged(tmp_path):
+    absolute = str(tmp_path / "elsewhere" / "g.sqlite")
+    config = {"app": {"database_path": absolute}}
+    resolved = resolve_database_path(config, str(tmp_path / "config.yaml"))
+    assert Path(resolved) == Path(absolute)
+
+
+def test_resolve_database_path_independent_of_cwd(tmp_path, monkeypatch):
+    config_path = str(tmp_path / "config.yaml")
+    config = {"app": {"database_path": "data/g.sqlite"}}
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.chdir(elsewhere)  # launch from a foreign cwd
+    resolved = resolve_database_path(config, config_path)
+    assert Path(resolved) == tmp_path / "data" / "g.sqlite"

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import Any
 
 from homelab_guardian import db
@@ -225,10 +226,23 @@ def build_server(database_path: str):
     return server
 
 
+def resolve_database_path(config: dict[str, Any], config_path: str) -> str:
+    """Resolve the snapshot DB path the MCP server should read. An MCP client
+    launches this process from *its* working directory (e.g. the agent's home),
+    not Guardian's — so a relative `database_path` is resolved against the
+    config file's directory, ensuring we read the same snapshot the scanner
+    (run from the Guardian dir) writes."""
+    database_path = config.get("app", {}).get("database_path", "data/guardian.sqlite")
+    db_path = Path(database_path)
+    if not db_path.is_absolute():
+        db_path = Path(config_path).resolve().parent / db_path
+    return str(db_path)
+
+
 def run_stdio(config_path: str) -> int:
     """CLI entry: serve Guardian over MCP on stdio (a client launches this process)."""
     config = load_config(config_path)
-    database_path = config.get("app", {}).get("database_path", "data/guardian.sqlite")
+    database_path = resolve_database_path(config, config_path)
     try:
         server = build_server(database_path)
     except ModuleNotFoundError:
