@@ -246,6 +246,20 @@ ai:
   # unset for local endpoints that need no key). Never put keys in this file.
   api_key_env: "GUARDIAN_AI_API_KEY"
 
+mcp:
+  # The `guardian mcp` server exposes Guardian's health data to an AI agent over
+  # the Model Context Protocol. Read tools (get_health_summary, list_problems,
+  # list_checks, get_check, get_recent_changes, list_scan_history,
+  # list_acknowledgments) are always available.
+  #
+  # allow_writes adds the two WRITE tools acknowledge_check / unacknowledge_check
+  # so the agent can mute/un-mute a check on your behalf (e.g. you tell the agent
+  # "silence that disk warning for a week"). It is the same mute the `guardian
+  # ack` CLI performs — reversible, and excluded from overall status + alerts.
+  # Off by default: with it false the write tools are not even registered, so an
+  # attached agent cannot change Guardian's state.
+  allow_writes: false
+
 notifications:
   # Delivery mode:
   #   direct — Guardian messages you over Telegram itself (standalone, no AI).

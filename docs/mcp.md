@@ -38,8 +38,22 @@ separately about the same thing.
 | `get_check(check_id)` | one check's full detail incl. the raw `evidence` dict |
 | `get_recent_changes()` | regressions / improvements / new / removed since the previous scan |
 | `list_scan_history(limit)` | recent scans with per-scan overall status and counts |
+| `list_acknowledgments()` | checks currently muted (acknowledged), with note + expiry |
 
 Plus one resource: `guardian://health` (the summary as JSON).
+
+### Write tools (opt-in, `mcp.allow_writes: true`)
+
+Off by default. When enabled, two WRITE tools are registered so an agent can
+manage acknowledgements on the user's behalf — the same mute the `guardian ack`
+CLI performs (reversible; muted checks are excluded from overall status and
+alerts). With `allow_writes` false they are not registered at all, so an attached
+agent cannot mutate Guardian's state.
+
+| Tool | Effect |
+|---|---|
+| `acknowledge_check(check_id, note, days)` | mute a check; `days` auto-expires the mute (0 = indefinite) |
+| `unacknowledge_check(check_id)` | un-mute a check so it counts and alerts again |
 
 Tool descriptions are written for the agent's benefit — they state *when* to call
 each tool, which materially improves should-call behaviour on recent models.
@@ -132,10 +146,11 @@ Verify with hermes's own tooling: `hermes mcp test guardian` should report
    *Remaining behavioural step: have Marcus actually prefer Guardian for
    homelab-health questions / stop its own redundant alerting — an agent-policy
    change on the hermes side, separate from this transport wiring.*
-2. **Acknowledgement tools (gated):** `acknowledge_check` / `unacknowledge_check`
-   — the first *write* surface. Mutates the acks table, so it ships behind an
-   explicit opt-in (a config flag and/or MCP `always_ask` confirmation), never on
-   by default.
+2. **Acknowledgement tools (done — gated):** `acknowledge_check` /
+   `unacknowledge_check` — the first *write* surface. Mutates the acks table, so
+   it ships behind the explicit opt-in `mcp.allow_writes` (default false): the
+   tools are not registered at all unless enabled. The same mute as `guardian
+   ack`, reversible.
 3. **Approval-gated repair playbooks:** whitelisted, never raw shell — the
    detect→diagnose→approve→repair→verify loop, exposed as tools an agent proposes
    and a human confirms.
