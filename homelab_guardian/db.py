@@ -55,8 +55,106 @@ def connect(database_path: str | Path) -> sqlite3.Connection:
         )
         """
     )
+    # Append-only audit + state machine for approval-gated repairs. A proposal is
+    # created (proposed) → approved/denied by a human → executed → verified. See
+    # docs/repair.md. Nothing here executes anything; that is homelab_guardian.repair.
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS repair_proposals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            check_id TEXT NOT NULL,
+            action TEXT NOT NULL,
+            params TEXT NOT NULL DEFAULT '{}',
+            argv TEXT NOT NULL DEFAULT '[]',
+            plan_json TEXT NOT NULL DEFAULT '{}',
+            status TEXT NOT NULL DEFAULT 'proposed',
+            proposed_by TEXT NOT NULL DEFAULT '',
+            proposed_at TEXT NOT NULL,
+            approved_by TEXT,
+            approved_at TEXT,
+            executed_at TEXT,
+            result_json TEXT,
+            verify_json TEXT
+        )
+        """
+    )
     conn.commit()
     return conn
+
+
+_REPAIR_COLUMNS = (
+    "id, check_id, action, params, argv, plan_json, status, proposed_by, "
+    "proposed_at, approved_by, approved_at, executed_at, result_json, verify_json"
+)
+
+
+def _repair_dict(row) -> dict[str, Any] | None:
+    if row is None:
+        return None
+    keys = [c.strip() for c in _REPAIR_COLUMNS.split(",")]
+    d = dict(zip(keys, row))
+    for jcol in ("params", "argv", "plan_json", "result_json", "verify_json"):
+        if d.get(jcol):
+            try:
+                d[jcol] = json.loads(d[jcol])
+            except ValueError:
+                pass
+    return d
+
+
+def create_repair_proposal(conn, check_id, action, plan, proposed_by="") -> int:
+    now = datetime.now(timezone.utc).isoformat()
+    cur = conn.execute(
+        "INSERT INTO repair_proposals (check_id, action, params, argv, plan_json, status, proposed_by, proposed_at) "
+        "VALUES (?, ?, ?, ?, ?, 'proposed', ?, ?)",
+        (check_id, action, json.dumps(plan.get("params", {})), json.dumps(plan.get("argv", [])),
+         json.dumps(plan), proposed_by, now),
+    )
+    conn.commit()
+    return int(cur.lastrowid)
+
+
+def get_repair_proposal(conn, proposal_id) -> dict[str, Any] | None:
+    row = conn.execute(f"SELECT {_REPAIR_COLUMNS} FROM repair_proposals WHERE id = ?", (proposal_id,)).fetchone()
+    return _repair_dict(row)
+
+
+def set_repair_decision(conn, proposal_id, status, decided_by) -> bool:
+    """Approve or deny a proposal — only from the 'proposed' state. Returns True
+    if the transition happened (i.e. it was still pending)."""
+    now = datetime.now(timezone.utc).isoformat()
+    cur = conn.execute(
+        "UPDATE repair_proposals SET status = ?, approved_by = ?, approved_at = ? "
+        "WHERE id = ? AND status = 'proposed'",
+        (status, decided_by, now, proposal_id),
+    )
+    conn.commit()
+    return cur.rowcount > 0
+
+
+def record_repair_execution(conn, proposal_id, status, result, verify) -> None:
+    now = datetime.now(timezone.utc).isoformat()
+    conn.execute(
+        "UPDATE repair_proposals SET status = ?, executed_at = ?, result_json = ?, verify_json = ? WHERE id = ?",
+        (status, now, json.dumps(result), json.dumps(verify), proposal_id),
+    )
+    conn.commit()
+
+
+def list_repair_proposals(conn, limit=20) -> list[dict[str, Any]]:
+    rows = conn.execute(
+        f"SELECT {_REPAIR_COLUMNS} FROM repair_proposals ORDER BY id DESC LIMIT ?", (limit,)
+    ).fetchall()
+    return [_repair_dict(r) for r in rows]
+
+
+def count_recent_repair_executions(conn, action, check_id, since_iso) -> int:
+    row = conn.execute(
+        "SELECT COUNT(*) FROM repair_proposals WHERE action = ? AND check_id = ? "
+        "AND executed_at IS NOT NULL AND executed_at >= ?",
+        (action, check_id, since_iso),
+    ).fetchone()
+    return int(row[0]) if row else 0
 
 
 def prune_scans(conn: sqlite3.Connection, retention_days: float) -> int:

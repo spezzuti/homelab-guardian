@@ -260,6 +260,25 @@ mcp:
   # attached agent cannot change Guardian's state.
   allow_writes: false
 
+repair:
+  # Approval-gated repair playbooks (see docs/repair.md). OFF by default and a
+  # separate, stronger gate than mcp.allow_writes. With enabled: false no repair
+  # can run and the repair MCP tools are not registered. Guardian only ever runs
+  # named, whitelisted, parameterized actions — never raw shell — and only after
+  # a human approves the specific proposal (CLI: `guardian repair approve <id>`).
+  enabled: false
+  require_approval: true        # human approval required (auto_approve below opts out per-action)
+  playbooks:
+    restart_systemd_unit:
+      enabled: false
+      # Only units listed here can be restarted. Keep it to a blessed subset of
+      # the units the systemd collector watches. The unit to restart is read from
+      # the failing check's evidence, then checked against this list.
+      allowed_units: []         # e.g. [marcus-backup.service]
+      auto_approve: false       # true skips per-instance approval — leave off until you trust it
+      max_attempts_per_hour: 3  # loop guard: after this, Guardian escalates to you instead of restarting again
+      timeout: 60
+
 notifications:
   # Delivery mode:
   #   direct — Guardian messages you over Telegram itself (standalone, no AI).

@@ -328,6 +328,94 @@ def run_ack(config_path: str, command: str, check_id: str | None, note: str, day
         conn.close()
 
 
+def _print_plan(plan: dict) -> None:
+    print(f"  Action:       {plan['action']}")
+    print(f"  Check:        {plan['check_id']}")
+    print(f"  Will run:     {' '.join(plan['argv'])}")
+    print(f"  Blast radius: {plan['blast_radius']}")
+    print(f"  Reversible:   {plan['reversible']}")
+    if plan.get("needs_privilege"):
+        print("  Privilege:    needs a scoped sudoers grant for that exact systemctl argv.")
+
+
+def run_repair(config_path: str, sub: str | None, rest: list[str], by: str = "cli") -> int:
+    from homelab_guardian import repair
+
+    config = load_config(config_path)
+    if not repair.is_enabled(config):
+        print("Repairs are disabled. Set repair.enabled: true in config.yaml first (see docs/repair.md).")
+        return 1
+    conn = db.connect(config.get("app", {}).get("database_path", "data/guardian.sqlite"))
+    try:
+        sub = sub or "list"
+        if sub == "list":
+            if rest:  # actions applicable to a specific check
+                check = repair._load_check(conn, rest[0])
+                if check is None:
+                    print(f"No check '{rest[0]}' in the latest scan.")
+                    return 1
+                actions = repair.applicable_actions(config, check)
+                print(f"{check.id} ({check.status}): {check.summary}")
+                print("  Repair actions:", ", ".join(actions) if actions else "(none available)")
+                for a in actions:
+                    print(f"    propose with: guardian repair propose {check.id} {a}")
+            else:  # recent proposals
+                rows = db.list_repair_proposals(conn)
+                if not rows:
+                    print("No repair proposals yet.")
+                for p in rows:
+                    print(f"  #{p['id']} [{p['status']}] {p['action']} on {p['check_id']} (proposed {p['proposed_at']})")
+            return 0
+
+        if sub == "propose":
+            if len(rest) < 2:
+                print("Usage: guardian repair propose <check_id> <action>")
+                return 1
+            res = repair.propose(config, conn, rest[0], rest[1], proposed_by=by)
+            print(f"Proposal #{res['proposal_id']} [{res['status']}]:")
+            _print_plan(res["plan"])
+            if res["status"] == "approved":
+                print(f"\nAuto-approved. Execute with: guardian repair execute {res['proposal_id']}")
+            else:
+                print(f"\nApprove with: guardian repair approve {res['proposal_id']}   (then: guardian repair execute {res['proposal_id']})")
+            return 0
+
+        if sub in {"approve", "deny", "execute"}:
+            if not rest:
+                print(f"Usage: guardian repair {sub} <proposal_id>")
+                return 1
+            pid = int(rest[0])
+            if sub == "approve":
+                repair.approve(conn, pid, approved_by=by)
+                print(f"Proposal #{pid} approved. Execute with: guardian repair execute {pid}")
+            elif sub == "deny":
+                repair.deny(conn, pid, denied_by=by)
+                print(f"Proposal #{pid} denied.")
+            else:
+                res = repair.execute(config, conn, pid, executed_by=by)
+                r, v = res["result"], res["verify"]
+                ran = f"exit {r.get('exit_code')}" if r.get("ran") else f"did not run: {r.get('error')}"
+                print(f"Proposal #{pid} {res['status']} — action {ran}.")
+                print(f"  Verify: {v['status']} — {v['summary']}")
+            return 0
+
+        if sub == "log":
+            for p in db.list_repair_proposals(conn, limit=50):
+                line = f"  #{p['id']} [{p['status']}] {p['action']} on {p['check_id']}"
+                if p.get("approved_by"):
+                    line += f" · by {p['approved_by']}"
+                print(line)
+            return 0
+
+        print("Usage: guardian repair {list|propose|approve|deny|execute|log} ...")
+        return 1
+    except repair.RepairError as exc:
+        print(f"Refused: {exc}")
+        return 1
+    finally:
+        conn.close()
+
+
 def run_scan_loop(config_path: str, interval_seconds: int) -> int:
     """Run scans forever, every interval_seconds. A failed scan is reported
     and the loop continues — a transient collector error must not stop a
@@ -383,11 +471,13 @@ def main() -> int:
     parser.add_argument(
         "command",
         nargs="?",
-        choices=["scan", "doctor", "init", "serve", "ack", "unack", "mcp"],
+        choices=["scan", "doctor", "init", "serve", "ack", "unack", "mcp", "repair"],
         default="scan",
         help="Command to run",
     )
-    parser.add_argument("check_id", nargs="?", help="ack/unack: the check id to mute or unmute")
+    parser.add_argument("check_id", nargs="?", help="ack/unack: the check id; repair: the subcommand")
+    parser.add_argument("rest", nargs="*", help="repair: subcommand arguments")
+    parser.add_argument("--by", default="cli", help="repair: identity recorded for approve/deny/execute")
     parser.add_argument("--config", default="config.yaml", help="Path to YAML config file")
     parser.add_argument("--note", default="", help="ack: why this check is muted")
     parser.add_argument("--days", type=float, default=0, help="ack: auto-expire after this many days")
@@ -417,6 +507,8 @@ def main() -> int:
     load_dotenv()
     if args.command in {"ack", "unack"}:
         return run_ack(args.config, args.command, args.check_id, args.note, args.days, args.until)
+    if args.command == "repair":
+        return run_repair(args.config, args.check_id, args.rest, by=args.by)
     if args.doctor or args.command == "doctor":
         return run_doctor(args.config)
     if args.command == "serve":
