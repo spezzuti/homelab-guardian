@@ -133,6 +133,10 @@ def build_config(
     secrets_provider: str = "env",
     host_checks: bool = False,
     backup_unit: str | None = None,
+    mounts: list[str] | None = None,
+    mcp: dict[str, Any] | None = None,
+    web_auth: dict[str, Any] | None = None,
+    repair: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Assemble the config.yaml structure from wizard answers. Pure function:
     no prompts, no filesystem, fully unit-testable."""
@@ -231,6 +235,42 @@ def build_config(
             "base_url": ai["base_url"],
             "model": ai["model"],
             "api_key_env": ai.get("api_key_env", "GUARDIAN_AI_API_KEY"),
+        }
+
+    if mounts:
+        config["collectors"]["mounts"] = {
+            "enabled": True,
+            "mounts": [{"path": p} for p in mounts],
+        }
+
+    # MCP: let an agent read Guardian's verified state. Writes stay off by
+    # default (read tools only). A remote agent needs the HTTP transport, which
+    # refuses to start without a bearer token, so we wire the token env name.
+    if mcp is not None:
+        mcp_cfg: dict[str, Any] = {"allow_writes": bool(mcp.get("allow_writes", False))}
+        if mcp.get("remote"):
+            mcp_cfg["http"] = {"token_env": mcp.get("token_env", "GUARDIAN_MCP_TOKEN")}
+        config["mcp"] = mcp_cfg
+
+    # Dashboard auth — only the keys the chosen mode needs. The wizard offers
+    # the built-in `basic` mode; richer modes (forward_auth, oidc) are config.
+    if web_auth:
+        config["web"] = {"auth": dict(web_auth)}
+
+    # A single, conservative self-healing repair: restart one named systemd unit
+    # on failure. require-approval by default (auto_approve stays off); the unit
+    # must be one the user explicitly named, so the allowlist is never broad.
+    if repair and repair.get("unit"):
+        config["repair"] = {
+            "enabled": True,
+            "playbooks": {
+                "restart_systemd_unit": {
+                    "enabled": True,
+                    "allowed_units": [repair["unit"]],
+                    "auto_approve": False,
+                    "max_attempts_per_hour": 3,
+                }
+            },
         }
 
     return config
@@ -353,6 +393,51 @@ def run_init(output_path: str = "config.yaml", force: bool = False, discover_net
                 backup_unit = unit or None
     print()
 
+    mounts: list[str] | None = None
+    if _ask_yes_no("Watch any NAS/NFS/CIFS mountpoints? (a dropped share is a silent failure)", default=False):
+        raw = _ask("  Mountpoint paths, comma-separated (e.g. /mnt/nas, /mnt/media)")
+        paths = [p.strip() for p in raw.split(",") if p.strip()]
+        mounts = paths or None
+    print()
+
+    # --- v0.3 actuator surface: agent (MCP), dashboard auth, self-healing ---
+    mcp: dict[str, Any] | None = None
+    mcp_token: str | None = None
+    if _ask_yes_no("Attach an AI agent (Claude, a local agent, ...) over MCP?", default=False):
+        print("  Read-only by default — the agent reads Guardian's verified state.")
+        remote = _ask_yes_no("  Is the agent on a DIFFERENT machine (needs the HTTP transport)?", default=False)
+        mcp = {"allow_writes": False, "remote": remote}
+        if remote:
+            import secrets as _secrets
+            mcp_token = _secrets.token_urlsafe(32)
+            mcp["token_env"] = "GUARDIAN_MCP_TOKEN"
+            env_lines.append(f"GUARDIAN_MCP_TOKEN={mcp_token}")
+            print("  Generated a bearer token (saved to .env as GUARDIAN_MCP_TOKEN).")
+    print()
+
+    web_auth: dict[str, Any] | None = None
+    if _ask_yes_no("Password-protect the web dashboard? (recommended if you'll expose it)", default=False):
+        username = _ask("  Username", "admin")
+        _collect_env_secret(env_lines, "GUARDIAN_WEB_PASSWORD", "a dashboard password (you choose it)")
+        web_auth = {"mode": "basic", "username": username, "password_env": "GUARDIAN_WEB_PASSWORD"}
+        print("  (For SSO via Authentik/Authelia/OIDC instead, see docs/auth.md.)")
+    print()
+
+    repair: dict[str, Any] | None = None
+    if sys.platform.startswith("linux") and _ask_yes_no(
+        "Enable ONE guarded self-healing repair? (restart a named systemd unit when it fails)",
+        default=False,
+    ):
+        print("  Guardian proposes the restart; nothing runs until a human approves")
+        print("  (auto-approve stays off). Only the unit you name here is ever eligible.")
+        unit = _ask("  Unit to allow restarting (e.g. marcus-backup.service)")
+        if unit:
+            repair = {"unit": unit}
+            print(f"  Grant Guardian's user a scoped sudoers line for just this, e.g.:")
+            print(f"    <user> ALL=(root) NOPASSWD: /usr/bin/systemctl restart {unit}")
+            print("  (user-bus units need no sudo). See docs/repair.md for the privilege model.")
+    print()
+
     secrets_provider = "env"
     if _ask_yes_no("Use Bitwarden Secrets Manager instead of a local .env file? (advanced)", default=False):
         secrets_provider = "bitwarden"
@@ -376,10 +461,31 @@ def run_init(output_path: str = "config.yaml", force: bool = False, discover_net
             pass
         print(f"Wrote {env_path} (keep it private; it is gitignored)")
 
+    if mcp is not None:
+        # Print the ready-to-paste MCP client config so attaching an agent is a
+        # copy, not a hunt through docs.
+        import json as _json
+        cfg_path = str(output.resolve())
+        if mcp.get("remote"):
+            print()
+            print("Attach a REMOTE agent: run the HTTP server on this host —")
+            print(f"  guardian mcp --http --config {output}")
+            print("  then point the agent at http://<this-host>:8675 with the bearer token")
+            print("  from .env (GUARDIAN_MCP_TOKEN). See docs/mcp.md.")
+        else:
+            snippet = {"mcpServers": {"homelab-guardian": {
+                "command": "guardian", "args": ["mcp", "--config", cfg_path]}}}
+            print()
+            print("Attach a local agent — add this to your MCP client config:")
+            print("  " + _json.dumps(snippet, indent=2).replace("\n", "\n  "))
+
     print()
     print("Next steps:")
     print(f"  1. guardian doctor --config {output}    # preflight check")
     print(f"  2. guardian --config {output}           # first scan")
     print(f"  3. guardian serve --config {output} --interval 900   # web view + recurring scans")
     print("Reports land in reports/latest.md and at http://localhost:8674 while serving.")
+    if repair is not None:
+        print("Repair is armed but human-gated: `guardian repair list <check>` to see proposals,")
+        print("`guardian repair approve <id>` to authorize. Auto-approve stays off. See docs/repair.md.")
     return 0

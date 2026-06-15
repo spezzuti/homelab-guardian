@@ -80,6 +80,45 @@ def test_build_config_optional_sections_absent_by_default():
     # Host-hardening collectors are opt-in (Linux-host only).
     for name in ("firewall", "exposed_services", "ssh", "updates", "backup_health"):
         assert name not in config["collectors"]
+    # v0.3 actuator surface is all opt-in too.
+    assert "mounts" not in config["collectors"]
+    for name in ("mcp", "web", "repair"):
+        assert name not in config
+
+
+def test_build_config_mounts():
+    config = build_config([], mounts=["/mnt/nas", "/mnt/media"])
+    paths = [m["path"] for m in config["collectors"]["mounts"]["mounts"]]
+    assert config["collectors"]["mounts"]["enabled"] is True and paths == ["/mnt/nas", "/mnt/media"]
+
+
+def test_build_config_mcp_stdio_and_remote():
+    local = build_config([], mcp={"allow_writes": False})
+    assert local["mcp"] == {"allow_writes": False}  # no http block for same-host stdio
+    remote = build_config([], mcp={"remote": True})
+    assert remote["mcp"]["http"]["token_env"] == "GUARDIAN_MCP_TOKEN"
+    assert remote["mcp"]["allow_writes"] is False
+
+
+def test_build_config_web_auth_basic():
+    config = build_config([], web_auth={"mode": "basic", "username": "admin",
+                                        "password_env": "GUARDIAN_WEB_PASSWORD"})
+    assert config["web"]["auth"]["mode"] == "basic"
+    assert config["web"]["auth"]["password_env"] == "GUARDIAN_WEB_PASSWORD"
+
+
+def test_build_config_repair_is_conservative():
+    config = build_config([], repair={"unit": "marcus-backup.service"})
+    pb = config["repair"]["playbooks"]["restart_systemd_unit"]
+    assert config["repair"]["enabled"] is True
+    assert pb["allowed_units"] == ["marcus-backup.service"]
+    assert pb["auto_approve"] is False  # wizard never enables self-healing unattended
+    # Only the one safe playbook — no destructive actions are wired by the wizard.
+    assert list(config["repair"]["playbooks"]) == ["restart_systemd_unit"]
+
+
+def test_build_config_repair_ignored_without_unit():
+    assert "repair" not in build_config([], repair={})
 
 
 def test_build_config_host_checks_enables_zero_config_collectors():
