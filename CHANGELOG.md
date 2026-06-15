@@ -1,5 +1,32 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Auto-repair escalation** — when scan-loop self-healing tries but can't
+  recover a critical (the fix didn't take, or the loop guard is spent), Guardian
+  tags it `escalate` and surfaces an `escalations` list to the agent. These stay
+  alert-worthy, making the reflex → specialist → human hand-off explicit.
+- **`guardian init` onboards the v0.3 features** — optional wizard steps for
+  attaching an agent over MCP (prints the client config / generates a token),
+  password-protecting the dashboard, watching NAS mounts, and one conservative
+  self-healing repair.
+
+### Security / Changed
+
+- **Dashboard fails closed on an unloadable auth secret.** If `web.auth.mode` is
+  `oidc`/`basic` and the configured secret can't be resolved (e.g. the secrets
+  vault was unreachable at startup), `guardian serve` now refuses to start
+  instead of silently serving a login that can't complete. The bitwarden store
+  retries transient failures with backoff before falling back to env-only, and
+  `guardian doctor` preflights that auth secrets actually resolve.
+
+### Fixed
+
+- CI: the dashboard-auth end-to-end tests no longer depend on a `config.yaml`
+  being present in the working directory (passed locally, failed in CI).
+
 ## v0.3.2 — 2026-06-14
 
 ### Added

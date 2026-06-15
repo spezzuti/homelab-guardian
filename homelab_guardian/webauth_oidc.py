@@ -102,6 +102,16 @@ class OidcAuth(Authenticator):
         secret_env = str(cfg.get("client_secret_env", ""))
         client_secret = (secrets.get(secret_env) if secrets is not None and hasattr(secrets, "get") and secret_env else None) or os.environ.get(secret_env, "")
         missing = [k for k, v in (("issuer", issuer), ("client_id", client_id), ("redirect_url", redirect_url)) if not v]
+        # Fail closed on a *configured-but-unresolved* client secret. If the admin
+        # named a secret env (client_secret_env) but it came back empty, the secrets
+        # backend was almost certainly unreachable at startup (e.g. a transient bws
+        # DNS failure). Starting anyway serves a login whose token exchange can only
+        # fail — a silent half-broken dashboard. Refusing to start instead surfaces
+        # the problem loudly and lets the supervisor (systemd) retry once the vault
+        # is reachable. A genuinely public client simply leaves client_secret_env
+        # unset, and this check does not apply.
+        if secret_env and not client_secret:
+            missing.append(f"client secret (env {secret_env} resolved empty — is the secrets backend reachable?)")
         if missing:
             raise ValueError(f"auth mode 'oidc' is missing required config: {', '.join(missing)}")
         return cls(

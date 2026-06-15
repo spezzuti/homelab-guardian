@@ -156,6 +156,18 @@ def test_forward_auth_gates_the_dashboard(tmp_path):
         server.shutdown()
 
 
+def test_serve_fails_closed_on_unresolved_oidc_secret():
+    # serve() must refuse to start (return non-zero) rather than bring up a
+    # dashboard whose OIDC login can't complete because the secret didn't load.
+    cfg = {
+        "app": {"database_path": ":memory:"},
+        "web": {"auth": {"mode": "oidc", "issuer": "https://idp", "client_id": "cid",
+                         "redirect_url": "http://h/cb",
+                         "client_secret_env": "GUARDIAN_OIDC_CLIENT_SECRET_TESTONLY_UNSET"}},
+    }
+    assert web.serve(cfg) == 1
+
+
 def test_build_authenticator_modes():
     assert isinstance(build_authenticator({}), NoAuth)
     assert isinstance(

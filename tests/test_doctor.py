@@ -1,4 +1,39 @@
-from homelab_guardian.doctor import _check_backup_health_config, _check_repair_config
+from homelab_guardian.doctor import _check_backup_health_config, _check_repair_config, _check_web_auth
+
+
+class _Secrets:
+    def __init__(self, **vals):
+        self._v = vals
+
+    def get(self, k):
+        return self._v.get(k)
+
+
+def test_web_auth_preflight_skipped_for_none_and_forward_auth():
+    assert _check_web_auth({}, _Secrets()) is None
+    assert _check_web_auth({"web": {"auth": {"mode": "forward_auth"}}}, _Secrets()) is None
+
+
+def test_web_auth_preflight_oidc_public_client_skipped():
+    assert _check_web_auth({"web": {"auth": {"mode": "oidc"}}}, _Secrets()) is None
+
+
+def test_web_auth_preflight_critical_when_oidc_secret_missing():
+    c = _check_web_auth({"web": {"auth": {"mode": "oidc", "client_secret_env": "GUARDIAN_OIDC_CLIENT_SECRET"}}}, _Secrets())
+    assert c.status == "critical" and "refuse to start" in c.summary
+
+
+def test_web_auth_preflight_ok_when_oidc_secret_present():
+    c = _check_web_auth(
+        {"web": {"auth": {"mode": "oidc", "client_secret_env": "GUARDIAN_OIDC_CLIENT_SECRET"}}},
+        _Secrets(GUARDIAN_OIDC_CLIENT_SECRET="x"),
+    )
+    assert c.status == "ok"
+
+
+def test_web_auth_preflight_basic_missing_password_is_critical():
+    c = _check_web_auth({"web": {"auth": {"mode": "basic", "password_env": "GUARDIAN_WEB_PASSWORD"}}}, _Secrets())
+    assert c.status == "critical"
 
 
 def _cfg(**backup_health):

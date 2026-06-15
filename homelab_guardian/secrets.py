@@ -62,6 +62,9 @@ class BitwardenSecretStore(SecretStore):
         bws_path: str = "bws",
         runner: Callable[..., subprocess.CompletedProcess] | None = None,
         clock: Callable[[], float] = time.monotonic,
+        max_retries: int = 2,
+        retry_backoff: float = 1.0,
+        sleeper: Callable[[float], None] = time.sleep,
     ) -> None:
         self.access_token_env = access_token_env or "BWS_ACCESS_TOKEN"
         self.project_id = project_id or ""
@@ -69,6 +72,12 @@ class BitwardenSecretStore(SecretStore):
         self.bws_path = bws_path
         self._runner = runner or subprocess.run
         self._clock = clock
+        # Transient bws failures (e.g. a DNS blip at boot) shouldn't poison the
+        # whole cache_seconds window — a couple of backed-off retries lets a
+        # short outage recover before we fall back to env-only.
+        self._max_retries = max(0, int(max_retries))
+        self._retry_backoff = float(retry_backoff)
+        self._sleeper = sleeper
         self._env = EnvSecretStore()
         self._cache: dict[str, str] | None = None
         self._cache_loaded_at: float | None = None
@@ -119,20 +128,30 @@ class BitwardenSecretStore(SecretStore):
             command.append(self.project_id)
         env = {**os.environ, "BWS_ACCESS_TOKEN": access_token}
 
-        try:
-            result = self._runner(command, capture_output=True, text=True, timeout=30, env=env)
-        except FileNotFoundError:
-            self._warn(f"bws CLI not found at '{self.bws_path}'. Install it or set secrets.bitwarden.bws_path.")
-            self._cache, self._cache_loaded_at = {}, now
-            return self._cache
-        except (subprocess.SubprocessError, OSError) as exc:
-            self._warn(f"bws CLI failed to run: {exc}.")
-            self._cache, self._cache_loaded_at = {}, now
-            return self._cache
+        result = None
+        last_error = ""
+        for attempt in range(self._max_retries + 1):
+            try:
+                result = self._runner(command, capture_output=True, text=True, timeout=30, env=env)
+            except FileNotFoundError:
+                # A missing binary won't fix itself on retry — fail fast.
+                self._warn(f"bws CLI not found at '{self.bws_path}'. Install it or set secrets.bitwarden.bws_path.")
+                self._cache, self._cache_loaded_at = {}, now
+                return self._cache
+            except (subprocess.SubprocessError, OSError) as exc:
+                last_error = f"bws CLI failed to run: {exc}."
+                result = None
+            else:
+                if result.returncode == 0:
+                    break
+                detail = (result.stderr or result.stdout or "").strip()[:200]
+                last_error = f"bws secret list failed (exit {result.returncode}): {detail}."
+            # Transient — back off and retry unless this was the last attempt.
+            if attempt < self._max_retries:
+                self._sleeper(self._retry_backoff * (attempt + 1))
 
-        if result.returncode != 0:
-            detail = (result.stderr or result.stdout or "").strip()[:200]
-            self._warn(f"bws secret list failed (exit {result.returncode}): {detail}.")
+        if result is None or result.returncode != 0:
+            self._warn(last_error)
             self._cache, self._cache_loaded_at = {}, now
             return self._cache
 
