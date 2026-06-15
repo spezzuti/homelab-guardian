@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "homelab-guardian"
-version = "0.3.2"
+version = "0.3.3"
 description = "Local-first homelab health monitoring with optional AI-agent integration and approval-gated repair"
 readme = "README.md"
 requires-python = ">=3.10"
