@@ -105,10 +105,16 @@ def _start_server(tmp_path, auth_config):
     conn = db.connect(dbp)
     db.save_scan(conn, {"app": "HG", "checks": [HealthCheck("a", "A", "ok", "x").to_dict()]})
     conn.close()
+    # The dashboard handler loads its config on each request; give it a real file
+    # in tmp_path so the test never depends on a config.yaml in the working dir
+    # (CI's clean checkout has none — this was a silent cross-machine failure).
+    cfgp = tmp_path / "config.yaml"
+    cfgp.write_text("app:\n  name: Homelab Guardian\n", encoding="utf-8")
     handler = type(
         "BoundH",
         (web.GuardianRequestHandler,),
-        {"database_path": dbp, "auth": build_authenticator(auth_config), "refresh_seconds": 0},
+        {"database_path": dbp, "config_path": str(cfgp),
+         "auth": build_authenticator(auth_config), "refresh_seconds": 0},
     )
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
