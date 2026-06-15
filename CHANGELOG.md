@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- **Docker `socket_url` default** — the shipped default was the malformed
+  `unix://var/run/docker.sock` (two slashes). It connected anyway (the code
+  prepends the missing slash for the existence check and the Docker SDK
+  tolerates the rest), but it's now the canonical `unix:///var/run/docker.sock`
+  in the example config, `DEFAULT_CONFIG`, and the collector/doctor fallbacks.
+
 ## v0.3.3 — 2026-06-15
 
 ### Added

@@ -219,7 +219,7 @@ def collect(config: dict[str, Any], secrets: Any = None) -> list[HealthCheck]:
             )
         ]
 
-    socket_url = os.environ.get("DOCKER_HOST") or config.get("socket_url") or "unix://var/run/docker.sock"
+    socket_url = os.environ.get("DOCKER_HOST") or config.get("socket_url") or "unix:///var/run/docker.sock"
     socket_path = None
     if socket_url.startswith("unix://"):
         raw_socket_path = socket_url.removeprefix("unix://")
