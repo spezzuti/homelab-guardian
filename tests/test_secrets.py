@@ -91,10 +91,39 @@ def test_missing_cli_degrades(token_env, capsys):
 
 
 def test_cli_error_degrades_and_warns_once(token_env, capsys):
-    store = BitwardenSecretStore(runner=lambda *a, **k: _completed("", returncode=1, stderr="bad token"))
+    store = BitwardenSecretStore(runner=lambda *a, **k: _completed("", returncode=1, stderr="bad token"),
+                                 sleeper=lambda _: None)
     assert store.get("A") is None
     assert store.get("B") is None
     assert capsys.readouterr().out.count("Falling back") == 1
+
+
+def test_transient_failure_is_retried_then_recovers(token_env):
+    # A blip (e.g. a DNS hiccup at boot) that clears on the second try must NOT
+    # poison the cache — the secret should resolve and the store stay healthy.
+    calls = {"n": 0}
+
+    def runner(*a, **k):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return _completed("", returncode=1, stderr="dns error")
+        return _completed(_bws_payload(HASS_TOKEN="recovered"))
+
+    store = BitwardenSecretStore(runner=runner, sleeper=lambda _: None)
+    assert store.get("HASS_TOKEN") == "recovered"
+    assert calls["n"] == 2 and not store.degraded
+
+
+def test_persistent_failure_retries_then_gives_up(token_env):
+    calls = {"n": 0}
+
+    def runner(*a, **k):
+        calls["n"] += 1
+        return _completed("", returncode=1, stderr="still down")
+
+    store = BitwardenSecretStore(runner=runner, max_retries=2, sleeper=lambda _: None)
+    assert store.get("A") is None
+    assert calls["n"] == 3 and store.degraded  # initial try + 2 retries
 
 
 def test_project_id_passed_to_cli(token_env):

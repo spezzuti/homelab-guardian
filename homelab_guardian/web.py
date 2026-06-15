@@ -989,7 +989,14 @@ def serve(
     from homelab_guardian.secrets import build_store
 
     secrets = build_store(config.get("secrets", {}))
-    authenticator = build_authenticator(config, secrets)
+    try:
+        authenticator = build_authenticator(config, secrets)
+    except ValueError as exc:
+        # Fail closed rather than serve a dashboard whose auth can't work (e.g. an
+        # OIDC secret that didn't load because the vault was unreachable). Exit
+        # non-zero so the supervisor restarts and retries once it's reachable.
+        print(f"Refusing to start the dashboard — authentication is misconfigured: {exc}")
+        return 1
     auth_mode = str((config.get("web") or {}).get("auth", {}).get("mode", "none")).lower()
 
     handler = type(

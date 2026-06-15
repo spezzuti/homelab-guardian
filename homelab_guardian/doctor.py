@@ -192,6 +192,41 @@ def _check_homeassistant(config: dict[str, Any], secrets: SecretStore) -> list[H
     return checks
 
 
+def _check_web_auth(config: dict[str, Any], secrets: SecretStore) -> HealthCheck | None:
+    """Catch the silent-broken-login trap before it bites: an auth mode whose
+    secret can't be resolved (e.g. the vault was unreachable). serve() now fails
+    closed on this, so flag it as critical here — the dashboard won't start."""
+    auth = (config.get("web") or {}).get("auth") or {}
+    mode = str(auth.get("mode", "none")).lower()
+    if mode == "basic":
+        secret_env = str(auth.get("password_env", ""))
+        present = bool(auth.get("password")) or (bool(secret_env) and bool(secrets.get(secret_env)))
+        name = secret_env or "inline password"
+    elif mode == "oidc":
+        secret_env = str(auth.get("client_secret_env", ""))
+        if not secret_env:
+            return None  # a public/PKCE client legitimately has no secret
+        present = bool(secrets.get(secret_env))
+        name = secret_env
+    else:
+        return None  # none / forward_auth need no locally-held secret
+    if present:
+        return HealthCheck(
+            "preflight_web_auth_secret", "Dashboard auth secret", "ok",
+            f"Dashboard auth mode '{mode}' has its secret available ({name}).",
+            {"mode": mode, "secret_env": secret_env or None},
+            "No action required.",
+        )
+    return HealthCheck(
+        "preflight_web_auth_secret", "Dashboard auth secret", "critical",
+        f"Dashboard auth mode '{mode}' is enabled but its secret '{name}' did not resolve — "
+        "the dashboard will refuse to start.",
+        {"mode": mode, "secret_env": secret_env or None},
+        "Expose the secret via the environment or the configured secrets provider "
+        "(if using bitwarden, confirm the provider is reachable), then restart.",
+    )
+
+
 def _check_backup_config(config: dict[str, Any]) -> HealthCheck | None:
     backup_config = config.get("collectors", {}).get("backups", {})
     if not backup_config.get("enabled", False):
@@ -341,7 +376,11 @@ def run_doctor(config_path: str | Path) -> int:
             _check_repair_config(config),
         ]
         checks.extend(check for check in optional_checks if check is not None)
-        checks.extend(_check_homeassistant(config, build_store(config.get("secrets", {}))))
+        store = build_store(config.get("secrets", {}))
+        web_auth_check = _check_web_auth(config, store)
+        if web_auth_check is not None:
+            checks.append(web_auth_check)
+        checks.extend(_check_homeassistant(config, store))
 
     print(render(checks))
     return 1 if any(check.status == "critical" for check in checks) else 0

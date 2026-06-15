@@ -64,6 +64,37 @@ def test_from_config_requires_core_fields():
         OidcAuth.from_config({"client_id": "x"})  # missing issuer + redirect_url
 
 
+_FULL_CFG = {
+    "issuer": "https://idp",
+    "client_id": "cid",
+    "redirect_url": "http://host/auth/callback",
+    "client_secret_env": "GUARDIAN_OIDC_CLIENT_SECRET",
+}
+
+
+def test_from_config_fails_closed_when_secret_unresolved():
+    # client_secret_env is configured but neither secrets store nor env has it
+    # (e.g. the vault was unreachable at startup) -> refuse, don't serve broken login.
+    with pytest.raises(ValueError, match="client secret"):
+        OidcAuth.from_config(_FULL_CFG, secrets=None)
+
+
+def test_from_config_accepts_resolved_secret():
+    class _S:
+        def get(self, k):
+            return "resolved" if k == "GUARDIAN_OIDC_CLIENT_SECRET" else None
+
+    auth = OidcAuth.from_config(_FULL_CFG, secrets=_S())
+    assert auth.client_secret == "resolved"
+
+
+def test_from_config_public_client_without_secret_env_is_allowed():
+    # No client_secret_env set -> a public/PKCE client; the secret check doesn't apply.
+    cfg = {k: v for k, v in _FULL_CFG.items() if k != "client_secret_env"}
+    auth = OidcAuth.from_config(cfg, secrets=None)
+    assert auth.client_secret == ""
+
+
 def _auth() -> OidcAuth:
     return OidcAuth(
         issuer="https://idp",
