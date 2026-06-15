@@ -1,5 +1,7 @@
 # Homelab Guardian
 
+[![PyPI](https://img.shields.io/pypi/v/homelab-guardian.svg)](https://pypi.org/project/homelab-guardian/)
+
 Homelab Guardian is a local-first homelab operations assistant built around
 read-only infrastructure collectors and local reports.
 
@@ -10,10 +12,30 @@ It is not another dashboard. It generates plain-English health reports that expl
 - what matters
 - what the safest next step is
 
-Guardian v0.2 is the **Daily Homelab Doctor plus dashboard and alerts**: a
-packaged CLI that collects optional read-only signals, stores local snapshots,
-writes Markdown reports, serves a read-only web view, and can send optional
-flap-damped notifications.
+Guardian started as a read-only "Daily Homelab Doctor" and has grown into a
+**safe actuator** for your homelab. The full arc, all opt-in:
+
+1. **Monitor** — optional read-only collectors (Docker, Home Assistant, network
+   and TLS, disks, mounts, systemd, plus host-hardening checks: firewall, SSH,
+   exposed services, pending updates, backup health) feed a structured
+   `status / summary / evidence / recommended_action` contract.
+2. **Report** — local Markdown reports and a read-only web dashboard, each
+   leading with *what changed* since the last scan; optional flap-damped
+   Telegram notifications; an optional bring-your-own-model AI briefing.
+3. **Attach an agent** — an [MCP](https://modelcontextprotocol.io) server
+   (`guardian mcp`) lets any AI agent read Guardian's *verified* state instead
+   of re-deriving it; agent-delivery mode makes the agent the single voice with
+   a deterministic Telegram critical-fallback.
+4. **Self-heal (carefully)** — approval-gated repair (`guardian repair`) can
+   *propose* a whitelisted, parameterized fix, execute it **only after a human
+   approves**, then verify recovery — never raw shell, fully audited, with an
+   opt-in auto-approve tier for vetted, non-destructive actions.
+
+Every step degrades gracefully and is off until you turn it on. Start at step 1
+and go as far as you trust it.
+
+**Install:** `pip install homelab-guardian` (add `[mcp]` for the agent server).
+New here? See **[the getting-started walkthrough](docs/getting-started.md)**.
 
 ## Core principles
 
@@ -37,16 +59,25 @@ briefings when explicitly enabled.
 
 ## Quick start
 
+Guardian is on PyPI. Install it (a virtualenv or `pipx` keeps it isolated), then
+let the wizard write a working config and run your first scan:
+
 ```bash
-git clone <repo-url>
-cd homelab-guardian
-python -m venv .venv
-. .venv/bin/activate
-pip install -e .
+pip install homelab-guardian          # or: pipx install homelab-guardian
 
 guardian init      # answer a few questions; optionally scans your LAN
-guardian doctor    # preflight check
+guardian doctor    # preflight check — verifies config, secrets, reachability
 guardian           # first scan -> reports/latest.md
+guardian serve     # read-only web view at http://localhost:8674
+```
+
+That's the whole loop: install, generate a config, scan, look. Open
+`reports/latest.md` in your editor or browse the dashboard.
+
+To attach an AI agent over MCP, install the optional extra instead:
+
+```bash
+pip install 'homelab-guardian[mcp]'   # pulls the MCP SDK; enables `guardian mcp`
 ```
 
 `guardian init` can probe your local network (read-only TCP connects, nothing
@@ -54,16 +85,26 @@ is sent to any device) and recognizes common homelab services — Home
 Assistant, Proxmox, Pi-hole/AdGuard, Portainer, Plex, Jellyfin, Synology,
 QNAP, Uptime Kuma, and more — then writes a working `config.yaml` for you.
 Smart-speaker false positives (Google Cast devices) are fingerprinted and
-filtered out automatically.
+filtered out automatically. On a Linux host it also offers the zero-config
+host-hardening checks (firewall, SSH, exposed services, pending updates).
+
+Ready to go further than monitoring? The
+**[From monitoring to self-healing](#from-monitoring-to-self-healing)** walkthrough
+below takes you from a first scan to an agent reading Guardian over MCP to a
+human-approved repair.
 
 ## Manual first-run steps
 
+Prefer to write the config yourself? Start from the example instead of the wizard:
+
 ```bash
+curl -O https://raw.githubusercontent.com/spezzuti/homelab-guardian/main/config.example.yaml
 cp config.example.yaml config.yaml
 mkdir -p data reports
 ```
 
-Edit `config.yaml` locally. Do not commit it.
+Edit `config.yaml` locally. Do not commit it. (`config.example.yaml` documents
+the full config surface — every collector, secrets, MCP, repair, notifications.)
 
 For Docker inventory, enable the Docker collector in `config.yaml` only on a Docker host or when using the socket proxy overlay:
 
@@ -76,34 +117,24 @@ collectors:
       - "homelab-guardian*"
 ```
 
-## Direct Python run
+## Install from source (development)
 
-Use this mode for development or for hosts where Python already has access to the paths and services you want to inspect.
+To hack on Guardian, install the checkout in editable mode:
 
 ```bash
+git clone https://github.com/spezzuti/homelab-guardian
+cd homelab-guardian
 python -m venv .venv
 . .venv/bin/activate
-pip install -r requirements.txt
-python -m homelab_guardian.main --config config.yaml
+pip install -e '.[mcp,dev]'    # editable, with the MCP extra and pytest
+
+guardian --config config.yaml          # same CLI as the installed package
+guardian --config config.example.yaml  # safe example run, no private services
+guardian doctor --config config.yaml   # preflight check
 ```
 
-Safe example run without private services:
-
-```bash
-python -m homelab_guardian.main --config config.example.yaml
-```
-
-Preflight check:
-
-```bash
-python -m homelab_guardian.main doctor --config config.yaml
-```
-
-Equivalent form:
-
-```bash
-python -m homelab_guardian.main --config config.yaml --doctor
-```
+The console command and `python -m homelab_guardian.main` are equivalent;
+`guardian doctor` and `guardian --doctor` are the same preflight.
 
 ## Prebuilt Docker image
 
@@ -166,7 +197,7 @@ If `/var/run/docker.sock` is missing:
 
 Safest next step:
 
-1. Run `python -m homelab_guardian.main doctor --config config.yaml`.
+1. Run `guardian doctor --config config.yaml`.
 2. Confirm the host actually runs Docker.
 3. If running in Docker Compose, confirm the socket mount exists.
 4. If you do not want Docker inventory on this machine, disable `collectors.docker.enabled`.
@@ -280,7 +311,7 @@ Safe setup for local dogfood:
 4. Run a report:
 
    ```bash
-   python -m homelab_guardian.main --config config.yaml
+   guardian --config config.yaml
    ```
 
 5. If running through Docker Compose, use the same ignored `.env` file and `config.yaml`:
@@ -348,10 +379,46 @@ collectors:
 Then run:
 
 ```bash
-python -m homelab_guardian.main --config config.yaml
+guardian --config config.yaml
 ```
 
 Expected result: the dummy backup check reports `ok` while the marker file is fresh. To test stale behavior safely, change `max_age_days` to `0` or adjust only files inside `/tmp/homelab-guardian-backup-dogfood`. Never commit `config.yaml`, generated reports, database files, or the dummy runtime folder.
+
+### Disk space and mounts collectors
+
+The `disks` collector reads usage on configured mounts (or the drive Guardian
+runs on when no `paths` are set) with warning/critical percent thresholds —
+disk-full is the most common silent homelab failure. The `mounts` collector
+verifies configured NAS/NFS/CIFS mountpoints are *actually* mounted: a dropped
+share is silent, because the mountpoint directory still exists and a disk check
+stays green. Read-only via `os.path.ismount`; it pairs with the `remount` repair.
+
+### systemd collector
+
+Sweeps the system (and optionally user) service manager for failed units and
+units stuck in a restart loop — the `activating/auto-restart` state that never
+reaches "failed" and hides exactly the breakage that matters. Specific units can
+be watched individually with state and restart-count evidence. Run Guardian
+directly on the host (a container cannot see the host's systemd).
+
+### Host-hardening collectors
+
+Read-only posture checks for the Linux host Guardian runs on. None need root and
+all are off by default:
+
+- **`firewall`** — is a host firewall active and defaulting to deny inbound?
+- **`exposed_services`** — names services listening on a non-loopback address,
+  flagging sensitive ones (SMB, VNC, databases, ...). Reads `ss` only.
+- **`ssh`** — reads the effective sshd config and warns on password
+  authentication or direct root login.
+- **`updates`** — pending updates, pending *security* updates, and whether a
+  reboot is required (apt-based hosts for now).
+- **`backup_health`** — watches the backup *job*, not just a directory: restic
+  snapshot age, or a systemd backup unit's last run. Distinct from the `backups`
+  freshness collector above, which watches a path.
+
+`guardian init` offers to enable the four zero-config ones when it detects it's
+running on the host you want to watch.
 
 ## Web view
 
@@ -363,16 +430,24 @@ guardian serve --host 0.0.0.0           # expose on your LAN (explicit choice)
 
 A read-only page rendered from local scan history: overall status, the AI
 briefing when enabled, what changed, every check with its evidence, and
-recent scan history with per-scan drill-down. No web framework, no
-JavaScript, no write endpoints; binds to localhost unless you say otherwise.
-`/healthz` returns plain `ok` so other monitors can watch Guardian itself.
+recent scan history with per-scan drill-down. Problem groups roll up first and
+auto-open; healthy groups collapse — calm by default, deep on demand. No web
+framework, no JavaScript on the health view; binds to localhost unless you say
+otherwise. `/healthz` returns plain `ok` so other monitors can watch Guardian
+itself.
+
+Two opt-in, authenticated control surfaces exist when enabled: a `/settings`
+page to toggle collectors (comment-preserving writes to `config.yaml`) and a
+`/repairs` page to approve/deny repair proposals. Both sit behind auth + CSRF.
+Add authentication before exposing the dashboard — `web.auth.mode` supports
+`basic`, `forward_auth`, and `oidc`. See [docs/auth.md](docs/auth.md).
 
 ## Recurring scans
 
 Guardian runs once by default. For continuous monitoring, pass `--interval`:
 
 ```bash
-python -m homelab_guardian.main --config config.yaml --interval 900
+guardian --config config.yaml --interval 900
 ```
 
 This repeats the scan every 900 seconds. A failed scan is logged and the loop
@@ -408,12 +483,12 @@ secrets:
     project_id: "" # optional: restrict to one project
 ```
 
-`python -m homelab_guardian.main doctor` verifies the provider end-to-end and reports how
+`guardian doctor` verifies the provider end-to-end and reports how
 many secrets are readable. The provider interface is intentionally small, so
 additional backends (Vault, 1Password, Infisical) can be added without
 touching collectors.
 
-Alternative: `bws run -- python -m homelab_guardian.main --config config.yaml` injects all
+Alternative: `bws run -- guardian --config config.yaml` injects all
 secrets as process environment variables without any Guardian configuration.
 
 ## AI briefing — bring your own model
@@ -480,26 +555,145 @@ loop. The whole point is to do this safely:
 Design and threat model: [docs/repair.md](docs/repair.md) and
 [docs/repair-reclaim.md](docs/repair-reclaim.md).
 
+## From monitoring to self-healing
+
+A four-step path from a read-only doctor to a careful self-healer. Each step is
+opt-in and stands on its own — stop at any rung you're comfortable with. For the
+full step-by-step version with explanations, see
+[docs/getting-started.md](docs/getting-started.md).
+
+### 1. Monitor — enable a few collectors
+
+Start with the read-only collectors that fit your setup. Everything here only
+*reads*; nothing is changed on any host.
+
+```yaml
+# config.yaml — a focused starting set
+collectors:
+  disks:
+    enabled: true       # disk-full is the #1 silent homelab failure
+    paths: []           # empty = the drive Guardian runs on
+  systemd:
+    enabled: true       # failed units AND restart loops
+    units:
+      - unit: my-backup.service
+  network:
+    enabled: true
+    http_checks:
+      - { id: http_ha, name: Home Assistant, url: "http://homeassistant.local:8123", expected_status: [200, 301, 302, 401] }
+```
+
+```bash
+guardian doctor    # confirm the config is valid and targets are reachable
+guardian           # scan -> reports/latest.md
+```
+
+### 2. See it — the dashboard
+
+```bash
+guardian serve                 # http://localhost:8674 (localhost only)
+guardian serve --interval 900  # appliance mode: scan every 15 min + serve
+```
+
+The page is read-only and leads with overall status, *what changed*, and every
+check with its evidence. Bind it to localhost (default) until you've added auth
+(`web.auth.mode`, see [docs/auth.md](docs/auth.md)); use `--host 0.0.0.0` only as
+an explicit choice once it's protected.
+
+### 3. Attach an agent over MCP
+
+Hand your *verified* state to an AI agent so it reasons over real checks instead
+of re-deriving them. Read-only by default — the agent can read, not change.
+
+```bash
+pip install 'homelab-guardian[mcp]'
+guardian mcp --config /path/to/config.yaml   # stdio; the agent launches this
+```
+
+Point a client at the stdio command (Claude Desktop / Claude Code example):
+
+```json
+{
+  "mcpServers": {
+    "homelab-guardian": {
+      "command": "guardian",
+      "args": ["mcp", "--config", "/path/to/config.yaml"]
+    }
+  }
+}
+```
+
+Now ask the agent *"is my homelab healthy?"* and it answers from Guardian's
+checks. For a remote agent, `guardian mcp --http` serves the same over a
+bearer-token-gated HTTP transport. Depth, the full tool surface, and
+agent-delivery notifications: [docs/mcp.md](docs/mcp.md).
+
+### 4. Turn on a gated repair for one safe unit
+
+Pick the *single* safest repair you have — restarting one watched systemd unit —
+and gate it behind human approval. Guardian will only ever restart units you
+explicitly allowlist, and only after you approve each proposal.
+
+```yaml
+repair:
+  enabled: true                 # master switch
+  require_approval: true        # human approves every proposal (default)
+  playbooks:
+    restart_systemd_unit:
+      enabled: true
+      allowed_units: [my-backup.service]   # explicit allowlist; empty = nothing
+      auto_approve: false
+      max_attempts_per_hour: 3
+```
+
+```bash
+guardian doctor    # self-validates the repair config (allowlists, sudo scope)
+
+# when my-backup.service is failing:
+guardian repair list my-backup.service            # what repairs apply?
+guardian repair propose my-backup.service restart_systemd_unit
+guardian repair approve <proposal_id>             # the human-only gate
+guardian repair execute <proposal_id>             # runs, then verifies recovery
+```
+
+`propose` is a dry run: it shows the exact argv, blast radius, and verify step
+and changes nothing. The agent (over MCP) can propose and execute, but **never
+approve** — approval lives only in Guardian's CLI/dashboard. System units need a
+*scoped* sudoers grant for that exact argv; prefer `systemctl --user` units,
+which need none. Full safety model: [docs/repair.md](docs/repair.md).
+
+### 5 (optional). Self-healing — auto-approve a vetted action
+
+Once you trust a *non-destructive* repair on a specific unit, you can let
+Guardian act on its own. Setting `auto_approve: true` makes that one action a
+deterministic reflex: on a **confirmed** (flap-damped) critical, Guardian
+proposes, executes, and verifies with no human in the loop — still loop-guarded
+and audited, and the agent is told what was auto-handled so it narrates the fix
+instead of re-alarming.
+
+```yaml
+repair:
+  enabled: true
+  playbooks:
+    restart_systemd_unit:
+      enabled: true
+      allowed_units: [my-backup.service]
+      auto_approve: true        # self-heal this one allowlisted unit
+      max_attempts_per_hour: 3
+```
+
+Destructive actions (anything that deletes — `docker_prune`, `prune_dir`)
+**ignore `auto_approve` entirely** and always require a human, by construction.
+Start narrow: one idempotent action, one unit, with the loop guard on.
+
 ## Telegram notifications
 
 Optional and disabled by default. Configure under `notifications.telegram` in
 `config.yaml` with a bot token and chat id provided through environment
 variables (see `config.example.yaml`). `send_on: changes` is the recommended
 mode: you only get a message when something actually changed since the last
-scan.
-
-### Disk space collector
-
-Reads usage on configured mounts (or the drive Guardian runs on when no
-paths are set) with warning/critical percent thresholds. Disk-full is the
-most common silent homelab failure; this is the check that catches it early.
-
-### systemd collector
-
-Sweeps the system (and optionally user) service manager for failed units and
-units stuck in a restart loop — the `activating/auto-restart` state that
-never reaches "failed" and hides exactly the breakage that matters. Specific
-units can be watched individually with state and restart-count evidence.
+scan. In `notifications.mode: agent`, Telegram is dormant and used only as the
+critical-fallback when an attached agent is the primary voice.
 
 ## Flap damping
 
