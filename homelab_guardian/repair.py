@@ -652,21 +652,53 @@ def auto_repair_confirmed(config, conn, events, runner: Callable[..., subprocess
                     continue  # e.g. destructive — never auto-approved
                 res = execute(config, conn, prop["proposal_id"], executed_by="auto", runner=runner)
                 recovered = bool(res["verify"].get("verified"))
-                results.append({
+                # The reflex ran but the check did not return to ok — this is no
+                # longer a reflex-fixable problem. Flag it so the agent escalates
+                # (specialist tier) or hands it to the human.
+                escalate = None if recovered else "reflex_failed"
+                entry = {
                     "check_id": check.id, "action": action, "status": res["status"],
-                    "recovered": recovered,
-                    # The reflex ran but the check did not return to ok — this is
-                    # no longer a reflex-fixable problem. Flag it so the agent
-                    # escalates (specialist tier) or hands it to the human.
-                    "escalate": None if recovered else "reflex_failed",
+                    "recovered": recovered, "escalate": escalate,
                     "summary": res["verify"].get("summary", ""),
-                })
+                }
+                if escalate:
+                    entry["diagnostic"] = _escalation_diagnostic(check, runner)
+                results.append(entry)
             except RepairError as exc:
                 # The reflex could not even run — most often the loop guard has
                 # tripped (it keeps failing) or a precondition is unmet. Either
                 # way Guardian is out of safe automatic moves: escalate.
                 results.append({"check_id": check.id, "action": action,
                                 "status": "refused", "recovered": False,
-                                "escalate": "blocked", "summary": str(exc)})
+                                "escalate": "blocked", "summary": str(exc),
+                                "diagnostic": _escalation_diagnostic(check, runner)})
             break  # at most one auto-repair attempt per check per scan
     return results
+
+
+def _escalation_diagnostic(check, runner: Callable[..., subprocess.CompletedProcess] = subprocess.run) -> str:
+    """Read-only root-cause context attached to an escalation so the agent gets
+    the WHY, not just the WHAT (the gap the live Phase-2 drill exposed: Guardian's
+    state tools say a unit is failed, but not why). Best-effort: argv-only,
+    bounded, short timeout, never raises — an empty string on any trouble."""
+    evidence = check.evidence or {}
+    cid = check.id or ""
+    try:
+        if cid.startswith("systemd_unit_"):
+            unit = evidence.get("unit")
+            if not unit:
+                return ""
+            argv = (["journalctl"] + (["--user"] if evidence.get("bus") == "user" else [])
+                    + ["-u", str(unit), "-n", "15", "--no-pager", "-o", "cat"])
+        elif cid.startswith("docker_container_"):
+            name = evidence.get("name")
+            if not name:
+                return ""
+            argv = ["docker", "logs", "--tail", "15", str(name)]
+        else:
+            return ""
+        result = runner(argv, capture_output=True, text=True, timeout=10)
+        out = ((getattr(result, "stdout", "") or "") + (getattr(result, "stderr", "") or "")).strip()
+        return out[-1500:]
+    except (subprocess.SubprocessError, OSError, ValueError):
+        return ""
