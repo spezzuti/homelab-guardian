@@ -13,7 +13,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "retention_days": 60,
     },
     "collectors": {
-        "docker": {"enabled": False, "socket_url": "unix://var/run/docker.sock", "exclude_containers": []},
+        "docker": {"enabled": False, "socket_url": "unix:///var/run/docker.sock", "exclude_containers": []},
         "homeassistant": {"enabled": False, "url": "", "token_env": "HOMEASSISTANT_TOKEN"},
         # All collectors are opt-in (enabled: False by default) so an
         # unconfigured host stays quiet instead of emitting "not configured"

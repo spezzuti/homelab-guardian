@@ -32,7 +32,7 @@ def test_override_merges_deeply(tmp_path):
     loaded = load_config(config)
     assert loaded["collectors"]["docker"]["enabled"] is True
     # sibling defaults survive the override
-    assert loaded["collectors"]["docker"]["socket_url"] == "unix://var/run/docker.sock"
+    assert loaded["collectors"]["docker"]["socket_url"] == "unix:///var/run/docker.sock"
     # collectors are opt-in: network stays off until a config enables it
     assert loaded["collectors"]["network"]["enabled"] is False
 

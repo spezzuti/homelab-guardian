@@ -95,7 +95,7 @@ def _check_docker(config: dict[str, Any]) -> HealthCheck | None:
     docker_config = config.get("collectors", {}).get("docker", {})
     if not docker_config.get("enabled", False):
         return None
-    socket_url = os.environ.get("DOCKER_HOST") or docker_config.get("socket_url") or "unix://var/run/docker.sock"
+    socket_url = os.environ.get("DOCKER_HOST") or docker_config.get("socket_url") or "unix:///var/run/docker.sock"
     socket_path = _socket_path(socket_url)
     if socket_path and not socket_path.exists():
         return HealthCheck(
