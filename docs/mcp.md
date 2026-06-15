@@ -1,97 +1,29 @@
 # Guardian as an MCP server
 
-**Status:** read-only v1 implemented (`guardian mcp`). Acknowledgement / repair
-tools are a deliberately separate, gated future phase (see Roadmap below).
+`guardian mcp` exposes Guardian over the [Model Context Protocol](https://modelcontextprotocol.io)
+so **any** MCP-capable agent — Claude Desktop, Claude Code, a custom agent, a
+local model — can read your homelab's *verified* health and, if you enable it,
+**propose and execute human-approved repairs**. The agent never gets a shell;
+it only ever calls Guardian's named tools.
 
-## Why
+Two postures, both opt-in:
 
-Guardian's moat is its collectors and the structured health-check contract
-(`status` / `summary` / `evidence` / `recommended_action`). Exposing that over the
-[Model Context Protocol](https://modelcontextprotocol.io) lets **any** agent read
-Guardian's view of the homelab instead of re-deriving it. The motivating case:
-Marcus (the home agent) consumes Guardian over MCP and reasons about real,
-verified state — rather than Guardian and Marcus both alerting the user
-separately about the same thing.
+- **Read-only (default).** The agent reads Guardian's checks, problems, and
+  recent changes. Nothing it can call changes a host or Guardian's state.
+- **Actuator (opt-in).** With `repair.enabled` (and the same allowlists the CLI
+  uses), the agent can *propose* a whitelisted repair and *execute* one **after a
+  human approves it out-of-band** — the agent can never approve its own repair.
 
-## Design
+## Quick start (any MCP client)
 
-- **Read-only.** Every tool reads the latest SQLite snapshot the scanner already
-  writes — the same data the web view renders. Nothing in the MCP server runs a
-  scan, changes an ack, or touches a host. This keeps the safety story intact: a
-  read-only MCP server is safe to attach to an agent.
-- **Thin over existing helpers.** `mcp_server.py` reuses `db`, `web`
-  (`checks_from_snapshot`, `effective_group`, `overall_of`), and `diff`. The
-  data layer is plain functions returning JSON-friendly dicts (`summary_payload`,
-  `problems_payload`, …), unit-tested without the `mcp` dependency. FastMCP just
-  decorates them.
-- **Optional dependency.** `pip install 'homelab-guardian[mcp]'` pulls the `mcp`
-  SDK; the core stays dependency-light. `guardian mcp` prints an install hint if
-  the extra is missing.
-
-## Tool surface (read-only)
-
-| Tool | Returns |
-|---|---|
-| `get_health_summary()` | overall status, per-status counts, per-group roll-up — the "is it OK?" answer |
-| `list_problems()` | failing, non-acknowledged checks, worst first, each with its recommended next step |
-| `list_checks(group?, status?)` | all checks, optionally filtered |
-| `get_check(check_id)` | one check's full detail incl. the raw `evidence` dict |
-| `get_recent_changes()` | regressions / improvements / new / removed since the previous scan |
-| `list_scan_history(limit)` | recent scans with per-scan overall status and counts |
-| `list_acknowledgments()` | checks currently muted (acknowledged), with note + expiry |
-| `list_pending_alerts()` | criticals pushed to this agent awaiting its relay-confirmation |
-| `acknowledge_alert_received(check_ids)` | the agent confirms it relayed these criticals (clears the fail-to-ack fallback) — see below |
-
-Plus one resource: `guardian://health` (the summary as JSON).
-
-`acknowledge_alert_received` is always available (not behind `allow_writes`): it
-only clears Guardian's fallback bookkeeping, not health state, and the
-fail-to-ack safety net depends on it working whenever an agent is attached. In
-agent-delivery mode (`notifications.mode: agent`), Guardian pushes a confirmed
-critical to the agent's webhook and starts a timer; the agent should call
-`acknowledge_alert_received([...])` once it has relayed the critical to the user.
-If no callback arrives within `notifications.agent.ack_timeout_minutes`, Guardian
-sends the critical over Telegram itself — so a critical is never silently lost
-even if the agent accepted it but failed to act.
-
-### Write tools (opt-in, `mcp.allow_writes: true`)
-
-Off by default. When enabled, two WRITE tools are registered so an agent can
-manage acknowledgements on the user's behalf — the same mute the `guardian ack`
-CLI performs (reversible; muted checks are excluded from overall status and
-alerts). With `allow_writes` false they are not registered at all, so an attached
-agent cannot mutate Guardian's state.
-
-| Tool | Effect |
-|---|---|
-| `acknowledge_check(check_id, note, days)` | mute a check; `days` auto-expires the mute (0 = indefinite) |
-| `unacknowledge_check(check_id)` | un-mute a check so it counts and alerts again |
-
-Tool descriptions are written for the agent's benefit — they state *when* to call
-each tool, which materially improves should-call behaviour on recent models.
-
-## Transport
-
-- **stdio (v1, default).** The client launches `guardian mcp` as a subprocess and
-  talks over stdin/stdout. No network, no port, no auth — process-level trust.
-  Ideal when the agent runs on the same host as Guardian (e.g. Marcus).
-- **Streamable HTTP (`guardian mcp --http`).** For a *remote* agent. Serves over
-  streamable HTTP, gated by a **bearer token** (`mcp.http.token_env`) — clients
-  send `Authorization: Bearer <token>`. It **refuses to start without a token**,
-  so the network surface is never unauthenticated. Default bind `127.0.0.1:8675`
-  (override with `--host`/`--port`). For SSO/OIDC, front it with a reverse proxy
-  (same mechanisms-not-providers stance as the dashboard).
-
-```yaml
-mcp:
-  http:
-    token_env: GUARDIAN_MCP_TOKEN   # the bearer token, from env or the secrets provider
+```bash
+pip install 'homelab-guardian[mcp]'    # pulls the MCP SDK; core stays light
+guardian init                          # writes a config.yaml (offers MCP setup)
+guardian --config config.yaml          # one scan, so the server has data to read
 ```
 
-## Connecting a client
-
-**Claude Desktop / Claude Code** — add an MCP server entry pointing at the
-console command (run it from the Guardian checkout / venv):
+Then point your MCP client at the `guardian mcp` stdio command. **Claude Desktop
+/ Claude Code:**
 
 ```json
 {
@@ -104,76 +36,125 @@ console command (run it from the Guardian checkout / venv):
 }
 ```
 
-**Claude API (local stdio server)** — use the Anthropic SDK's MCP helpers
-(`pip install 'anthropic[mcp]'`):
+Now ask your agent *"is my homelab healthy? what needs attention?"* — it calls
+`get_health_summary` / `list_problems` and answers from verified state instead of
+guessing. `guardian init` prints this same snippet for you on the way out.
 
-```python
-from anthropic import AsyncAnthropic
-from anthropic.lib.tools.mcp import async_mcp_tool
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
+> stdio launches `guardian mcp` from the **client's** working directory, so two
+> things must hold (both true after a normal `pip install`): the package is
+> importable from any cwd (the install handles it — don't rely on running from a
+> source checkout), and a relative `app.database_path` is resolved against the
+> **config file's** directory, so the server reads the same snapshot the scanner
+> writes no matter where the client started it.
 
-client = AsyncAnthropic()
-params = StdioServerParameters(command="guardian", args=["mcp", "--config", "config.yaml"])
-async with stdio_client(params) as (read, write):
-    async with ClientSession(read, write) as session:
-        await session.initialize()
-        tools = (await session.list_tools()).tools
-        runner = client.beta.messages.tool_runner(
-            model="claude-opus-4-8", max_tokens=16000,
-            messages=[{"role": "user", "content": "Is my homelab healthy? What needs attention?"}],
-            tools=[async_mcp_tool(t, session) for t in tools],
-        )
-        async for message in runner:
-            print(message)
-```
+## Tool surface
 
-**Marcus (hermes-agent)** — point its MCP config at the same stdio command. This
-is the configuration that lets Marcus consume Guardian instead of double-alerting.
-hermes-agent uses a `mcp_servers.<name>` block (stdio `command`/`args`); the live
-wiring on Marcus is:
+**Read tools — always registered:**
+
+| Tool | Returns |
+|---|---|
+| `get_health_summary()` | overall status, per-status counts, per-group roll-up — the "is it OK?" answer |
+| `list_problems()` | failing, non-acknowledged checks, worst first, each with its recommended next step |
+| `list_checks(group?, status?)` | all checks, optionally filtered |
+| `get_check(check_id)` | one check's full detail incl. the raw `evidence` dict |
+| `get_recent_changes()` | regressions / improvements / new / removed since the previous scan |
+| `list_scan_history(limit)` | recent scans with per-scan overall status and counts |
+| `list_acknowledgments()` | checks currently muted, with note + expiry |
+| `list_pending_alerts()` | criticals pushed to a proactive agent awaiting relay-confirmation |
+| `acknowledge_alert_received(check_ids)` | a proactive agent confirms it relayed these criticals (see *Proactive push* below) |
+
+Plus a resource: `guardian://health` (the summary as JSON).
+
+**Acknowledgement write tools — only when `mcp.allow_writes: true`:**
+
+| Tool | Effect |
+|---|---|
+| `acknowledge_check(check_id, note, days)` | mute a check; `days` auto-expires (0 = indefinite) |
+| `unacknowledge_check(check_id)` | un-mute so it counts and alerts again |
+
+**Repair tools — only when `repair.enabled: true`:**
+
+| Tool | Effect |
+|---|---|
+| `list_repair_actions(check_id)` | which whitelisted repairs apply, each with a dry-run plan (exact argv, blast radius, reversibility). Changes nothing. |
+| `propose_repair(check_id, action)` | stage a repair; returns a proposal id + the exact plan. **Does not execute.** |
+| `execute_repair(proposal_id, confirmation?)` | run a proposal **a human has approved**, then verify recovery. Refused unless approved. |
+| `get_repair_log()` | the append-only audit trail (who proposed, who approved, what ran, did it recover) |
+
+Tool descriptions are written *for the agent* — they state when to call each
+tool and the approval rules, which materially improves should-call behaviour on
+recent models. When `allow_writes` is false and `repair.enabled` is false, those
+tools aren't registered at all, so an attached agent simply cannot mutate
+anything — the read-only safety story is structural, not a prompt request.
+
+## The repair flow (agent-agnostic)
+
+The actuator loop is the same for any agent, because **approval lives outside the
+agent**:
+
+1. A check is failing. The agent calls `list_repair_actions` → `propose_repair`.
+2. The agent relays the plan to you in plain language and asks you to approve.
+   **It cannot approve its own proposal.**
+3. *You* approve out-of-band — `guardian repair approve <id>` (CLI) or the
+   `/repairs` page on the dashboard.
+4. The agent calls `execute_repair(<id>)`; Guardian runs the whitelisted argv
+   (never a shell), then re-checks and reports whether it recovered. Every step
+   is audited (`get_repair_log`).
+
+Destructive actions never auto-approve and carry extra interlocks (e.g. a
+backup-freshness check before deleting files). See [repair.md](repair.md).
+
+Guardian also has its **own** reflex self-healing (`auto_approve` on a playbook)
+that runs with no agent at all — the agent layer is for the cases a deterministic
+reflex shouldn't or can't handle.
+
+## Transport
+
+- **stdio (default).** The client launches `guardian mcp` as a subprocess and
+  talks over stdin/stdout — no network, no port, process-level trust. Use when
+  the agent runs on the **same host** as Guardian.
+- **Streamable HTTP (`guardian mcp --http`).** For a **remote** agent. Gated by a
+  bearer token (`mcp.http.token_env`); clients send `Authorization: Bearer
+  <token>`. It **refuses to start without a token**, so the surface is never
+  unauthenticated. Default bind `127.0.0.1:8675` (`--host`/`--port` to change).
+  For SSO/OIDC, front it with a reverse proxy.
 
 ```yaml
-# ~/.hermes/config.yaml
-mcp_servers:
-  guardian:
-    command: /home/marcus/homelab-guardian/.venv/bin/guardian
-    args: [mcp, --config, /home/marcus/homelab-guardian/config.yaml]
-    enabled: true
-    timeout: 30
-    tools:
-      resources: true
+mcp:
+  allow_writes: false               # set true to register the ack write tools
+  http:
+    token_env: GUARDIAN_MCP_TOKEN   # bearer token, from env or the secrets provider
 ```
 
-Two prerequisites the stdio launch depends on, both because the client starts
-`guardian mcp` from **its own** working directory, not Guardian's:
+## Two integration tiers
 
-1. The package must be importable from any cwd — `pip install -e '.[mcp]'` into
-   Guardian's venv (this also creates the `guardian` console command). Running
-   straight from the source tree only works when cwd is the checkout.
-2. A relative `app.database_path` is resolved against the **config file's**
-   directory (see `resolve_database_path`), so the server reads the same
-   snapshot the scanner writes — regardless of where the client launched it.
+**1. Pull — works with any MCP agent (Claude Desktop, Claude Code, custom).**
+The agent reads Guardian and drives repair **when you ask it to**. This is the
+whole loop above and needs nothing beyond the MCP wiring. For *alerting* in this
+tier, use Guardian's built-in channels — the dashboard and/or Telegram
+(`notifications.mode: direct`) — and let the agent investigate on demand.
 
-Verify with hermes's own tooling: `hermes mcp test guardian` should report
-`✓ Connected` and `✓ Tools discovered: 6`.
+**2. Proactive push — for webhook-capable agents (advanced).** With
+`notifications.mode: agent`, Guardian POSTs each confirmed change to an agent's
+intake webhook so the **agent becomes the single proactive voice**. It signs the
+payload (HMAC) and, for criticals, starts a timer: the agent calls
+`acknowledge_alert_received([...])` once it has relayed the alert; if no callback
+arrives within `notifications.agent.ack_timeout_minutes`, Guardian sends the
+critical over Telegram itself — so a critical is never silently lost even if the
+agent accepted it but failed to act.
 
-## Roadmap
+This tier needs an agent that can *receive a webhook and run on its own*
+(Claude Desktop and most chat clients can't — they're pull-only). The reference
+implementation is **hermes-agent**, which subscribes its webhook intake to
+Guardian and registers `guardian mcp` as a tool server so it can both narrate
+alerts and drive the repair flow. The config is ordinary MCP — a
+`mcp_servers.<name>` stdio block pointing at the same `guardian mcp` command —
+plus a webhook subscription on the agent side; nothing Guardian does here is
+hermes-specific.
 
-1. **v1 (done):** read-only stdio server, the six tools + health resource.
-   **Wired live on Marcus (2026-06-14):** `hermes mcp test guardian` →
-   `✓ Connected`, 6 tools. Marcus can now read Guardian's view over MCP.
-   *Remaining behavioural step: have Marcus actually prefer Guardian for
-   homelab-health questions / stop its own redundant alerting — an agent-policy
-   change on the hermes side, separate from this transport wiring.*
-2. **Acknowledgement tools (done — gated):** `acknowledge_check` /
-   `unacknowledge_check` — the first *write* surface. Mutates the acks table, so
-   it ships behind the explicit opt-in `mcp.allow_writes` (default false): the
-   tools are not registered at all unless enabled. The same mute as `guardian
-   ack`, reversible.
-3. **Approval-gated repair playbooks:** whitelisted, never raw shell — the
-   detect→diagnose→approve→repair→verify loop, exposed as tools an agent proposes
-   and a human confirms.
-4. **HTTP transport + auth (done):** `guardian mcp --http` serves streamable HTTP
-   gated by a bearer token, refusing to start unauthenticated — so a remote agent
-   can consume Guardian, not just a same-host one.
+## Notes
+
+- The whole MCP layer reads the SQLite snapshot the scanner already writes — the
+  same data the web view renders. The MCP server never runs a scan itself.
+- The `mcp` SDK is an optional extra; `guardian mcp` prints an install hint if
+  it's missing, and the data-layer functions are unit-tested without it.

@@ -178,12 +178,13 @@ Most useful repairs need elevated rights (restarting a *system* unit needs
 root). The rule: **least privilege, scoped to the exact action — never
 Guardian's broad ambient privilege.**
 
-On Marcus today the service user has *passwordless sudo*, which is convenient but
-far too broad to back a repair feature. The intended model instead:
+If Guardian's service user has broad/passwordless sudo, that's convenient but far
+too wide to back a repair feature. The intended model instead:
 
-- A **minimal sudoers allowlist** granting exactly the repair argv we ship and
-  nothing else, e.g. `NOPASSWD: /usr/bin/systemctl restart marcus-backup.service`
-  (one line per allowed unit), **or** a polkit rule scoped the same way.
+- A **minimal sudoers allowlist** granting exactly the repair argv you allow and
+  nothing else, e.g. `<guardian-user> ALL=(root) NOPASSWD: /usr/bin/systemctl
+  restart your-service.service` (one line per allowed unit), **or** a polkit rule
+  scoped the same way.
 - User-bus units (`systemctl --user`) need no elevation at all — prefer these
   where possible.
 - Guardian's repair runner refuses to invoke anything not expressible through

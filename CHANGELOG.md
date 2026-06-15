@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Documentation
+
+- **MCP guide rewritten to be agent-agnostic.** `docs/mcp.md` now leads with the
+  any-client quick start (Claude Desktop / Claude Code), documents the full
+  current tool surface including the gated repair tools (`list_repair_actions` /
+  `propose_repair` / `execute_repair` / `get_repair_log`) and the agent-agnostic
+  approve-out-of-band repair flow, and tiers integration as **pull** (works with
+  any MCP agent) vs **proactive push** (advanced, webhook-capable agents). A cold
+  `pip install 'homelab-guardian[mcp]'` was verified end-to-end against a real MCP
+  stdio client (15 tools registered, tools callable).
+
 ### Fixed
 
 - **Docker `socket_url` default** — the shipped default was the malformed
