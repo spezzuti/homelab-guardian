@@ -7,7 +7,10 @@
 - **Auto-repair escalation** — when scan-loop self-healing tries but can't
   recover a critical (the fix didn't take, or the loop guard is spent), Guardian
   tags it `escalate` and surfaces an `escalations` list to the agent. These stay
-  alert-worthy, making the reflex → specialist → human hand-off explicit.
+  alert-worthy, making the reflex → specialist → human hand-off explicit. Each
+  escalation carries a read-only `diagnostic` (recent journal lines for a systemd
+  unit, container logs for Docker) so the agent gets the *why*, not just the
+  *what*.
 - **`guardian init` onboards the v0.3 features** — optional wizard steps for
   attaching an agent over MCP (prints the client config / generates a token),
   password-protecting the dashboard, watching NAS mounts, and one conservative

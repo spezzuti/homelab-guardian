@@ -566,6 +566,38 @@ def test_auto_repair_escalates_blocked_when_loop_guard_trips(tmp_path):
     results = repair.auto_repair_confirmed(config, conn, _confirmed(CHECK_ID), runner=_runner(active="failed"))
     assert len(results) == 1
     assert results[0]["status"] == "refused" and results[0]["escalate"] == "blocked"
+    assert "diagnostic" in results[0]  # escalations carry root-cause context
+
+
+# --- escalation diagnostics (give the agent the WHY, not just the WHAT) -------
+
+def test_escalation_diagnostic_systemd_returns_journal_tail():
+    check = HealthCheck("systemd_unit_x_service", "x", "critical", "down",
+                        evidence={"unit": "x.service", "bus": "user"})
+    def runner(cmd, **k):
+        assert "journalctl" in cmd and "--user" in cmd and "x.service" in cmd
+        return _CP(cmd, 0, "starting...\nFATAL: config /etc/x.conf missing\n")
+    assert "FATAL: config /etc/x.conf missing" in repair._escalation_diagnostic(check, runner=runner)
+
+
+def test_escalation_diagnostic_docker_uses_logs():
+    check = HealthCheck("docker_container_web", "x", "critical", "unhealthy", evidence={"name": "web"})
+    def runner(cmd, **k):
+        assert cmd[:2] == ["docker", "logs"] and "web" in cmd
+        return _CP(cmd, 0, "", "panic: cannot bind :80\n")  # stderr
+    assert "panic: cannot bind :80" in repair._escalation_diagnostic(check, runner=runner)
+
+
+def test_escalation_diagnostic_unknown_check_is_empty():
+    check = HealthCheck("disk_root", "/", "critical", "full", evidence={"path": "/"})
+    assert repair._escalation_diagnostic(check) == ""
+
+
+def test_escalation_diagnostic_never_raises():
+    check = HealthCheck("systemd_unit_x_service", "x", "critical", "down", evidence={"unit": "x.service"})
+    def boom(cmd, **k):
+        raise OSError("journalctl exploded")
+    assert repair._escalation_diagnostic(check, runner=boom) == ""
 
 
 def test_typed_confirmation_blocks_then_allows(tmp_path, monkeypatch):
