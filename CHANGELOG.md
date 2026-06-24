@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+### Fixed
+
+- **An unreachable network target is now `critical`, not `warning`.** Previously
+  every reachability failure in the `network` collector — TCP connection refused,
+  HTTP no-response, DNS that won't resolve, no TLS handshake — was classified as
+  `warning`; only an *expired certificate* was ever `critical`. In agent mode the
+  deterministic Telegram critical-fallback is gated on a confirmed critical, so a
+  host going **completely dark** produced only warnings and never tripped the
+  safety net — it rode entirely on the attached agent relaying one webhook. Found
+  the hard way: a main server went down, every dependent check went `ok → warning`,
+  the single agent push was silently dropped, and no fallback could fire. Now a
+  target Guardian cannot reach AT ALL is `critical` by default (a *degraded but
+  reachable* target — unexpected HTTP status, cert merely expiring soon — stays a
+  warning). Opt a noisy/optional target back down with
+  `critical_on_unreachable: false` on the check.
+
 ### Documentation
 
 - **MCP guide rewritten to be agent-agnostic.** `docs/mcp.md` now leads with the

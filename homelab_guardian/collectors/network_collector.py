@@ -19,6 +19,22 @@ def _expected_status(item: dict[str, Any]) -> set[int]:
     return {int(code) for code in expected}
 
 
+def _unreachable_status(item: dict[str, Any]) -> str:
+    """Severity for a target Guardian was told to watch but cannot reach AT ALL
+    (connection refused, no response, name won't resolve, no TLS handshake).
+
+    That is the canonical "this thing is gone" condition — a main server going
+    dark — so it is `critical` by default, which is what trips Guardian's
+    deterministic alert path (the agent-mode Telegram fallback is gated on a
+    confirmed critical). Noisy or genuinely optional targets can opt back down
+    to a softer `warning` with `critical_on_unreachable: false`.
+
+    Note this is *unreachable*, not *degraded*: a service that answers with an
+    unexpected HTTP status, or a certificate merely expiring soon, is reachable
+    and stays a warning — only handled by the callers, not here."""
+    return "warning" if item.get("critical_on_unreachable") is False else "critical"
+
+
 def collect(config: dict[str, Any], secrets: Any = None) -> list[HealthCheck]:
     checks: list[HealthCheck] = []
 
@@ -49,7 +65,7 @@ def collect(config: dict[str, Any], secrets: Any = None) -> list[HealthCheck]:
         except Exception as exc:
             checks.append(
                 HealthCheck(
-                    check_id, name, "warning",
+                    check_id, name, _unreachable_status(item),
                     f"{hostname} did not resolve.",
                     {"hostname": hostname, "record_type": record_type, "error": str(exc)},
                     "Check DNS service, upstream resolver, or local network path.", group=group,
@@ -79,7 +95,7 @@ def collect(config: dict[str, Any], secrets: Any = None) -> list[HealthCheck]:
         except Exception as exc:
             checks.append(
                 HealthCheck(
-                    check_id, name, "warning",
+                    check_id, name, _unreachable_status(item),
                     f"{host}:{port} is not reachable.",
                     {"host": host, "port": port, "timeout_seconds": timeout, "error": str(exc)},
                     "Check whether the service, host, route, or firewall changed.", group=group,
@@ -121,7 +137,7 @@ def collect(config: dict[str, Any], secrets: Any = None) -> list[HealthCheck]:
         except Exception as exc:
             checks.append(
                 HealthCheck(
-                    check_id, name, "warning",
+                    check_id, name, _unreachable_status(item),
                     f"{url} did not return an HTTP response.",
                     {"url": url, "method": method, "timeout_seconds": timeout, "expected_status": sorted(expected), "error": str(exc)},
                     "Check network path, DNS, TLS, reverse proxy, or service health.", group=group,
@@ -145,7 +161,7 @@ def collect(config: dict[str, Any], secrets: Any = None) -> list[HealthCheck]:
         except Exception as exc:
             checks.append(
                 HealthCheck(
-                    check_id, name, "warning",
+                    check_id, name, _unreachable_status(item),
                     f"Could not read the TLS certificate from {host}:{port}.",
                     {"host": host, "port": port, "error": str(exc)},
                     "Check that the service is up and actually speaks TLS on this port.", group=group,
