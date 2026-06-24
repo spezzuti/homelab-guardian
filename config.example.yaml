@@ -43,6 +43,13 @@ collectors:
 
   network:
     enabled: true
+    # Severity note: a target that is UNREACHABLE — TCP refused, no HTTP
+    # response, name won't resolve, no TLS handshake — is `critical` by default.
+    # That is the "this thing is gone" condition (a main server going dark), and
+    # only a critical trips Guardian's deterministic alert path (in agent mode,
+    # the Telegram critical-fallback). A service that is reachable but DEGRADED
+    # (unexpected HTTP status, or a cert merely expiring soon) stays a warning.
+    # Opt a noisy/optional target back down with `critical_on_unreachable: false`.
     dns_checks:
       - id: dns_example_public
         name: Public DNS sanity check
@@ -54,6 +61,7 @@ collectors:
         host: example.com
         port: 443
         timeout: 3
+        # critical_on_unreachable: false  # demote to warning if this target is optional
     http_checks:
       - id: http_example
         name: Example HTTP status check
