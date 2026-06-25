@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.3.4 — 2026-06-24
+
 ### Fixed
 
 - **An unreachable network target is now `critical`, not `warning`.** Previously
