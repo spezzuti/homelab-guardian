@@ -5,6 +5,7 @@ import os
 import sys
 import time
 import traceback
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable
 
@@ -77,95 +78,108 @@ def run_collector(
         ]
 
 
-def run_scan(config_path: str) -> int:
-    config = load_config(config_path)
-    # Fire the agent fail-to-ack fallback for anything overdue from a prior push
-    # before this scan records new ones (also covers one-shot/external-cron runs).
-    try:
-        check_overdue_alerts(config_path)
-    except Exception:
-        traceback.print_exc()
+def _collect_all(config, secrets: SecretStore) -> list[HealthCheck]:
+    """Run every enabled collector; a failing collector degrades to an unknown
+    check (in run_collector) rather than aborting the scan."""
     collector_config = config.get("collectors", {})
-    secrets = build_store(config.get("secrets", {}))
-
     checks: list[HealthCheck] = []
     for name, collector in COLLECTORS.items():
         checks.extend(run_collector(name, collector, collector_config.get(name, {}), secrets))
+    return checks
 
-    database_path = config.get("app", {}).get("database_path", "data/guardian.sqlite")
-    auto_repairs: list = []
-    conn = db.connect(database_path)
+
+def _apply_acks(conn, checks: list[HealthCheck]) -> set[str]:
+    """Mark actively-acknowledged checks as muted; return their ids."""
+    acks = db.load_active_acks(conn)
+    for check in checks:
+        ack = acks.get(check.id)
+        if ack is not None:
+            check.acknowledged = True
+            check.ack_note = ack.get("note") or ""
+    return {check.id for check in checks if check.acknowledged}
+
+
+def _diff_against_previous(conn, checks: list[HealthCheck], acked_ids: set[str]):
+    """What changed since the last scan. Acknowledged checks are muted on BOTH
+    sides so a flapping known issue cannot trigger notifications."""
+    active_checks = [check for check in checks if not check.acknowledged]
+    previous = db.load_latest_scan(conn)
+    if previous is None:
+        return diff_scans(None, active_checks)
+    previous_snapshot = dict(previous[2])
+    previous_snapshot["checks"] = [
+        item
+        for item in previous_snapshot.get("checks", [])
+        if not (isinstance(item, dict) and item.get("id") in acked_ids)
+    ]
+    return diff_scans(
+        previous_snapshot, active_checks, previous_scan_id=previous[0], previous_created_at=previous[1]
+    )
+
+
+def _run_auto_repairs(config, conn, events) -> list:
+    """Deterministic reflex self-healing: for any newly-confirmed critical that
+    has an auto-approvable repair, Guardian fixes it now (loop-guarded,
+    audited). The results flow into the notification so the agent/user is
+    told what was auto-handled rather than just alarmed."""
+    from homelab_guardian import repair as _repair
+
+    auto_repairs = _repair.auto_repair_confirmed(config, conn, events)
+    for r in auto_repairs:
+        print(f"Auto-repair: {r['action']} on {r['check_id']} -> {r['status']}"
+              f"{' (recovered)' if r['recovered'] else ''}.")
+    return auto_repairs
+
+
+def run_scan(config_path: str) -> int:
+    """One scan cycle — collect, reconcile acks, diff, persist, update alerts,
+    auto-repair, prune, report, notify — on a single DB connection."""
+    config = load_config(config_path)
+    secrets = build_store(config.get("secrets", {}))
+    conn = db.connect(config.get("app", {}).get("database_path", "data/guardian.sqlite"))
     try:
-        acks = db.load_active_acks(conn)
-        for check in checks:
-            ack = acks.get(check.id)
-            if ack is not None:
-                check.acknowledged = True
-                check.ack_note = ack.get("note") or ""
+        # Fire the agent fail-to-ack fallback for anything overdue from a prior
+        # push before this scan records new ones (also covers one-shot runs).
+        try:
+            _fire_overdue_alerts(config, conn)
+        except Exception:
+            traceback.print_exc()
 
-        # Acknowledged checks are muted: change detection ignores them on
-        # both sides so a flapping known issue cannot trigger notifications.
-        acked_ids = {check.id for check in checks if check.acknowledged}
-        active_checks = [check for check in checks if not check.acknowledged]
-
-        previous = db.load_latest_scan(conn)
-        if previous is not None:
-            previous_snapshot = dict(previous[2])
-            previous_snapshot["checks"] = [
-                item
-                for item in previous_snapshot.get("checks", [])
-                if not (isinstance(item, dict) and item.get("id") in acked_ids)
-            ]
-            diff = diff_scans(
-                previous_snapshot, active_checks, previous_scan_id=previous[0], previous_created_at=previous[1]
-            )
-        else:
-            diff = diff_scans(None, active_checks)
-
+        checks = _collect_all(config, secrets)
+        acked_ids = _apply_acks(conn, checks)
+        diff = _diff_against_previous(conn, checks, acked_ids)
         narrative = explain(config.get("ai", {}), checks, diff, secrets=secrets)
-
-        snapshot = {
+        scan_id = db.save_scan(conn, {
             "app": config.get("app", {}).get("name", "Homelab Guardian"),
             "checks": [check.to_dict() for check in checks],
             "narrative": narrative,
-        }
-        scan_id = db.save_scan(conn, snapshot)
+        })
 
         telegram_config = config.get("notifications", {}).get("telegram", {})
         events = update_alert_states(conn, checks, int(telegram_config.get("confirm_scans", 1)))
-
         # Agent-mode bookkeeping: a relayed critical that has recovered (or been
         # muted by a human) no longer needs its deferred fallback tracked.
         _reconcile_pending_alerts(conn, checks)
-
-        # Deterministic reflex self-healing: for any newly-confirmed critical that
-        # has an auto-approvable repair, Guardian fixes it now (loop-guarded,
-        # audited). The results flow into the notification so the agent/user is
-        # told what was auto-handled rather than just alarmed.
-        from homelab_guardian import repair as _repair
-        auto_repairs = _repair.auto_repair_confirmed(config, conn, events)
-        for r in auto_repairs:
-            print(f"Auto-repair: {r['action']} on {r['check_id']} -> {r['status']}"
-                  f"{' (recovered)' if r['recovered'] else ''}.")
+        auto_repairs = _run_auto_repairs(config, conn, events)
 
         retention_days = float(config.get("app", {}).get("retention_days", 60))
         if retention_days > 0:
             pruned = db.prune_scans(conn, retention_days)
             if pruned:
                 print(f"Pruned {pruned} scan snapshot(s) older than {retention_days:g} days.")
+
+        report_path = config.get("app", {}).get("report_path", "reports/latest.md")
+        written = write_report(report_path, checks, scan_id=scan_id, diff=diff, narrative=narrative)
+        print(f"Wrote report: {written}")
+        print(f"Checks: {len(checks)}")
+
+        _dispatch_notifications(config, checks, events, scan_id, secrets, auto_repairs=auto_repairs, conn=conn)
     finally:
         conn.close()
-
-    report_path = config.get("app", {}).get("report_path", "reports/latest.md")
-    written = write_report(report_path, checks, scan_id=scan_id, diff=diff, narrative=narrative)
-    print(f"Wrote report: {written}")
-    print(f"Checks: {len(checks)}")
-
-    _dispatch_notifications(config, checks, events, scan_id, secrets, auto_repairs=auto_repairs)
     return 0
 
 
-def _dispatch_notifications(config, checks, events, scan_id, secrets, auto_repairs=None) -> None:
+def _dispatch_notifications(config, checks, events, scan_id, secrets, auto_repairs=None, conn=None) -> None:
     """Route confirmed transitions to the right channel.
 
     direct mode (default): Guardian messages the user over Telegram itself —
@@ -196,7 +210,7 @@ def _dispatch_notifications(config, checks, events, scan_id, secrets, auto_repai
         # fails-to-ACK, not just fails-to-deliver. The callback only DEFERS that
         # deadline (once): a still-critical, humanly-unacknowledged check falls
         # back anyway, so a misbehaving agent can't swallow a critical by acking.
-        _record_pending_criticals(config, events, auto_repairs)
+        _record_pending_criticals(config, events, auto_repairs, conn=conn)
         return
 
     if not agent_notifier.has_critical(events):
@@ -216,24 +230,25 @@ def _ack_timeout_minutes(config) -> float:
     return float(agent.get("ack_timeout_minutes", 10))
 
 
-def _record_pending_criticals(config, events, auto_repairs=None) -> None:
+def _record_pending_criticals(config, events, auto_repairs=None, conn=None) -> None:
     """Track criticals the agent accepted but must still confirm it relayed.
     Criticals Guardian already auto-repaired to recovery are excluded — they are
     resolved, so there is nothing to fall back on."""
-    from datetime import datetime, timedelta, timezone
-
     resolved = {r["check_id"] for r in (auto_repairs or []) if r.get("recovered")}
     crits = [e for e in events.confirmed
              if e.get("current_status") == "critical" and e.get("id") not in resolved]
     if not crits:
         return
     deadline = (datetime.now(timezone.utc) + timedelta(minutes=_ack_timeout_minutes(config))).isoformat()
-    conn = db.connect(config.get("app", {}).get("database_path", "data/guardian.sqlite"))
+    owns_conn = conn is None
+    if owns_conn:
+        conn = db.connect(config.get("app", {}).get("database_path", "data/guardian.sqlite"))
     try:
         for e in crits:
             db.record_pending_alert(conn, e["id"], e["current_status"], e.get("summary", ""), deadline)
     finally:
-        conn.close()
+        if owns_conn:
+            conn.close()
 
 
 def _reconcile_pending_alerts(conn, checks) -> None:
@@ -271,30 +286,40 @@ def _overdue_message(overdue: list) -> str:
 
 
 def check_overdue_alerts(config_path: str) -> None:
-    """Agent-mode safety net: if a critical pushed to the agent wasn't
-    acknowledged before its deadline, send it to the user over Telegram so it is
-    never silently lost. Cleared on a successful send; left pending to retry if
-    Telegram itself is failing. No-op unless in agent mode with the fallback on."""
+    """Agent-mode safety net, public entry for the serve/sleep loop: reloads
+    config and opens its own connection. No-op unless in agent mode with the
+    fallback on."""
     config = load_config(config_path)
     notifications = config.get("notifications", {})
     if str(notifications.get("mode", "direct")).lower() != "agent":
         return
-    agent_config = notifications.get("agent", {})
-    if not agent_config.get("critical_fallback", True):
+    if not notifications.get("agent", {}).get("critical_fallback", True):
         return
-
     conn = db.connect(config.get("app", {}).get("database_path", "data/guardian.sqlite"))
     try:
-        overdue = db.overdue_pending_alerts(conn)
-        if not overdue:
-            return
-        secrets = build_store(config.get("secrets", {}))
-        sent = telegram_notifier.send_text(notifications.get("telegram", {}), _overdue_message(overdue), secrets=secrets)
-        if sent:
-            db.clear_pending_alerts(conn, [o["check_id"] for o in overdue])
-            print(f"Agent fallback: {len(overdue)} unacknowledged critical(s) sent to Telegram.")
+        _fire_overdue_alerts(config, conn)
     finally:
         conn.close()
+
+
+def _fire_overdue_alerts(config, conn) -> None:
+    """If a critical pushed to the agent wasn't acknowledged before its
+    deadline, send it to the user over Telegram so it is never silently lost.
+    Cleared on a successful send; left pending to retry if Telegram itself is
+    failing."""
+    notifications = config.get("notifications", {})
+    if str(notifications.get("mode", "direct")).lower() != "agent":
+        return
+    if not notifications.get("agent", {}).get("critical_fallback", True):
+        return
+    overdue = db.overdue_pending_alerts(conn)
+    if not overdue:
+        return
+    secrets = build_store(config.get("secrets", {}))
+    sent = telegram_notifier.send_text(notifications.get("telegram", {}), _overdue_message(overdue), secrets=secrets)
+    if sent:
+        db.clear_pending_alerts(conn, [o["check_id"] for o in overdue])
+        print(f"Agent fallback: {len(overdue)} unacknowledged critical(s) sent to Telegram.")
 
 
 def load_dotenv(path: str | Path = ".env") -> int:
@@ -323,8 +348,6 @@ def load_dotenv(path: str | Path = ".env") -> int:
 
 
 def run_ack(config_path: str, command: str, check_id: str | None, note: str, days: float, until: str) -> int:
-    from datetime import datetime, timedelta, timezone
-
     config = load_config(config_path)
     conn = db.connect(config.get("app", {}).get("database_path", "data/guardian.sqlite"))
     try:
@@ -483,7 +506,6 @@ def run_scan_loop(config_path: str, interval_seconds: int) -> int:
                 # scan-before-DNS doesn't flip every network check to a false
                 # warning. Later scans run ungated — a real outage must surface.
                 from homelab_guardian.network_ready import wait_for_network_ready
-                from homelab_guardian.config import load_config
 
                 try:
                     wait_for_network_ready(load_config(config_path))
