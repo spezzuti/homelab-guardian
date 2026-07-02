@@ -114,7 +114,7 @@ def apply_collector_toggles(text: str, desired: dict[str, bool]) -> str:
 
     for name, enabled in desired.items():
         value = "true" if enabled else "false"
-        header = next((j for j, l in enumerate(block) if _is_key_at_indent(l, 2, name)), None)
+        header = next((j for j, line in enumerate(block) if _is_key_at_indent(line, 2, name)), None)
         if header is None:
             block.insert(0, f"  {name}:")
             block.insert(1, f"    enabled: {value}")
@@ -122,10 +122,10 @@ def apply_collector_toggles(text: str, desired: dict[str, bool]) -> str:
         # Sub-block spans until the next indent-2 key.
         sub_end = len(block)
         for j in range(header + 1, len(block)):
-            l = block[j]
-            if not l.strip() or l.lstrip().startswith("#"):
+            line = block[j]
+            if not line.strip() or line.lstrip().startswith("#"):
                 continue
-            if len(l) - len(l.lstrip(" ")) <= 2:
+            if len(line) - len(line.lstrip(" ")) <= 2:
                 sub_end = j
                 break
         enabled_idx = next(

@@ -3,7 +3,7 @@ from __future__ import annotations
 import subprocess
 from typing import Any, Callable
 
-from homelab_guardian.models import HealthCheck
+from homelab_guardian.models import HealthCheck, HealthStatus
 
 # Two questions a homelab owner forgets between logins: are there security
 # updates waiting, and is the box running an old kernel because nobody
@@ -52,7 +52,7 @@ def collect(
     try:
         result = runner([_APT_CHECK], capture_output=True, text=True, timeout=30)
     except FileNotFoundError:
-        status = "warning" if reboot_required else "unknown"
+        status: HealthStatus = "warning" if reboot_required else "unknown"
         summary = (
             "A reboot is required to finish applying updates."
             if reboot_required

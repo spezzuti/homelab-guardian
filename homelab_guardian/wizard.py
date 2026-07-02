@@ -433,7 +433,7 @@ def run_init(output_path: str = "config.yaml", force: bool = False, discover_net
         unit = _ask("  Unit to allow restarting (e.g. marcus-backup.service)")
         if unit:
             repair = {"unit": unit}
-            print(f"  Grant Guardian's user a scoped sudoers line for just this, e.g.:")
+            print("  Grant Guardian's user a scoped sudoers line for just this, e.g.:")
             print(f"    <user> ALL=(root) NOPASSWD: /usr/bin/systemctl restart {unit}")
             print("  (user-bus units need no sudo). See docs/repair.md for the privilege model.")
     print()

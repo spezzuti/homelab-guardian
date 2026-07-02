@@ -73,6 +73,8 @@ def fetch_cert_expiry(host: str, port: int = 443, timeout: float = 5.0) -> tuple
         with socket.create_connection((host, port), timeout=timeout) as raw:
             with context.wrap_socket(raw, server_hostname=host) as tls_sock:
                 der = tls_sock.getpeercert(binary_form=True)
+        if der is None:
+            raise ssl.SSLError("server sent no certificate")
         not_before, not_after = parse_der_validity(der)
         return not_before, not_after, True
     except ssl.SSLError:
@@ -84,5 +86,7 @@ def fetch_cert_expiry(host: str, port: int = 443, timeout: float = 5.0) -> tuple
     with socket.create_connection((host, port), timeout=timeout) as raw:
         with context.wrap_socket(raw, server_hostname=host) as tls_sock:
             der = tls_sock.getpeercert(binary_form=True)
+    if der is None:
+        raise ssl.SSLError("server sent no certificate")
     not_before, not_after = parse_der_validity(der)
     return not_before, not_after, False

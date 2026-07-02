@@ -8,7 +8,7 @@ from typing import Any
 import requests
 import urllib3
 
-from homelab_guardian.models import HealthCheck
+from homelab_guardian.models import HealthCheck, HealthStatus
 from homelab_guardian.tls import fetch_cert_expiry
 
 
@@ -19,7 +19,7 @@ def _expected_status(item: dict[str, Any]) -> set[int]:
     return {int(code) for code in expected}
 
 
-def _unreachable_status(item: dict[str, Any]) -> str:
+def _unreachable_status(item: dict[str, Any]) -> HealthStatus:
     """Severity for a target Guardian was told to watch but cannot reach AT ALL
     (connection refused, no response, name won't resolve, no TLS handshake).
 

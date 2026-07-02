@@ -4,7 +4,7 @@ import json
 import subprocess
 from typing import Any, Callable
 
-from homelab_guardian.models import HealthCheck
+from homelab_guardian.models import HealthCheck, HealthStatus
 
 # Read-only systemd inspection via systemctl. Two layers:
 #   1. A sweep per bus (system, optionally user) for failed units and
@@ -202,7 +202,7 @@ def _watched_unit(
             check_id, name, "warning", f"{unit} is transitioning (state: {active}/{sub}).", evidence,
             "Re-check shortly; persistent transitioning states usually mean a slow or wedged start.",
         )
-    status = "critical" if required else "warning"
+    status: HealthStatus = "critical" if required else "warning"
     return HealthCheck(
         check_id,
         name,

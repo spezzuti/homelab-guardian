@@ -45,7 +45,7 @@ def build_payload(
     by_id = {c.id: c for c in checks}
 
     def enrich(event: dict[str, Any]) -> dict[str, Any]:
-        check = by_id.get(event.get("id"))
+        check = by_id.get(str(event.get("id") or ""))
         item = {
             "id": event.get("id"),
             "name": event.get("name"),

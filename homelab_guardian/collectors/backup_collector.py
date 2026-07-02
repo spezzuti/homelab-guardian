@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from homelab_guardian.collectors._util import ProbeTimeout, probe_with_timeout
-from homelab_guardian.models import HealthCheck
+from homelab_guardian.models import HealthCheck, HealthStatus
 
 # A backup path on a dropped NFS/CIFS mount can make stat()/rglob() block in the
 # kernel indefinitely. Bound the filesystem walk so one hung destination can't
@@ -127,7 +127,7 @@ def collect(config: dict[str, Any], secrets: Any = None) -> list[HealthCheck]:
         path = Path(path_value).expanduser()
         try:
             if not probe_with_timeout(path.exists, probe_timeout):
-                status = "critical" if required else "warning"
+                status: HealthStatus = "critical" if required else "warning"
                 checks.append(
                     HealthCheck(
                         check_id,
