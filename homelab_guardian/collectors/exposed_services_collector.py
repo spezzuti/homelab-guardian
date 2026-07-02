@@ -93,18 +93,18 @@ def collect(
         )]
 
     listeners = _parse_ss(result.stdout or "")
-    exposed = [l for l in listeners if not _is_loopback(l["address"])]
+    exposed = [ln for ln in listeners if not _is_loopback(ln["address"])]
     flagged = [
-        {**l, "service": sensitive[l["port"]]}
-        for l in exposed
-        if l["port"] in sensitive and l["port"] not in allow
+        {**ln, "service": sensitive[ln["port"]]}
+        for ln in exposed
+        if ln["port"] in sensitive and ln["port"] not in allow
     ]
     # de-duplicate flagged ports for a readable summary
     flagged_ports = sorted({(f["service"], f["port"]) for f in flagged}, key=lambda x: x[1])
 
     evidence = {
         "exposed_count": len(exposed),
-        "exposed": sorted(({"proto": l["proto"], "address": l["address"], "port": l["port"]} for l in exposed), key=lambda x: x["port"]),
+        "exposed": sorted(({"proto": ln["proto"], "address": ln["address"], "port": ln["port"]} for ln in exposed), key=lambda x: x["port"]),
         "sensitive_exposed": [{"service": s, "port": p} for s, p in flagged_ports],
         "allowed_ports": sorted(allow),
     }

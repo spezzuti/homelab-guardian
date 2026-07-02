@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from homelab_guardian.config import load_config
-from homelab_guardian.models import HealthCheck
+from homelab_guardian.models import HealthCheck, HealthStatus
 from homelab_guardian.reports.markdown_report import render
 from homelab_guardian.secrets import SecretStore, build_store
 
@@ -345,7 +345,7 @@ def _check_repair_config(config: dict[str, Any]) -> HealthCheck | None:
     destructive = enabled & {"docker_prune", "prune_dir"}
     auto_destructive = [n for n in destructive if (playbooks.get(n) or {}).get("auto_approve")]
 
-    status = "warning" if warnings else "ok"
+    status: HealthStatus = "warning" if warnings else "ok"
     summary = (f"{len(enabled)} repair playbook(s) enabled"
                + (f"; {len(warnings)} warning(s)." if warnings else "; configuration looks sane."))
     return HealthCheck(

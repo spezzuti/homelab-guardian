@@ -643,7 +643,8 @@ _REPAIR_STATUS_CLASS = {
 
 
 def _render_proposal(p: dict[str, Any], *, editable: bool, csrf_token: str) -> str:
-    plan = p.get("plan_json") if isinstance(p.get("plan_json"), dict) else {}
+    plan_raw = p.get("plan_json")
+    plan: dict[str, Any] = plan_raw if isinstance(plan_raw, dict) else {}
     argv = " ".join(p.get("argv") or plan.get("argv") or [])
     status = str(p.get("status", "proposed"))
     status_cls = _REPAIR_STATUS_CLASS.get(status, "unk")
@@ -851,7 +852,7 @@ class GuardianRequestHandler(BaseHTTPRequestHandler):
             csrf_token=csrf,
             identity=identity,
             saved=query.get("saved") == ["1"],
-            error=(query.get("error") or [None])[0],
+            error=next(iter(query.get("error") or []), None),
             auth_mode=self.auth_mode,
         ))
 
@@ -864,6 +865,9 @@ class GuardianRequestHandler(BaseHTTPRequestHandler):
             )
             return
         identity = self.auth.identify(self)
+        if identity is None:  # unreachable behind _editable(), but fail closed
+            self._send("Authentication required.", status=403, content_type="text/plain; charset=utf-8")
+            return
         form = parse_qs(self._post_body)
         if not self._check_csrf(identity.user, (form.get("csrf") or [""])[0]):
             self._send(
@@ -907,8 +911,8 @@ class GuardianRequestHandler(BaseHTTPRequestHandler):
             editable=self._editable(),
             csrf_token=self._csrf_token(identity.user) if identity else "",
             repair_enabled=enabled,
-            notice=(query.get("ok") or [None])[0],
-            error=(query.get("error") or [None])[0],
+            notice=next(iter(query.get("ok") or []), None),
+            error=next(iter(query.get("error") or []), None),
         ))
 
     def _save_repair_decision(self) -> None:
@@ -921,6 +925,9 @@ class GuardianRequestHandler(BaseHTTPRequestHandler):
             self._send("Repairs are disabled.", status=403, content_type="text/plain; charset=utf-8")
             return
         identity = self.auth.identify(self)
+        if identity is None:  # unreachable behind _editable(), but fail closed
+            self._send("Authentication required.", status=403, content_type="text/plain; charset=utf-8")
+            return
         form = parse_qs(self._post_body)
         if not self._check_csrf(identity.user, (form.get("csrf") or [""])[0]):
             self._send("Invalid form token — reload the repairs page and try again.",

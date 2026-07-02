@@ -180,7 +180,7 @@ def list_repair_proposals(conn, limit=20) -> list[dict[str, Any]]:
     rows = conn.execute(
         f"SELECT {_REPAIR_COLUMNS} FROM repair_proposals ORDER BY id DESC LIMIT ?", (limit,)
     ).fetchall()
-    return [_repair_dict(r) for r in rows]
+    return [d for r in rows if (d := _repair_dict(r)) is not None]
 
 
 def count_recent_repair_executions(conn, action, check_id, since_iso) -> int:
@@ -363,4 +363,4 @@ def save_scan(conn: sqlite3.Connection, snapshot: dict[str, Any]) -> int:
         (created_at, payload),
     )
     conn.commit()
-    return int(cursor.lastrowid)
+    return int(cursor.lastrowid or 0)

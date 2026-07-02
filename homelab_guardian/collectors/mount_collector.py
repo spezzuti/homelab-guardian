@@ -4,7 +4,7 @@ import os
 from typing import Any
 
 from homelab_guardian.collectors._util import ProbeTimeout, probe_with_timeout
-from homelab_guardian.models import HealthCheck
+from homelab_guardian.models import HealthCheck, HealthStatus
 
 # Verifies that configured mountpoints are actually mounted. A dropped NAS/NFS/
 # CIFS mount is a common silent homelab failure: the mountpoint directory still
@@ -51,7 +51,7 @@ def collect(config: dict[str, Any], secrets: Any = None) -> list[HealthCheck]:
         except ProbeTimeout:
             # A stat that never returns is itself the failure this collector looks
             # for — a hung share reads as "not mounted", just with a clearer why.
-            status = "critical" if required else "warning"
+            status: HealthStatus = "critical" if required else "warning"
             checks.append(HealthCheck(
                 check_id, name, status,
                 f"{path} did not respond within {probe_timeout:g}s (stale or hung mount?).",

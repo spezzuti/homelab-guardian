@@ -5,7 +5,7 @@ import subprocess
 from datetime import datetime, timezone
 from typing import Any, Callable
 
-from homelab_guardian.models import HealthCheck
+from homelab_guardian.models import HealthCheck, HealthStatus
 
 # The backup you never check is the backup you don't have. The existing
 # `backups` collector watches a directory's freshness; this one watches the
@@ -41,7 +41,7 @@ def _parse_iso(value: str) -> datetime | None:
     return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
-def _age_status(age_hours: float, warn: float, crit: float) -> str:
+def _age_status(age_hours: float, warn: float, crit: float) -> HealthStatus:
     if age_hours >= crit:
         return "critical"
     if age_hours >= warn:
