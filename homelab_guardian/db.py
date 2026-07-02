@@ -144,6 +144,21 @@ def set_repair_decision(conn, proposal_id, status, decided_by) -> bool:
     return cur.rowcount > 0
 
 
+def claim_repair_execution(conn, proposal_id, result, verify) -> bool:
+    """Atomically move a proposal from 'approved' to 'running' — the same
+    conditional-UPDATE pattern as set_repair_decision, so two concurrent
+    execute() calls cannot both claim (and run) the same proposal. Returns True
+    if this caller won the claim."""
+    now = datetime.now(timezone.utc).isoformat()
+    cur = conn.execute(
+        "UPDATE repair_proposals SET status = 'running', executed_at = ?, result_json = ?, verify_json = ? "
+        "WHERE id = ? AND status = 'approved'",
+        (now, json.dumps(result), json.dumps(verify), proposal_id),
+    )
+    conn.commit()
+    return cur.rowcount > 0
+
+
 def record_repair_execution(conn, proposal_id, status, result, verify) -> None:
     now = datetime.now(timezone.utc).isoformat()
     conn.execute(
