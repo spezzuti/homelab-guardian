@@ -38,3 +38,14 @@ def test_missing_path_is_unknown():
 
 def test_no_mounts_configured_is_quiet():
     assert mount_collector.collect({"mounts": []}) == []
+
+
+def test_hung_mount_times_out_instead_of_hanging(monkeypatch):
+    # A stat that never returns (dropped NFS/CIFS) must be bounded — the check
+    # degrades to critical for a required mount, it does not stall the scan.
+    import time
+
+    monkeypatch.setattr(mount_collector, "_probe", lambda path: time.sleep(30))
+    c = mount_collector.collect({"mounts": [{"path": "/mnt/nas", "probe_timeout_seconds": 0.1}]})[0]
+    assert c.status == "critical"
+    assert c.evidence["probe_timed_out"] is True

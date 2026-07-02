@@ -4,7 +4,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from homelab_guardian.collectors._util import ProbeTimeout, probe_with_timeout
 from homelab_guardian.models import HealthCheck
+
+# A backup path on a dropped NFS/CIFS mount can make stat()/rglob() block in the
+# kernel indefinitely. Bound the filesystem walk so one hung destination can't
+# stall the whole scan. Generous by default (large backup trees are legitimately
+# slow to walk); override per-path with `probe_timeout_seconds`.
+DEFAULT_PROBE_TIMEOUT = 30.0
 
 
 def _latest_file_mtime(path: Path) -> tuple[float | None, Path | None, int]:
@@ -64,6 +71,18 @@ def _max_age_days(item: dict[str, Any]) -> float:
     return 1.0
 
 
+def _critical_age_days(item: Any, max_age_days: float) -> float:
+    """When a *required* backup is this stale it is critical, not just a warning
+    — a backup job that silently died days ago is a data-loss risk, matching
+    backup_health's escalation. Defaults to 3× the freshness window."""
+    if isinstance(item, dict):
+        if "critical_age_days" in item:
+            return float(item["critical_age_days"])
+        if "critical_age_hours" in item:
+            return float(item["critical_age_hours"]) / 24
+    return max_age_days * 3
+
+
 def collect(config: dict[str, Any], secrets: Any = None) -> list[HealthCheck]:
     checks: list[HealthCheck] = []
     paths = config.get("paths", []) or []
@@ -83,12 +102,14 @@ def collect(config: dict[str, Any], secrets: Any = None) -> list[HealthCheck]:
             max_age_days = _max_age_days(item)
             required = bool(item.get("required", True))
             check_id = item.get("id") or f"backup_{str(name).lower().replace(' ', '_')}"
+            probe_timeout = float(item.get("probe_timeout_seconds", DEFAULT_PROBE_TIMEOUT))
         else:
             path_value = str(item)
             name = path_value
             max_age_days = 1.0
             required = True
             check_id = f"backup_{name}"
+            probe_timeout = DEFAULT_PROBE_TIMEOUT
 
         if not path_value:
             checks.append(
@@ -105,7 +126,7 @@ def collect(config: dict[str, Any], secrets: Any = None) -> list[HealthCheck]:
 
         path = Path(path_value).expanduser()
         try:
-            if not path.exists():
+            if not probe_with_timeout(path.exists, probe_timeout):
                 status = "critical" if required else "warning"
                 checks.append(
                     HealthCheck(
@@ -129,7 +150,9 @@ def collect(config: dict[str, Any], secrets: Any = None) -> list[HealthCheck]:
                 )
                 continue
 
-            newest_mtime, newest_path, file_count = _latest_file_mtime(path)
+            newest_mtime, newest_path, file_count = probe_with_timeout(
+                lambda: _latest_file_mtime(path), probe_timeout
+            )
             if newest_mtime is None or newest_path is None:
                 status = "critical" if required else "unknown"
                 checks.append(
@@ -158,8 +181,16 @@ def collect(config: dict[str, Any], secrets: Any = None) -> list[HealthCheck]:
             age_hours = (now - latest).total_seconds() / 3600
             age_days = age_hours / 24
             max_age_hours = max_age_days * 24
-            status = "ok" if age_hours <= max_age_hours else "warning"
-            action = "No action required." if status == "ok" else "Check whether the backup job has stopped or the destination is stale."
+            critical_age_hours = _critical_age_days(item, max_age_days) * 24
+            if age_hours <= max_age_hours:
+                status = "ok"
+                action = "No action required."
+            elif required and age_hours >= critical_age_hours:
+                status = "critical"
+                action = "A required backup has been stale for too long — the job likely died. Fix it before the last good copy ages out."
+            else:
+                status = "warning"
+                action = "Check whether the backup job has stopped or the destination is stale."
             summary = f"Newest backup file is {round(age_days, 2)} days / {round(age_hours, 2)} hours old."
             checks.append(
                 HealthCheck(
@@ -179,6 +210,17 @@ def collect(config: dict[str, Any], secrets: Any = None) -> list[HealthCheck]:
                         file_count=file_count,
                     ),
                     action,
+                )
+            )
+        except ProbeTimeout:
+            checks.append(
+                HealthCheck(
+                    check_id,
+                    f"Backup freshness: {name}",
+                    "unknown",
+                    f"Backup path did not respond within {probe_timeout:g}s (stale/hung mount, or a very large tree).",
+                    {"path": str(path), "required": required, "probe_timed_out": True},
+                    "Check whether the backup mount is stale/hung; if the tree is just large, raise probe_timeout_seconds for this path.",
                 )
             )
         except Exception as exc:

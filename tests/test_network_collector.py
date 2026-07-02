@@ -70,3 +70,33 @@ def test_dns_unresolvable_can_opt_out_to_warning():
                          "critical_on_unreachable": False}]}
     )
     assert checks[0].status == "warning"
+
+
+def test_malformed_item_degrades_only_that_check():
+    # A single bad numeric value must NOT abort the whole collector and wipe
+    # every other target's result — it degrades only its own check to unknown.
+    checks = network_collector.collect(
+        {
+            "tcp_checks": [
+                {"id": "bad", "host": "127.0.0.1", "port": "https", "timeout": 1},
+                {"id": "good", "host": "127.0.0.1", "port": 1, "timeout": 1},
+            ]
+        }
+    )
+    by_id = {c.id: c for c in checks}
+    assert by_id["bad"].status == "unknown"
+    assert by_id["good"].status == "critical"  # port 1 refused = reachable check still ran
+
+
+def test_http_invalid_expected_status_is_unknown():
+    checks = network_collector.collect(
+        {"http_checks": [{"id": "h1", "url": "http://127.0.0.1:1", "expected_status": "abc"}]}
+    )
+    assert checks[0].status == "unknown"
+
+
+def test_tls_invalid_port_is_unknown():
+    checks = network_collector.collect(
+        {"tls_checks": [{"id": "t1", "host": "example.com", "port": "https"}]}
+    )
+    assert checks[0].status == "unknown"

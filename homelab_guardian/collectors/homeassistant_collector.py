@@ -120,7 +120,9 @@ def collect(config: dict[str, Any], secrets: Any = None) -> list[HealthCheck]:
             )
         ]
 
-    unavailable = [s for s in states if s.get("state") in {"unavailable", "unknown"}]
+    # Guard each element: a proxy or a malformed API response can slip a non-dict
+    # into the list, and an unguarded s.get(...) would crash the whole collector.
+    unavailable = [s for s in states if isinstance(s, dict) and s.get("state") in {"unavailable", "unknown"}]
     if not unavailable:
         return [
             _check(

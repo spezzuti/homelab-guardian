@@ -78,17 +78,25 @@ def collect(config: dict[str, Any], secrets: Any = None) -> list[HealthCheck]:
         name = item.get("name") or f"TCP check: {item.get('host', 'unknown')}:{item.get('port', 'unknown')}"
         host = item.get("host")
         port = item.get("port")
-        timeout = float(item.get("timeout", 3))
         if not host or not port:
             checks.append(HealthCheck(check_id, name, "unknown", "TCP check is missing host or port.", item, "Add host and port or remove this check.", group=group))
             continue
+        # Coerce per-item numerics inside the item's own guard: a single bad
+        # value must degrade only THIS check to unknown, never raise out of
+        # collect() and wipe every other target's result.
         try:
-            with socket.create_connection((host, int(port)), timeout=timeout):
+            port_num = int(port)
+            timeout = float(item.get("timeout", 3))
+        except (TypeError, ValueError):
+            checks.append(HealthCheck(check_id, name, "unknown", "TCP check has an invalid port or timeout.", {"host": host, "port": port, "timeout": item.get("timeout")}, "Set port to an integer and timeout to a number of seconds.", group=group))
+            continue
+        try:
+            with socket.create_connection((host, port_num), timeout=timeout):
                 checks.append(
                     HealthCheck(
                         check_id, name, "ok",
                         f"{host}:{port} accepted a TCP connection.",
-                        {"host": host, "port": int(port), "timeout_seconds": timeout},
+                        {"host": host, "port": port_num, "timeout_seconds": timeout},
                         "No action required.", group=group,
                     )
                 )
@@ -107,14 +115,20 @@ def collect(config: dict[str, Any], secrets: Any = None) -> list[HealthCheck]:
         check_id = item.get("id") or f"http_{item.get('url', 'unknown')}"
         name = item.get("name") or f"HTTP check: {item.get('url', 'unknown')}"
         url = item.get("url")
-        timeout = float(item.get("timeout", 5))
+        if not url:
+            checks.append(HealthCheck(check_id, name, "unknown", "HTTP check is missing a URL.", item, "Add a URL or remove this check.", group=group))
+            continue
         method = str(item.get("method", "GET")).upper()
-        expected = _expected_status(item)
         # Homelab services commonly use self-signed certificates. verify_tls: false
         # keeps the reachability check useful without forcing users to install CAs.
         verify_tls = bool(item.get("verify_tls", True))
-        if not url:
-            checks.append(HealthCheck(check_id, name, "unknown", "HTTP check is missing a URL.", item, "Add a URL or remove this check.", group=group))
+        # Guard the numeric/expected-status parsing per item so one bad value
+        # degrades only this check instead of aborting the whole collector.
+        try:
+            timeout = float(item.get("timeout", 5))
+            expected = _expected_status(item)
+        except (TypeError, ValueError):
+            checks.append(HealthCheck(check_id, name, "unknown", "HTTP check has an invalid timeout or expected_status.", {"url": url, "timeout": item.get("timeout"), "expected_status": item.get("expected_status", item.get("expected_statuses"))}, "Set timeout to a number and expected_status to an integer or list of integers.", group=group))
             continue
         try:
             with warnings.catch_warnings():
@@ -147,15 +161,25 @@ def collect(config: dict[str, Any], secrets: Any = None) -> list[HealthCheck]:
     for item in config.get("tls_checks", []) or []:
         group = item.get("group") or "Certificates"
         host = item.get("host")
-        port = int(item.get("port", 443))
-        check_id = item.get("id") or f"tls_{host}_{port}"
-        name = item.get("name") or f"TLS certificate: {host}"
-        warn_days = float(item.get("warn_days", 14))
-        critical_days = float(item.get("critical_days", 3))
-        timeout = float(item.get("timeout", 5))
         if not host:
+            check_id = item.get("id") or f"tls_{host}_{item.get('port', 443)}"
+            name = item.get("name") or f"TLS certificate: {host}"
             checks.append(HealthCheck(check_id, name, "unknown", "TLS check is missing a host.", item, "Add a host or remove this check.", group=group))
             continue
+        # Guard the numeric parsing per item so a bad port/day/timeout value
+        # degrades only this check instead of aborting the whole collector.
+        try:
+            port = int(item.get("port", 443))
+            warn_days = float(item.get("warn_days", 14))
+            critical_days = float(item.get("critical_days", 3))
+            timeout = float(item.get("timeout", 5))
+        except (TypeError, ValueError):
+            check_id = item.get("id") or f"tls_{host}"
+            name = item.get("name") or f"TLS certificate: {host}"
+            checks.append(HealthCheck(check_id, name, "unknown", "TLS check has an invalid port, warn_days, critical_days, or timeout.", {"host": host, "port": item.get("port"), "warn_days": item.get("warn_days"), "critical_days": item.get("critical_days"), "timeout": item.get("timeout")}, "Set port and the day/timeout thresholds to numbers.", group=group))
+            continue
+        check_id = item.get("id") or f"tls_{host}_{port}"
+        name = item.get("name") or f"TLS certificate: {host}"
         try:
             not_before, not_after, verified = fetch_cert_expiry(host, port, timeout=timeout)
         except Exception as exc:

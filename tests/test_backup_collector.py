@@ -33,6 +33,26 @@ def test_stale_backup_is_warning(tmp_path):
     assert checks[0].evidence["age_days"] >= 1.9
 
 
+def test_very_stale_required_backup_is_critical(tmp_path):
+    # A required backup past its critical age (default 3x the freshness window)
+    # is a data-loss risk, not just a warning.
+    marker = tmp_path / "backup.tar"
+    marker.write_bytes(b"data")
+    ten_days_ago = time.time() - 10 * 24 * 3600
+    os.utime(marker, (ten_days_ago, ten_days_ago))
+    checks = backup_collector.collect(_config(tmp_path))  # max_age_days=1 -> crit at 3d
+    assert checks[0].status == "critical"
+
+
+def test_very_stale_optional_backup_stays_warning(tmp_path):
+    marker = tmp_path / "backup.tar"
+    marker.write_bytes(b"data")
+    ten_days_ago = time.time() - 10 * 24 * 3600
+    os.utime(marker, (ten_days_ago, ten_days_ago))
+    checks = backup_collector.collect(_config(tmp_path, required=False))
+    assert checks[0].status == "warning"
+
+
 def test_missing_required_path_is_critical(tmp_path):
     checks = backup_collector.collect(_config(tmp_path / "missing"))
     assert checks[0].status == "critical"
@@ -47,6 +67,18 @@ def test_empty_required_dir_is_critical(tmp_path):
     checks = backup_collector.collect(_config(tmp_path))
     assert checks[0].status == "critical"
     assert "no files" in checks[0].summary
+
+
+def test_hung_backup_path_times_out(tmp_path, monkeypatch):
+    # A dropped mount that makes rglob/stat block must be bounded, not hang the
+    # scan; it degrades to unknown with a clear reason.
+    (tmp_path / "backup.tar").write_bytes(b"data")
+    monkeypatch.setattr(
+        backup_collector, "_latest_file_mtime", lambda path: time.sleep(30)
+    )
+    checks = backup_collector.collect(_config(tmp_path, probe_timeout_seconds=0.1))
+    assert checks[0].status == "unknown"
+    assert checks[0].evidence["probe_timed_out"] is True
 
 
 def test_newest_file_wins_in_nested_dirs(tmp_path):
