@@ -2,6 +2,85 @@
 
 ## Unreleased
 
+## v0.3.5 — 2026-07-02
+
+### Security
+
+- **`guardian init` now actually writes the dashboard-auth, MCP, mounts, and
+  repair answers.** The wizard collected all four and then silently dropped them
+  from the generated `config.yaml` — worst case, a user answered yes to
+  password-protecting the dashboard, pasted a password into `.env`, and the
+  dashboard served **unauthenticated** while they believed it was protected (the
+  MCP-remote and repair steps were similarly no-ops). The wiring is fixed, and a
+  new end-to-end wizard test drives the prompts and asserts the *written* config
+  contains every section the user said yes to. If you ran `guardian init` on
+  v0.3.3/v0.3.4 and enabled any of these, re-run it (or add the sections by
+  hand) — check your `config.yaml` for a `web.auth` block in particular.
+- **An agent ack now *defers* the Telegram critical-fallback instead of
+  cancelling it.** Previously `acknowledge_alert_received` deleted the pending
+  alert, so a confused or compromised agent could claim "relayed" and disarm the
+  fail-to-ack safety net on its own unverifiable say-so. An ack now buys one
+  deferral window (`notifications.agent.ack_defer_minutes`, default 60; repeat
+  acks don't extend it): if the check is still critical and no human has
+  acknowledged it when the deferred deadline passes, the fallback fires anyway.
+  Tracking clears only on the real "user is covered" signals — the check
+  recovers, a human acks it (`guardian ack` / dashboard), or the fallback fires —
+  and the fallback message now distinguishes "agent never acknowledged" from
+  "agent relayed, but it's still critical".
+- **Typed destructive confirmation is now a human-held token.** The
+  `require_typed_confirmation` gate compared against the proposal id — which
+  `propose_repair` had just returned to the agent, making the gate a no-op on
+  the agent path. Approving a destructive proposal now mints a random token,
+  stored in a column excluded from every agent-readable payload and shown only
+  on the human approval surfaces (CLI approve output, dashboard notice), so the
+  gate is a genuine second human touch.
+- **Concurrent `execute()` calls can no longer run one approved repair twice.**
+  The approved→running transition is now an atomic conditional UPDATE (the same
+  single-use pattern approval already used); the losing caller is refused.
+- **OIDC login is bound to the browser that began it (login-CSRF fix).** The
+  `state` was tracked only server-side, so an attacker-initiated login's valid
+  state+code could be replayed in a victim's browser to sign them into the
+  attacker's account. `/auth/login` now sets state as a short-lived HttpOnly
+  cookie that must match (constant-time) at the callback.
+- **OIDC error pages escape exception text** — the one spot that interpolated
+  server-derived strings into HTML unescaped.
+
+### Fixed
+
+- **Collector correctness sweep:** disk `percent_used` now matches `df` (the
+  ~5% root reserve no longer delays the critical threshold); systemd
+  backup-health timestamps are requested as real UTC (`--timestamp=utc`), fixing
+  ages skewed by the server's local offset; `sshd_config` `Match` blocks are no
+  longer read as global settings (false warnings / masked real ones); a
+  container that exited with an application error (1–127) is **critical**, while
+  signal exits (`docker stop`) stay warnings.
+- **One bad target can no longer blind a whole collector:** malformed per-item
+  values (port/timeout/expected_status) degrade only that check instead of
+  collapsing every network target to `unknown`; a hung NFS/CIFS mount is probed
+  under a thread timeout, so a stale share reads as critical instead of wedging
+  the scan; non-dict Home Assistant states are guarded; a required backup past
+  its critical age (3× the freshness window) escalates to critical.
+- **`serve --interval` readers no longer 500 during a background scan** —
+  SQLite `busy_timeout` plus WAL (best-effort; some network filesystems reject
+  it) let the web threads read while the scan thread writes.
+
+### Changed
+
+- **The Docker SDK is an optional extra:** `pip install
+  'homelab-guardian[docker]'`. The core install is dependency-light again; the
+  collector degrades to a clear install-hint check without it, and the container
+  image still ships the SDK.
+
+### Internal
+
+- CI runs **ruff + mypy** on a clean baseline; collector statuses are typed as
+  `HealthStatus` literals so the check contract is enforced at type-check time.
+- `run_scan` decomposed into staged, unit-testable helpers running on a single
+  DB connection per cycle.
+- ARCHITECTURE/PROJECT docs corrected to state the real v0.3 safety boundary
+  (approval-gated repair exists; it is allowlisted argv, human-approved, never
+  raw shell).
+
 ## v0.3.4 — 2026-06-24
 
 ### Fixed
