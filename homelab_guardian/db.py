@@ -56,6 +56,9 @@ def connect(database_path: str | Path) -> sqlite3.Connection:
     # Criticals pushed to an attached agent that are awaiting the agent's
     # confirmation it relayed them. If the deadline passes unacknowledged, the
     # scan loop fires the Telegram fallback so a critical is never silently lost.
+    # An agent ack DEFERS the deadline (recorded in agent_acked_at) rather than
+    # deleting the row — only recovery, a human ack, or the fired fallback clears
+    # it, so a misbehaving agent cannot silently swallow a critical.
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS pending_alerts (
@@ -63,10 +66,15 @@ def connect(database_path: str | Path) -> sqlite3.Connection:
             status TEXT NOT NULL,
             summary TEXT NOT NULL DEFAULT '',
             pushed_at TEXT NOT NULL,
-            deadline TEXT NOT NULL
+            deadline TEXT NOT NULL,
+            agent_acked_at TEXT
         )
         """
     )
+    try:  # additive migration for databases created before agent_acked_at
+        conn.execute("ALTER TABLE pending_alerts ADD COLUMN agent_acked_at TEXT")
+    except sqlite3.OperationalError:
+        pass
     # Append-only audit + state machine for approval-gated repairs. A proposal is
     # created (proposed) → approved/denied by a human → executed → verified. See
     # docs/repair.md. Nothing here executes anything; that is homelab_guardian.repair.
@@ -219,12 +227,15 @@ def list_acks(conn: sqlite3.Connection) -> list[dict[str, Any]]:
 def record_pending_alert(
     conn: sqlite3.Connection, check_id: str, status: str, summary: str, deadline: str
 ) -> None:
-    """Mark a critical as pushed-to-agent and awaiting its acknowledgement."""
+    """Mark a critical as pushed-to-agent and awaiting its acknowledgement. A
+    re-push (fresh confirmed transition) resets any earlier agent ack — the
+    agent must confirm relaying THIS occurrence."""
     conn.execute(
         "INSERT INTO pending_alerts (check_id, status, summary, pushed_at, deadline) "
         "VALUES (?, ?, ?, ?, ?) "
         "ON CONFLICT(check_id) DO UPDATE SET status = excluded.status, "
-        "summary = excluded.summary, pushed_at = excluded.pushed_at, deadline = excluded.deadline",
+        "summary = excluded.summary, pushed_at = excluded.pushed_at, "
+        "deadline = excluded.deadline, agent_acked_at = NULL",
         (check_id, status, summary, datetime.now(timezone.utc).isoformat(), deadline),
     )
     conn.commit()
@@ -241,22 +252,48 @@ def clear_pending_alerts(conn: sqlite3.Connection, check_ids: list[str]) -> int:
     return cursor.rowcount
 
 
+def defer_pending_alerts(conn: sqlite3.Connection, check_ids: list[str], new_deadline: str) -> int:
+    """Record the agent's relayed-it ack by DEFERRING the fallback deadline —
+    once per push. Rows already deferred (agent_acked_at set) are untouched, so
+    repeated acks cannot postpone the fallback indefinitely: it fires at most
+    one deferral after the original deadline unless the check recovers or a
+    human acknowledges it. Returns rows newly deferred."""
+    if not check_ids:
+        return 0
+    now = datetime.now(timezone.utc).isoformat()
+    placeholders = ",".join("?" for _ in check_ids)
+    cursor = conn.execute(
+        f"UPDATE pending_alerts SET deadline = ?, agent_acked_at = ? "
+        f"WHERE check_id IN ({placeholders}) AND agent_acked_at IS NULL",
+        [new_deadline, now, *check_ids],
+    )
+    conn.commit()
+    return cursor.rowcount
+
+
+_PENDING_COLUMNS = "check_id, status, summary, pushed_at, deadline, agent_acked_at"
+
+
+def _pending_dict(r) -> dict[str, Any]:
+    return {"check_id": r[0], "status": r[1], "summary": r[2], "pushed_at": r[3],
+            "deadline": r[4], "agent_acked_at": r[5]}
+
+
 def list_pending_alerts(conn: sqlite3.Connection) -> list[dict[str, Any]]:
     rows = conn.execute(
-        "SELECT check_id, status, summary, pushed_at, deadline FROM pending_alerts ORDER BY deadline"
+        f"SELECT {_PENDING_COLUMNS} FROM pending_alerts ORDER BY deadline"
     ).fetchall()
-    return [{"check_id": r[0], "status": r[1], "summary": r[2], "pushed_at": r[3], "deadline": r[4]} for r in rows]
+    return [_pending_dict(r) for r in rows]
 
 
 def overdue_pending_alerts(conn: sqlite3.Connection, now: datetime | None = None) -> list[dict[str, Any]]:
     """Pending alerts whose acknowledgement deadline has passed."""
     current = (now or datetime.now(timezone.utc)).isoformat()
     rows = conn.execute(
-        "SELECT check_id, status, summary, pushed_at, deadline FROM pending_alerts "
-        "WHERE deadline <= ? ORDER BY deadline",
+        f"SELECT {_PENDING_COLUMNS} FROM pending_alerts WHERE deadline <= ? ORDER BY deadline",
         (current,),
     ).fetchall()
-    return [{"check_id": r[0], "status": r[1], "summary": r[2], "pushed_at": r[3], "deadline": r[4]} for r in rows]
+    return [_pending_dict(r) for r in rows]
 
 
 def load_active_acks(conn: sqlite3.Connection, now: datetime | None = None) -> dict[str, dict[str, Any]]:

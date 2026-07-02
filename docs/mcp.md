@@ -61,7 +61,7 @@ guessing. `guardian init` prints this same snippet for you on the way out.
 | `list_scan_history(limit)` | recent scans with per-scan overall status and counts |
 | `list_acknowledgments()` | checks currently muted, with note + expiry |
 | `list_pending_alerts()` | criticals pushed to a proactive agent awaiting relay-confirmation |
-| `acknowledge_alert_received(check_ids)` | a proactive agent confirms it relayed these criticals (see *Proactive push* below) |
+| `acknowledge_alert_received(check_ids)` | a proactive agent confirms it relayed these criticals — defers the Telegram fallback, doesn't cancel it (see *Proactive push* below) |
 
 Plus a resource: `guardian://health` (the summary as JSON).
 
@@ -142,6 +142,14 @@ payload (HMAC) and, for criticals, starts a timer: the agent calls
 arrives within `notifications.agent.ack_timeout_minutes`, Guardian sends the
 critical over Telegram itself — so a critical is never silently lost even if the
 agent accepted it but failed to act.
+
+The agent's callback **defers** that fallback rather than cancelling it (Guardian
+can't verify you actually saw the relay). If the check is still critical and no
+human has acknowledged it `notifications.agent.ack_defer_minutes` (default 60)
+after the agent's ack, the Telegram fallback fires anyway — one deferral per
+push; repeat acks don't extend it. Tracking clears only when the check recovers,
+a human acknowledges it (`guardian ack` or the dashboard), or the fallback fires.
+So even a confused or compromised agent cannot swallow a critical by acking it.
 
 This tier needs an agent that can *receive a webhook and run on its own*
 (Claude Desktop and most chat clients can't — they're pull-only). The reference

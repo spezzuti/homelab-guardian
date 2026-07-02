@@ -242,18 +242,33 @@ def pending_alerts_payload(database_path: str) -> list[dict[str, Any]]:
         conn.close()
 
 
-def acknowledge_alerts_payload(database_path: str, check_ids: list[str]) -> dict[str, Any]:
-    """Clear pending-alert tracking for the given criticals: the agent confirms it
-    relayed them, so Guardian must NOT fire its Telegram fail-to-ack fallback."""
+def acknowledge_alerts_payload(
+    database_path: str, check_ids: list[str], defer_minutes: float = 60.0
+) -> dict[str, Any]:
+    """Record the agent's relayed-it confirmation by DEFERRING the Telegram
+    fail-to-ack fallback, not cancelling it. Guardian cannot verify the user
+    actually saw the relay, so the ack buys one deferral window: if the check is
+    still critical and no human has acknowledged it when the deferred deadline
+    passes, the fallback fires anyway. Recovery or a human ack clears it."""
+    from datetime import datetime, timedelta, timezone
+
     ids = [c for c in (check_ids or []) if c]
     if not ids:
         return {"acknowledged_receipt": 0, "error": "At least one check_id is required."}
+    deadline = (datetime.now(timezone.utc) + timedelta(minutes=defer_minutes)).isoformat()
     conn = db.connect(database_path)
     try:
-        cleared = db.clear_pending_alerts(conn, ids)
+        deferred = db.defer_pending_alerts(conn, ids, deadline)
     finally:
         conn.close()
-    return {"acknowledged_receipt": cleared, "check_ids": ids}
+    return {
+        "acknowledged_receipt": deferred,
+        "check_ids": ids,
+        "fallback_deferred_until": deadline,
+        "note": "The fallback is deferred, not cancelled: it still fires at the deferred "
+                "deadline unless the check recovers or a human acknowledges it. "
+                "Already-deferred alerts are not extended by repeat calls.",
+    }
 
 
 def build_server(database_path: str, allow_writes: bool = False, config: dict[str, Any] | None = None):
@@ -319,20 +334,25 @@ def build_server(database_path: str, allow_writes: bool = False, config: dict[st
 
     @server.tool()
     def list_pending_alerts() -> list:
-        """Criticals Guardian pushed to you that you have NOT yet confirmed relaying.
-        Each one will be sent to the user over Telegram (the fail-to-ack fallback) if
-        you don't call acknowledge_alert_received before its deadline."""
+        """Criticals Guardian pushed to you that are still being tracked for the
+        Telegram fail-to-ack fallback. Call acknowledge_alert_received once you relay
+        one — that defers its fallback deadline. An entry clears only when the check
+        recovers, a human acknowledges it, or the fallback fires."""
         return pending_alerts_payload(database_path)
 
     @server.tool()
     def acknowledge_alert_received(check_ids: list[str]) -> dict:
-        """Confirm you have RELAYED these criticals to the user, so Guardian does not
-        also send them over Telegram. Call this right after you message the user about
-        a critical Guardian pushed to you. Pass the check ids from the event payload.
-        Not gated by mcp.allow_writes: it only clears Guardian's fallback bookkeeping
-        (it does not change any health state), and the fail-to-ack safety net depends
-        on it working whenever an agent is attached."""
-        return acknowledge_alerts_payload(database_path, check_ids)
+        """Confirm you have RELAYED these criticals to the user. Call this right after
+        you message the user about a critical Guardian pushed to you; pass the check
+        ids from the event payload. This DEFERS Guardian's Telegram fallback rather
+        than cancelling it: if the check is still critical and no human has
+        acknowledged it when the deferred deadline passes, Guardian messages the user
+        directly anyway (your ack cannot silently swallow a critical). Not gated by
+        mcp.allow_writes: it only adjusts Guardian's fallback bookkeeping and does not
+        change any health state."""
+        agent_cfg = (config.get("notifications", {}) or {}).get("agent", {}) or {}
+        defer_minutes = float(agent_cfg.get("ack_defer_minutes", 60))
+        return acknowledge_alerts_payload(database_path, check_ids, defer_minutes=defer_minutes)
 
     @server.resource("guardian://health")
     def health_resource() -> str:
