@@ -623,10 +623,35 @@ def test_typed_confirmation_blocks_then_allows(tmp_path, monkeypatch):
     config = _prune_config(tmp_path)
     config["repair"]["require_typed_confirmation"] = True
     pid = repair.propose(config, conn, DISK_CHECK_ID, "prune_dir")["proposal_id"]
-    repair.approve(conn, pid, "alice")
+    approved = repair.approve(conn, pid, "alice")
+    token = approved["confirm_token"]  # minted for destructive actions, human-held
     with pytest.raises(repair.RepairError, match="typed confirmation"):
         repair.execute(config, conn, pid, runner=_prune_runner())  # no token
+    with pytest.raises(repair.RepairError, match="typed confirmation"):
+        # The proposal id the agent already holds is NOT the token.
+        repair.execute(config, conn, pid, runner=_prune_runner(), confirmation=str(pid))
     import homelab_guardian.collectors.disk_collector as dc
     monkeypatch.setattr(dc, "collect", lambda config, secrets=None: [_disk_check("ok"), _backup_check("ok")])
-    res = repair.execute(config, conn, pid, runner=_prune_runner(), confirmation=str(pid))
+    res = repair.execute(config, conn, pid, runner=_prune_runner(), confirmation=token)
     assert res["status"] == "executed"
+
+
+def test_confirm_token_never_leaks_into_payloads(tmp_path):
+    """The token gates a destructive run on a second human touch, so it must be
+    invisible to everything an agent can read: get/list proposal payloads (the
+    MCP repair tools are built from these)."""
+    conn = db.connect(str(tmp_path / "g.sqlite"))
+    db.save_scan(conn, {"app": "HG", "checks": [_disk_check().to_dict(), _backup_check("ok").to_dict()]})
+    config = _prune_config(tmp_path)
+    pid = repair.propose(config, conn, DISK_CHECK_ID, "prune_dir")["proposal_id"]
+    token = repair.approve(conn, pid, "alice")["confirm_token"]
+    assert token and token != str(pid)
+    for payload in (db.get_repair_proposal(conn, pid), *db.list_repair_proposals(conn)):
+        assert "confirm_token" not in payload
+        assert token not in str(payload)
+
+
+def test_non_destructive_approval_mints_no_token(tmp_path):
+    conn = _seed(tmp_path)
+    pid = repair.propose(_config(tmp_path), conn, CHECK_ID, "restart_systemd_unit")["proposal_id"]
+    assert "confirm_token" not in repair.approve(conn, pid, "alice")
