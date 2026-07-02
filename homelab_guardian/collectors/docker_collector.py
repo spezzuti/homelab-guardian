@@ -222,7 +222,7 @@ def collect(config: dict[str, Any], secrets: Any = None) -> list[HealthCheck]:
                 "unknown",
                 "Docker collector is enabled, but the Docker SDK could not be imported.",
                 {"error": str(exc)},
-                "Install dependencies with pip install -r requirements.txt.",
+                "Install the Docker extra: pip install 'homelab-guardian[docker]'.",
             )
         ]
 
