@@ -11,6 +11,18 @@ def connect(database_path: str | Path) -> sqlite3.Connection:
     path = Path(database_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(path)
+    # In serve --interval mode the background scan thread writes while web
+    # request threads read the same file. Without these a reader hitting a
+    # concurrent write raises "database is locked" and 500s. busy_timeout makes
+    # it wait for the lock (per connection); WAL lets readers and a writer work
+    # concurrently (persists on the db file once set).
+    conn.execute("PRAGMA busy_timeout = 5000")
+    try:
+        conn.execute("PRAGMA journal_mode = WAL")
+    except sqlite3.OperationalError:
+        # Some filesystems (e.g. certain network mounts) reject WAL; the default
+        # rollback journal still works, just with less read/write concurrency.
+        pass
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS scans (
