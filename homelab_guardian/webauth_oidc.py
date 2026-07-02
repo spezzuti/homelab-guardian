@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import html
 import json
 import os
 import secrets as secrets_mod
@@ -244,7 +245,10 @@ class OidcAuth(Authenticator):
             claims = decode_jwt_payload(id_token)
             validate_claims(claims, self.client_id, self.issuer, nonce)
         except Exception as exc:
-            handler._send(f"Login failed: {exc}. <a href=\"/auth/login\">Try again</a>.", status=400)
+            handler._send(
+                f"Login failed: {html.escape(str(exc))}. <a href=\"/auth/login\">Try again</a>.",
+                status=400,
+            )
             return
 
         groups = tuple(claims.get("groups", []) or [])
