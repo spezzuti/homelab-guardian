@@ -414,3 +414,9 @@ notifications:
     # Catches "agent accepted it but never told me" (vs. critical_fallback above,
     # which catches "agent was unreachable"). Needs the agent wired to call back.
     ack_timeout_minutes: 10
+    # The agent's ack DEFERS the fallback, it does not cancel it: if the check is
+    # still critical and no human has acknowledged it this many minutes after the
+    # agent's ack, Guardian sends it over Telegram anyway. One deferral per push —
+    # repeat acks don't extend it. Tracking clears only when the check recovers,
+    # a human acks it (`guardian ack` / dashboard), or the fallback fires.
+    ack_defer_minutes: 60

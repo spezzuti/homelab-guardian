@@ -134,6 +134,10 @@ def run_scan(config_path: str) -> int:
         telegram_config = config.get("notifications", {}).get("telegram", {})
         events = update_alert_states(conn, checks, int(telegram_config.get("confirm_scans", 1)))
 
+        # Agent-mode bookkeeping: a relayed critical that has recovered (or been
+        # muted by a human) no longer needs its deferred fallback tracked.
+        _reconcile_pending_alerts(conn, checks)
+
         # Deterministic reflex self-healing: for any newly-confirmed critical that
         # has an auto-approvable repair, Guardian fixes it now (loop-guarded,
         # audited). The results flow into the notification so the agent/user is
@@ -189,7 +193,9 @@ def _dispatch_notifications(config, checks, events, scan_id, secrets, auto_repai
         # agent's callback (the acknowledge_alert_received MCP tool, called once
         # it has relayed them). If no callback arrives before the deadline, the
         # scan loop's overdue check fires the Telegram fallback — true
-        # fails-to-ACK, not just fails-to-deliver.
+        # fails-to-ACK, not just fails-to-deliver. The callback only DEFERS that
+        # deadline (once): a still-critical, humanly-unacknowledged check falls
+        # back anyway, so a misbehaving agent can't swallow a critical by acking.
         _record_pending_criticals(config, events, auto_repairs)
         return
 
@@ -230,17 +236,37 @@ def _record_pending_criticals(config, events, auto_repairs=None) -> None:
         conn.close()
 
 
+def _reconcile_pending_alerts(conn, checks) -> None:
+    """Clear agent-acked (deferred) pending alerts whose check is no longer an
+    active critical — the agent relayed it and the problem is resolved or muted,
+    so there is nothing left to fall back on. Un-acked entries are kept even if
+    recovered: their overdue fallback doubles as the agent-down signal."""
+    still_critical = {c.id for c in checks if c.status == "critical" and not c.acknowledged}
+    resolved = [p["check_id"] for p in db.list_pending_alerts(conn)
+                if p.get("agent_acked_at") and p["check_id"] not in still_critical]
+    if resolved:
+        db.clear_pending_alerts(conn, resolved)
+
+
 def _overdue_message(overdue: list) -> str:
     import html
 
-    lines = [
-        "<b>⚠️ Guardian · agent did not acknowledge</b>",
-        "These confirmed criticals were sent to your agent, but it never confirmed it relayed them:",
-    ]
-    for o in overdue[:10]:
-        lines.append(f"🔴 <b>{html.escape(o['check_id'])}</b>: {html.escape(o.get('summary', ''))}")
-    if len(overdue) > 10:
-        lines.append(f"…and {len(overdue) - 10} more.")
+    def _lines(items):
+        out = [f"🔴 <b>{html.escape(o['check_id'])}</b>: {html.escape(o.get('summary', ''))}" for o in items[:10]]
+        if len(items) > 10:
+            out.append(f"…and {len(items) - 10} more.")
+        return out
+
+    unacked = [o for o in overdue if not o.get("agent_acked_at")]
+    relayed = [o for o in overdue if o.get("agent_acked_at")]
+    lines = ["<b>⚠️ Guardian · agent did not acknowledge</b>"] if unacked else \
+        ["<b>⚠️ Guardian · still critical after agent relay</b>"]
+    if unacked:
+        lines.append("These confirmed criticals were sent to your agent, but it never confirmed it relayed them:")
+        lines.extend(_lines(unacked))
+    if relayed:
+        lines.append("Your agent says it relayed these, but they are still critical and unacknowledged:")
+        lines.extend(_lines(relayed))
     return "\n".join(lines)
 
 
@@ -336,6 +362,9 @@ def run_ack(config_path: str, command: str, check_id: str | None, note: str, day
             expires_at = (datetime.now(timezone.utc) + timedelta(days=days)).isoformat()
 
         db.set_ack(conn, check_id, note=note, expires_at=expires_at)
+        # A human acking a critical IS the "user saw it" signal the agent
+        # fallback waits for — stop tracking it.
+        db.clear_pending_alerts(conn, [check_id])
         expiry_text = f" until {expires_at}" if expires_at else " with no expiry"
         print(f"Acknowledged: {check_id}{expiry_text}.")
         print("It is now muted: excluded from overall status, change detection, and notifications.")
