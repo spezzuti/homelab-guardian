@@ -94,14 +94,22 @@ def connect(database_path: str | Path) -> sqlite3.Connection:
             approved_at TEXT,
             executed_at TEXT,
             result_json TEXT,
-            verify_json TEXT
+            verify_json TEXT,
+            confirm_token TEXT
         )
         """
     )
+    try:  # additive migration for databases created before confirm_token
+        conn.execute("ALTER TABLE repair_proposals ADD COLUMN confirm_token TEXT")
+    except sqlite3.OperationalError:
+        pass
     conn.commit()
     return conn
 
 
+# confirm_token is deliberately NOT in this list: every list/get payload (MCP
+# tools, web page, CLI log) is built from these columns, and the typed
+# confirmation must stay a human-held secret the agent never sees.
 _REPAIR_COLUMNS = (
     "id, check_id, action, params, argv, plan_json, status, proposed_by, "
     "proposed_at, approved_by, approved_at, executed_at, result_json, verify_json"
@@ -150,6 +158,16 @@ def set_repair_decision(conn, proposal_id, status, decided_by) -> bool:
     )
     conn.commit()
     return cur.rowcount > 0
+
+
+def set_repair_confirm_token(conn, proposal_id, token: str) -> None:
+    conn.execute("UPDATE repair_proposals SET confirm_token = ? WHERE id = ?", (token, proposal_id))
+    conn.commit()
+
+
+def get_repair_confirm_token(conn, proposal_id) -> str | None:
+    row = conn.execute("SELECT confirm_token FROM repair_proposals WHERE id = ?", (proposal_id,)).fetchone()
+    return row[0] if row and row[0] else None
 
 
 def claim_repair_execution(conn, proposal_id, result, verify) -> bool:

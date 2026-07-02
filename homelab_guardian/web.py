@@ -944,8 +944,12 @@ class GuardianRequestHandler(BaseHTTPRequestHandler):
         conn = db.connect(self.database_path)
         try:
             if decision == "approve":
-                repair.approve(conn, proposal_id, approved_by=identity.user)
-                self._redirect("/repairs?ok=" + quote(f"Proposal #{proposal_id} approved."))
+                res = repair.approve(conn, proposal_id, approved_by=identity.user)
+                message = f"Proposal #{proposal_id} approved."
+                if res.get("confirm_token"):
+                    message += (f" Destructive action — executing requires the confirmation token "
+                                f"{res['confirm_token']} (shown only here).")
+                self._redirect("/repairs?ok=" + quote(message))
             elif decision == "deny":
                 repair.deny(conn, proposal_id, denied_by=identity.user)
                 self._redirect("/repairs?ok=" + quote(f"Proposal #{proposal_id} denied."))

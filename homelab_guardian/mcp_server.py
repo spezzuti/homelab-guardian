@@ -420,7 +420,9 @@ def build_server(database_path: str, allow_writes: bool = False, config: dict[st
             """Execute a repair proposal that a human has APPROVED, then verify recovery.
             Fails unless the proposal is approved (it is refused otherwise). Only call this
             after the user has approved the specific proposal. If the action is destructive
-            and typed-confirmation is required, pass the proposal id as `confirmation`."""
+            and typed-confirmation is required, the approver was shown a confirmation token
+            when they approved — ask the user for it and pass it as `confirmation`. You
+            cannot derive it yourself; it exists so a human touches destructive runs twice."""
             conn = db.connect(database_path)
             try:
                 return _repair.execute(config, conn, proposal_id, executed_by="agent", confirmation=confirmation or None)

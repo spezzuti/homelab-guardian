@@ -357,8 +357,11 @@ repair:
       auto_approve: false
       max_attempts_per_hour: 2
       timeout: 120
-  # Optional: require re-typing the proposal id to execute a destructive repair
-  # (off by default — a single human approval is enough, like Claude Code).
+  # Optional: require a typed confirmation token to execute a destructive
+  # repair (off by default — a single human approval is enough, like Claude
+  # Code). The token is minted at approval time and shown only to the human
+  # approver (CLI/dashboard) — an agent never sees it, so enabling this makes
+  # destructive runs a genuine second human touch.
   require_typed_confirmation: false
 
 notifications:

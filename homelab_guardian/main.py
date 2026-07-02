@@ -437,8 +437,11 @@ def run_repair(config_path: str, sub: str | None, rest: list[str], by: str = "cl
                 return 1
             pid = int(rest[0])
             if sub == "approve":
-                repair.approve(conn, pid, approved_by=by)
+                res = repair.approve(conn, pid, approved_by=by)
                 print(f"Proposal #{pid} approved. Execute with: guardian repair execute {pid}")
+                if res.get("confirm_token"):
+                    print(f"  Destructive action — executing requires: --confirm {res['confirm_token']}")
+                    print("  (This token is only shown here. If an agent executes for you, give it the token.)")
             elif sub == "deny":
                 repair.deny(conn, pid, denied_by=by)
                 print(f"Proposal #{pid} denied.")

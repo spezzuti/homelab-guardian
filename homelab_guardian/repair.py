@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import hmac
 import os
+import secrets as secrets_mod
 import subprocess
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
@@ -525,7 +527,18 @@ def propose(config: dict[str, Any], conn, check_id: str, action: str, proposed_b
 
 def approve(conn, proposal_id: int, approved_by: str) -> dict[str, Any]:
     if db.set_repair_decision(conn, proposal_id, "approved", approved_by):
-        return {"proposal_id": proposal_id, "status": "approved"}
+        result: dict[str, Any] = {"proposal_id": proposal_id, "status": "approved"}
+        # For destructive actions, mint a confirmation token the HUMAN holds:
+        # it is shown only on the approval surface (CLI/dashboard), never in any
+        # agent-readable payload, so the typed-confirmation gate at execute time
+        # is a real second human touch — not something the agent can self-supply.
+        p = db.get_repair_proposal(conn, proposal_id)
+        plan = p["plan_json"] if p and isinstance(p.get("plan_json"), dict) else {}
+        if plan.get("risk") == "destructive":
+            token = secrets_mod.token_hex(4)
+            db.set_repair_confirm_token(conn, proposal_id, token)
+            result["confirm_token"] = token
+        return result
     p = db.get_repair_proposal(conn, proposal_id)
     if p is None:
         raise RepairError(f"No proposal #{proposal_id}.")
@@ -569,12 +582,19 @@ def execute(
     if plan.get("risk") == "destructive" and p.get("approved_by") == "auto-approve":
         raise RepairError("Destructive repairs cannot run on an auto-approval; they require explicit human approval.")
     # Optional typed-confirmation gate for destructive actions (off by default).
+    # The token is minted at approval time and shown only to the human approver
+    # (never in agent-readable payloads), so this is a second HUMAN touch: an
+    # agent can't satisfy it from anything it already holds. Proposals approved
+    # before tokens existed fall back to the proposal id.
     require_typed = (bool(config.get("repair", {}).get("require_typed_confirmation", False))
                      or bool(_playbook_config(config, p["action"]).get("require_typed_confirmation", False)))
-    if plan.get("risk") == "destructive" and require_typed and str(confirmation) != str(proposal_id):
-        raise RepairError(
-            f"This destructive repair requires typed confirmation — re-run with the token '{proposal_id}'."
-        )
+    if plan.get("risk") == "destructive" and require_typed:
+        expected = db.get_repair_confirm_token(conn, proposal_id) or str(proposal_id)
+        if not hmac.compare_digest(str(confirmation), expected):
+            raise RepairError(
+                "This destructive repair requires typed confirmation — re-run with the token "
+                "shown to the approver when the proposal was approved."
+            )
     if not _within_loop_guard(config, conn, p["action"], p["check_id"]):
         raise RepairError(
             f"Loop guard: '{p['action']}' on '{p['check_id']}' has already run its hourly limit. "
