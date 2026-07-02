@@ -58,6 +58,19 @@ def test_restic_missing_binary_is_unknown():
     assert checks[0].status == "unknown"
 
 
+def test_systemd_show_requests_utc_timestamps():
+    # Without --timestamp=utc systemd emits local time, which we'd mis-stamp as
+    # UTC and get age_hours wrong by the local offset. Lock the flag in.
+    seen = {}
+
+    def runner(cmd, **k):
+        seen["cmd"] = cmd
+        return _cp("ActiveState=active\nResult=success\n")
+
+    backup_health_collector.collect(_systemd_cfg(), runner=runner)
+    assert "--timestamp=utc" in seen["cmd"]
+
+
 def test_systemd_running_is_ok():
     runner = lambda cmd, **k: _cp("ActiveState=active\nResult=success\n")
     checks = backup_health_collector.collect(_systemd_cfg(), runner=runner)

@@ -140,10 +140,15 @@ def _compose_labels(labels: dict[str, Any]) -> dict[str, str | None]:
     }
 
 
-def _status_for_container(status: str, health: str | None) -> tuple[HealthStatus, str]:
+def _status_for_container(status: str, health: str | None, exit_code: Any = None) -> tuple[HealthStatus, str]:
     if health == "unhealthy" or status in {"restarting", "dead"}:
         return "critical", "Inspect logs and recent compose/image changes before restarting anything."
     if status in {"exited", "created", "paused", "removing"}:
+        # An application-error exit (1..127) is a crash, not an intentional stop.
+        # Signal exits (>=128, e.g. 137/143 from `docker stop`) stay a warning so
+        # a deliberately-stopped container doesn't read as critical.
+        if status == "exited" and isinstance(exit_code, int) and 1 <= exit_code <= 127:
+            return "critical", f"Container exited with code {exit_code} (crashed, not a clean stop) — inspect its logs before restarting."
         return "warning", "Confirm whether this container is expected to be stopped or paused."
     if status == "running" and health in {None, "healthy", "starting"}:
         if health == "starting":
@@ -176,16 +181,18 @@ def _container_check(container: Any) -> HealthCheck:
     health_value = _as_mapping(state.get("Health")).get("Status")
     health = str(health_value) if health_value else None
     restart_count = attrs.get("RestartCount")
+    exit_code = state.get("ExitCode")
     labels = _as_mapping(_as_mapping(attrs.get("Config")).get("Labels"))
     name = _container_name(container)
     image = _safe_image_name(container, attrs)
-    check_status, action = _status_for_container(status, health)
+    check_status, action = _status_for_container(status, health, exit_code)
     evidence = {
         "id": _container_id(container),
         "name": name,
         "image": image,
         "status": status,
         "health_status": health,
+        "exit_code": exit_code,
         "restart_count": restart_count,
         "ports": _ports(attrs),
         "mounts": _mounts(attrs),

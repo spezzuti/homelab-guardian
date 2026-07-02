@@ -49,7 +49,13 @@ def _check_path(item: dict[str, Any] | str) -> HealthCheck:
             "Check that the path exists and is mounted; remove the check if the mount is gone on purpose.",
         )
 
-    percent_used = (usage.used / usage.total * 100) if usage.total else 0.0
+    # Match df's Use%: percentage of the space actually usable by non-root
+    # writers, i.e. used / (used + available). shutil.disk_usage sets `free` to
+    # the non-root-available blocks and leaves the ~5% root reserve out of both
+    # used and free — so used/total under-reports and the critical threshold
+    # would fire late on a disk that is full for every unprivileged writer.
+    usable = usage.used + usage.free
+    percent_used = (usage.used / usable * 100) if usable else 0.0
     free_gb = usage.free / 1024**3
     evidence = {
         "path": path,

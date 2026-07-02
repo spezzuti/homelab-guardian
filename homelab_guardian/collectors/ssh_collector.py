@@ -49,7 +49,14 @@ def _ordered_lines(main_text: str, dropins: list[tuple[str, str]]) -> list[str]:
 
 
 def effective_sshd_settings(main_text: str, dropins: list[tuple[str, str]]) -> dict[str, str]:
-    """First-match-wins resolution of the directives we care about."""
+    """First-match-wins resolution of the global directives we care about.
+
+    Resolution STOPS at the first `Match` block: directives inside a Match apply
+    only conditionally (by user/address/etc.), so treating them as global would
+    both raise false hardening warnings and mask real global weaknesses. We read
+    only the unconditional (pre-Match) section, the same values that apply to a
+    default connection — a `Match` that loosens auth for a specific source is out
+    of scope for this check."""
     wanted = set(_DEFAULTS)
     found: dict[str, str] = {}
     for line in _ordered_lines(main_text, dropins):
@@ -60,6 +67,8 @@ def effective_sshd_settings(main_text: str, dropins: list[tuple[str, str]]) -> d
         if len(parts) != 2:
             continue
         key = parts[0].lower()
+        if key == "match":
+            break  # end of the global section — conditional blocks aren't global
         if key in wanted and key not in found:
             found[key] = parts[1].strip().strip('"').lower()
     return {key: found.get(key, default) for key, default in _DEFAULTS.items()}
