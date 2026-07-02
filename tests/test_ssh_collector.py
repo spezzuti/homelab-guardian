@@ -61,3 +61,27 @@ def test_root_login_yes_is_warning():
 def test_missing_config_is_unknown():
     checks = _collect(None, {})
     assert checks[0].status == "unknown"
+
+
+def test_match_block_password_auth_is_not_treated_as_global():
+    # A conditional `Match` that re-enables password auth for one source must NOT
+    # be read as a global setting — resolution stops at the first Match line.
+    settings = ssh_collector.effective_sshd_settings(
+        "PasswordAuthentication no\n"
+        "PermitRootLogin no\n"
+        "Match Address 10.0.0.0/8\n"
+        "    PasswordAuthentication yes\n",
+        [],
+    )
+    assert settings["passwordauthentication"] == "no"
+
+
+def test_global_directive_after_match_is_ignored():
+    # Once inside a Match block there is no return to global scope, so a value
+    # that appears only after a Match falls back to sshd's default.
+    settings = ssh_collector.effective_sshd_settings(
+        "Match User backup\n"
+        "    PermitRootLogin yes\n",
+        [],
+    )
+    assert settings["permitrootlogin"] == "prohibit-password"  # sshd default

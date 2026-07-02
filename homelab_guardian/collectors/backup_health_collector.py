@@ -122,8 +122,12 @@ def _check_systemd(
         return HealthCheck(check_id, name, "unknown", "Backup repo (systemd mode) is missing a unit name.", dict(item), "Add a unit, e.g. marcus-backup.service.", group=GROUP)
     props = "Result,ExecMainStatus,ExecMainExitTimestamp,ActiveState"
     user = ["--user"] if item.get("user") else []
+    # --timestamp=utc forces ExecMainExitTimestamp into UTC. Without it systemd
+    # emits the server's LOCAL timezone, which we would then mis-stamp as UTC and
+    # compute age_hours off by the local offset (enough to flip a near-threshold
+    # backup). systemd >= 247 supports this option.
     try:
-        result = runner(["systemctl", *user, "show", unit, f"--property={props}"], capture_output=True, text=True, timeout=15)
+        result = runner(["systemctl", *user, "show", unit, "--timestamp=utc", f"--property={props}"], capture_output=True, text=True, timeout=15)
     except (FileNotFoundError, subprocess.SubprocessError, OSError) as exc:
         return HealthCheck(check_id, name, "unknown", f"Could not read state for {unit}.", {"unit": unit, "error": str(exc)}, "Check that systemctl works for Guardian's user.", group=GROUP)
 
