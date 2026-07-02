@@ -597,9 +597,12 @@ def execute(
             "since approval) — re-propose and re-approve."
         )
 
-    # Record a 'running' row BEFORE the side-effecting action so a crash mid-run
-    # still counts against the loop guard (the command may already have fired).
-    db.record_repair_execution(conn, proposal_id, "running", {"ran": False}, {})
+    # Claim the proposal (approved -> running) BEFORE the side-effecting action:
+    # a crash mid-run still counts against the loop guard (the command may
+    # already have fired), and the conditional transition means a concurrent
+    # execute() of the same proposal loses the claim instead of running twice.
+    if not db.claim_repair_execution(conn, proposal_id, {"ran": False}, {}):
+        raise RepairError(f"Proposal #{proposal_id} is already being executed — refusing to run it twice.")
 
     argv = stored_argv
     try:

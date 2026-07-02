@@ -124,6 +124,23 @@ def test_execute_refuses_unapproved(tmp_path):
         repair.execute(config, conn, pid, runner=_runner())
 
 
+def test_execute_claim_is_single_use(tmp_path):
+    """The approved->running transition is a conditional UPDATE: a second
+    executor racing on the same approved proposal loses the claim and refuses,
+    instead of running the command twice."""
+    conn = _seed(tmp_path)
+    config = _config(tmp_path)
+    pid = repair.propose(config, conn, CHECK_ID, "restart_systemd_unit")["proposal_id"]
+    repair.approve(conn, pid, "alice")
+    # First claimant wins (simulates the other executor getting there first)...
+    assert db.claim_repair_execution(conn, pid, {"ran": False}, {}) is True
+    assert db.claim_repair_execution(conn, pid, {"ran": False}, {}) is False
+    # ...so this execute must refuse rather than fire the action again.
+    with pytest.raises(repair.RepairError, match="not approved|already being executed"):
+        repair.execute(config, conn, pid, runner=_runner(active="active"))
+    assert db.get_repair_proposal(conn, pid)["status"] == "running"
+
+
 def test_execute_happy_path_runs_and_verifies(tmp_path):
     conn = _seed(tmp_path)
     config = _config(tmp_path)
