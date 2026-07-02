@@ -21,8 +21,9 @@ rest follows.
 ## Install
 
 ```bash
-pip install homelab-guardian          # core
-pip install 'homelab-guardian[mcp]'   # add the MCP server (step 3)
+pip install homelab-guardian            # core
+pip install 'homelab-guardian[docker]'  # add the Docker SDK for container checks
+pip install 'homelab-guardian[mcp]'     # add the MCP server (step 3)
 ```
 
 This gives you the `guardian` console command. (`python -m homelab_guardian.main`

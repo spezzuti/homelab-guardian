@@ -34,7 +34,8 @@ Guardian started as a read-only "Daily Homelab Doctor" and has grown into a
 Every step degrades gracefully and is off until you turn it on. Start at step 1
 and go as far as you trust it.
 
-**Install:** `pip install homelab-guardian` (add `[mcp]` for the agent server).
+**Install:** `pip install homelab-guardian` (add `[mcp]` for the agent server,
+`[docker]` for the Docker collector's SDK).
 New here? See **[the getting-started walkthrough](docs/getting-started.md)**.
 
 ## Core principles
@@ -126,7 +127,7 @@ git clone https://github.com/spezzuti/homelab-guardian
 cd homelab-guardian
 python -m venv .venv
 . .venv/bin/activate
-pip install -e '.[mcp,dev]'    # editable, with the MCP extra and pytest
+pip install -e '.[mcp,docker,dev]'    # editable, with the MCP + Docker extras and pytest
 
 guardian --config config.yaml          # same CLI as the installed package
 guardian --config config.example.yaml  # safe example run, no private services

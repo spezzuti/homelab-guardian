@@ -24,7 +24,6 @@ classifiers = [
 dependencies = [
     "PyYAML>=6.0.1",
     "requests>=2.31.0",
-    "docker>=7.0.0",
 ]
 
 [project.urls]
@@ -37,6 +36,9 @@ dev = ["pytest>=8.0.0"]
 # Expose Guardian as an MCP server (`guardian mcp`) so any agent can read its
 # structured health data. Optional so the core stays dependency-light.
 mcp = ["mcp>=1.2.0"]
+# The Docker collector's SDK. Optional for the same reason: the collector is
+# off by default and degrades to a clear "install the extra" check without it.
+docker = ["docker>=7.0.0"]
 
 [project.scripts]
 guardian = "homelab_guardian.main:main"
