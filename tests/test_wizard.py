@@ -1,5 +1,6 @@
 import yaml
 
+from homelab_guardian import wizard
 from homelab_guardian.wizard import DiscoveredService, build_config, discover, render_config_yaml, subnet_hosts
 
 
@@ -153,3 +154,50 @@ def test_build_config_with_all_sections():
 def test_rendered_yaml_round_trips():
     config = build_config([_svc("192.168.1.10", 8123, "Home Assistant", "http")])
     assert yaml.safe_load(render_config_yaml(config)) == config
+
+
+def test_run_init_wires_every_answer_into_the_config(tmp_path, monkeypatch):
+    """Drive run_init end-to-end and assert the *written* config contains every
+    section the user said yes to. build_config is pure and tested above; this
+    guards the run_init -> build_config wiring, where answers were once
+    collected and then silently dropped (mounts/mcp/web_auth/repair)."""
+    monkeypatch.setattr(wizard.sys, "platform", "linux")
+
+    answers = iter([
+        "n",                     # Home Assistant?
+        "n",                     # Telegram?
+        "n",                     # AI briefing?
+        "y",                     # Linux host checks?
+        "n",                     # watch a backup unit?
+        "y",                     # watch mounts?
+        "/mnt/nas, /mnt/media",  # mount paths
+        "y",                     # attach an agent over MCP?
+        "n",                     # agent on a different machine?
+        "y",                     # password-protect the dashboard?
+        "",                      # username (accept default: admin)
+        "y",                     # enable the guarded repair?
+        "myapp.service",         # unit to allow restarting
+        "n",                     # Bitwarden secrets?
+    ])
+    monkeypatch.setattr("builtins.input", lambda prompt="": next(answers))
+    monkeypatch.setattr("getpass.getpass", lambda prompt="": "hunter2")
+
+    output = tmp_path / "config.yaml"
+    assert wizard.run_init(str(output), discover_network=False) == 0
+
+    config = yaml.safe_load(output.read_text(encoding="utf-8"))
+    mounts = config["collectors"]["mounts"]
+    assert mounts["enabled"] is True
+    assert [m["path"] for m in mounts["mounts"]] == ["/mnt/nas", "/mnt/media"]
+    assert config["mcp"]["allow_writes"] is False
+    assert config["web"]["auth"]["mode"] == "basic"
+    assert config["web"]["auth"]["username"] == "admin"
+    assert config["web"]["auth"]["password_env"] == "GUARDIAN_WEB_PASSWORD"
+    assert config["repair"]["enabled"] is True
+    playbook = config["repair"]["playbooks"]["restart_systemd_unit"]
+    assert playbook["allowed_units"] == ["myapp.service"]
+    assert playbook["auto_approve"] is False
+    assert config["collectors"]["firewall"]["enabled"] is True
+
+    env = (tmp_path / ".env").read_text(encoding="utf-8")
+    assert "GUARDIAN_WEB_PASSWORD=hunter2" in env
