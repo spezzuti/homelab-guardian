@@ -56,8 +56,19 @@ Guardian separates three kinds of activity:
 - **Optional outbound sends:** Telegram notifications and AI briefings use
   explicit configuration and secrets; disabling them leaves scan/report
   behavior intact.
+- **Approval-gated repair (opt-in, disabled by default):** when
+  `repair.enabled` is true, Guardian can run *named, parameterized, allowlisted*
+  actions (restart an allowlisted systemd unit or container, remount, reclaim
+  disk) — never raw shell and never an LLM-generated command. Every action is
+  derived from Guardian's own validated check evidence, re-validated against the
+  allowlist at execution time, loop-guarded, and audited. An agent may *propose*
+  and *execute*, but only a human can *approve*; destructive actions (e.g.
+  `docker_prune`, `prune_dir`) can never run on an auto-approval. A narrow
+  reflex tier may auto-run only playbooks explicitly marked `auto_approve`, which
+  excludes every destructive action. See `docs/repair.md` for the full design.
 
-No self-healing or automatic service/container/system changes are implemented.
+No action outside that approval-gated, allowlisted set is ever taken: there is
+no generic "run a command" capability, and the AI layer stays read-only.
 
 ## Storage
 
@@ -102,8 +113,11 @@ Future versions may collect from remote Docker hosts, NAS systems, Home Assistan
 ## Security posture
 
 - No secrets committed
-- No destructive infrastructure actions
-- No shell execution by AI or collectors
+- Collectors are read-only; they never modify the systems they inspect
+- Destructive infrastructure actions are possible only through the opt-in,
+  human-approved, allowlisted repair playbooks (disabled by default) — never
+  from raw shell and never from an LLM-generated command
+- No shell execution by the AI layer; repair runs only fixed, allowlisted argv
 - Docker socket is optional and should be mounted intentionally
 - Home Assistant token comes from an environment variable or untracked local config
 - Web view binds to localhost by default; LAN exposure should sit behind an
