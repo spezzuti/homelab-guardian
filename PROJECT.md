@@ -36,19 +36,26 @@ A technical home user running some combination of:
 
 ## Current release shape
 
-Guardian v0.2: Daily Homelab Doctor plus dashboard and alerts.
+Guardian v0.3: Daily Homelab Doctor plus agent integration and approval-gated
+repair.
 
-The project is now a packaged `guardian` CLI with optional setup wizard,
-Markdown report generation, SQLite scan history, read-only web view,
-acknowledgments, flap-damped Telegram notifications, optional BYOM AI
-briefings, env/Bitwarden secrets providers, and GHCR image publishing.
+The project is a packaged `guardian` CLI (PyPI) with a setup wizard and
+`guardian doctor` preflight, Markdown report generation, SQLite scan history,
+a web dashboard with optional auth (password or OIDC), acknowledgments,
+flap-damped Telegram notifications, optional BYOM AI briefings, env/Bitwarden
+secrets providers, an MCP server so agents read Guardian's verified state,
+agent-delivery notifications with a deterministic critical-fallback, host
+hardening collectors (firewall, SSH, exposed services, updates, backups), and
+approval-gated repair playbooks (opt-in, disabled by default).
 
 ## Non-negotiable constraints
 
 - Local-first
 - Read-only against homelab infrastructure by default
-- No destructive infrastructure actions
-- No self-healing yet
+- Destructive infrastructure actions only through opt-in, human-approved,
+  allowlisted repair playbooks — never on auto-approve, disabled by default
+- Self-healing is propose → human approve → execute → verify; never raw shell,
+  never an AI-generated command
 - No AI shell execution
 - No cloud dependency required
 - Useful even without AI
