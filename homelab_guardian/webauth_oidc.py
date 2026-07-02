@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import hmac
 import json
 import os
 import secrets as secrets_mod
@@ -29,6 +30,9 @@ from homelab_guardian.webauth import Authenticator, Identity
 # Guardian does not use.
 
 SESSION_COOKIE = "guardian_session"
+# Binds the callback to the browser that started the login: the CSRF `state` is
+# also written here as a cookie and must match the state the IdP echoes back.
+STATE_COOKIE = "guardian_oidc_state"
 _SESSION_TTL = 8 * 3600
 _PENDING_TTL = 600
 _SCOPE = "openid profile email"
@@ -198,16 +202,26 @@ class OidcAuth(Authenticator):
             "code_challenge": challenge,
             "code_challenge_method": "S256",
         }
-        handler._redirect(authorize + ("&" if "?" in authorize else "?") + urlencode(params))
+        handler._redirect(
+            authorize + ("&" if "?" in authorize else "?") + urlencode(params),
+            extra_headers=[("Set-Cookie", self._state_cookie(state))],
+        )
 
     def _callback(self, handler: Any) -> None:
         query = parse_qs(urlparse(handler.path).query)
         code = (query.get("code") or [""])[0]
         state = (query.get("state") or [""])[0]
+        # Bind the callback to the browser that began the login: the state we set
+        # as a cookie at /auth/login must match the state the IdP echoed back.
+        # Without this, an attacker-initiated login's valid state+code could be
+        # replayed in a victim's browser to log them into the attacker's account
+        # (login CSRF / session fixation). Constant-time compared.
+        cookie_state = self._cookie_value(handler, STATE_COOKIE)
         with self._lock:
             self._prune(time.time())
             pending = self._pending.pop(state, None)
-        if not code or pending is None:
+        state_ok = bool(state and cookie_state and hmac.compare_digest(cookie_state, state))
+        if not code or pending is None or not state_ok:
             handler._send("Login failed or expired. <a href=\"/auth/login\">Try again</a>.", status=400)
             return
         nonce, verifier, _ = pending
@@ -246,7 +260,10 @@ class OidcAuth(Authenticator):
         session_id = secrets_mod.token_urlsafe(32)
         with self._lock:
             self._sessions[session_id] = (identity, time.time() + _SESSION_TTL)
-        handler._redirect("/", extra_headers=[("Set-Cookie", self._cookie(session_id))])
+        handler._redirect("/", extra_headers=[
+            ("Set-Cookie", f"{STATE_COOKIE}=; Max-Age=0; Path=/"),  # single-use state, clear it
+            ("Set-Cookie", self._cookie(session_id)),
+        ])
 
     def _logout(self, handler: Any) -> None:
         cookie_header = handler.headers.get("Cookie", "")
@@ -266,3 +283,24 @@ class OidcAuth(Authenticator):
         if self.cookie_secure:
             cookie += "; Secure"
         return cookie
+
+    def _state_cookie(self, state: str) -> str:
+        # SameSite=Lax so it still rides the top-level GET redirect back from the
+        # IdP; short-lived, matching the pending-login TTL.
+        cookie = f"{STATE_COOKIE}={state}; HttpOnly; Path=/; Max-Age={_PENDING_TTL}; SameSite=Lax"
+        if self.cookie_secure:
+            cookie += "; Secure"
+        return cookie
+
+    @staticmethod
+    def _cookie_value(handler: Any, name: str) -> str | None:
+        cookie_header = handler.headers.get("Cookie", "")
+        if not cookie_header:
+            return None
+        try:
+            jar = SimpleCookie()
+            jar.load(cookie_header)
+        except Exception:
+            return None
+        morsel = jar.get(name)
+        return morsel.value if morsel is not None else None

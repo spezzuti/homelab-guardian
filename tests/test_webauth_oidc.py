@@ -122,6 +122,30 @@ def test_challenge_redirects_to_login():
     assert h.sent["redirect"] == "/auth/login"
 
 
+def test_callback_without_matching_state_cookie_is_rejected():
+    # Login-CSRF guard: a valid pending state + code must still be refused if the
+    # browser doesn't present the matching state cookie set at /auth/login.
+    auth = _auth()
+    import time as _t
+
+    auth._pending["STATE"] = ("n", "v", _t.time() + 60)
+    h = FakeHandler(path="/auth/callback?code=abc&state=STATE")  # no cookie
+    auth._callback(h)
+    assert h.sent["status"] == 400
+
+
+def test_login_sets_state_cookie():
+    import homelab_guardian.webauth_oidc as oidc
+
+    auth = _auth()
+    auth._discovery = {"authorization_endpoint": "https://idp/authorize"}
+    h = FakeHandler(path="/auth/login")
+    auth._login(h)
+    cookie = h.sent["headers"]["Set-Cookie"]
+    assert cookie.startswith(f"{oidc.STATE_COOKIE}=")
+    assert "HttpOnly" in cookie and "SameSite=Lax" in cookie
+
+
 def test_callback_unknown_state_is_rejected():
     h = FakeHandler(path="/auth/callback?code=x&state=unknown")
     _auth()._callback(h)
@@ -141,7 +165,8 @@ def test_callback_happy_path_sets_session(monkeypatch):
     fake_resp = SimpleNamespace(raise_for_status=lambda: None, json=lambda: {"id_token": id_token})
     monkeypatch.setattr(oidc, "requests", SimpleNamespace(post=lambda *a, **k: fake_resp))
 
-    h = FakeHandler(path="/auth/callback?code=abc&state=STATE")
+    h = FakeHandler(path="/auth/callback?code=abc&state=STATE",
+                    headers={"Cookie": "guardian_oidc_state=STATE"})
     auth._callback(h)
     assert h.sent["redirect"] == "/"
     cookie = h.sent["headers"]["Set-Cookie"]
@@ -158,6 +183,7 @@ def test_callback_required_group_enforced(monkeypatch):
     id_token = _jwt({"aud": "cid", "iss": "https://idp", "exp": time.time() + 60, "nonce": "n", "groups": ["users"]})
     fake_resp = SimpleNamespace(raise_for_status=lambda: None, json=lambda: {"id_token": id_token})
     monkeypatch.setattr(oidc, "requests", SimpleNamespace(post=lambda *a, **k: fake_resp))
-    h = FakeHandler(path="/auth/callback?code=abc&state=S")
+    h = FakeHandler(path="/auth/callback?code=abc&state=S",
+                    headers={"Cookie": "guardian_oidc_state=S"})
     auth._callback(h)
     assert h.sent["status"] == 403
