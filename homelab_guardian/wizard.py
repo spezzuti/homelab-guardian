@@ -447,6 +447,7 @@ def run_init(output_path: str = "config.yaml", force: bool = False, discover_net
     config = build_config(
         discovered, homeassistant=ha or None, telegram=telegram, ai=ai,
         secrets_provider=secrets_provider, host_checks=host_checks, backup_unit=backup_unit,
+        mounts=mounts, mcp=mcp, web_auth=web_auth, repair=repair,
     )
     output.write_text(render_config_yaml(config), encoding="utf-8")
     print(f"\nWrote {output}")
