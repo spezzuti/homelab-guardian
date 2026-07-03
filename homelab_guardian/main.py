@@ -536,6 +536,81 @@ def run_scan_loop(config_path: str, interval_seconds: int) -> int:
             return 0
 
 
+def _add_config_arg(parser: argparse.ArgumentParser, *, top: bool) -> None:
+    # --config is accepted both before and after the subcommand. The
+    # subcommand copy defaults to SUPPRESS so it does not clobber a value
+    # already parsed at the top level (argparse lets subparser defaults win).
+    parser.add_argument(
+        "--config",
+        default="config.yaml" if top else argparse.SUPPRESS,
+        help="Path to YAML config file",
+    )
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="guardian",
+        description="Homelab Guardian - local-first homelab health monitoring with "
+        "optional AI-agent integration and approval-gated repair.",
+    )
+    _add_config_arg(parser, top=True)
+    # Pre-subcommand spellings kept working: `guardian --doctor` and
+    # `guardian --interval N` predate the subcommands.
+    parser.add_argument("--doctor", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--interval", type=int, default=0, metavar="SECONDS", help=argparse.SUPPRESS)
+
+    sub = parser.add_subparsers(dest="command", metavar="command")
+
+    def command(name: str, help_text: str) -> argparse.ArgumentParser:
+        cp = sub.add_parser(name, help=help_text)
+        _add_config_arg(cp, top=False)
+        return cp
+
+    cp = command("scan", "run one scan and write the report (the default)")
+    cp.add_argument("--interval", type=int, default=argparse.SUPPRESS, metavar="SECONDS",
+                    help="repeat the scan every N seconds instead of running once")
+
+    command("doctor", "preflight: validate config, secrets, reachability, repair scope")
+
+    cp = command("init", "interactive setup wizard")
+    cp.add_argument("--force", action="store_true", help="overwrite an existing config file")
+    cp.add_argument("--no-discover", action="store_true",
+                    help="skip the local network service discovery step")
+
+    cp = command("serve", "web dashboard (with --interval, scans run in the background)")
+    cp.add_argument("--host", default="127.0.0.1", help="address to bind (default localhost only)")
+    cp.add_argument("--port", type=int, default=0, help="port (default 8674)")
+    cp.add_argument("--interval", type=int, default=argparse.SUPPRESS, metavar="SECONDS",
+                    help="run a scan every N seconds behind the web view")
+
+    cp = command("mcp", "MCP server for AI agents (stdio by default)")
+    cp.add_argument("--http", action="store_true",
+                    help="serve over streamable HTTP (bearer-token auth) instead of stdio")
+    cp.add_argument("--host", default="127.0.0.1", help="--http: address to bind (default localhost only)")
+    cp.add_argument("--port", type=int, default=0, help="--http: port (default 8675)")
+
+    cp = command("ack", "mute a known issue (lists acknowledgments when no id is given)")
+    cp.add_argument("check_id", nargs="?", help="the check id to acknowledge")
+    cp.add_argument("--note", default="", help="why this check is muted")
+    cp.add_argument("--days", type=float, default=0, help="auto-expire after this many days")
+    cp.add_argument("--until", default="", help="auto-expire at this ISO date/time")
+
+    cp = command("unack", "unmute a previously acknowledged check")
+    cp.add_argument("check_id", nargs="?", help="the check id to unacknowledge")
+
+    cp = command("repair", "approval-gated repairs (see docs/repair.md)")
+    cp.add_argument("action", nargs="?", default="list",
+                    choices=["list", "propose", "approve", "deny", "execute", "log"],
+                    help="repair subcommand (default: list)")
+    cp.add_argument("args", nargs="*",
+                    help="subcommand arguments (check id / action name / proposal id)")
+    cp.add_argument("--by", default="cli", help="identity recorded for approve/deny/execute")
+    cp.add_argument("--confirm", default=None,
+                    help="typed-confirmation token for a destructive execute")
+
+    return parser
+
+
 def main() -> int:
     # Windows consoles often default to a legacy codepage that cannot encode
     # the status emoji; degrade characters instead of crashing.
@@ -543,64 +618,36 @@ def main() -> int:
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(errors="replace")
 
-    parser = argparse.ArgumentParser(description="Generate a Homelab Guardian health report.")
-    parser.add_argument(
-        "command",
-        nargs="?",
-        choices=["scan", "doctor", "init", "serve", "ack", "unack", "mcp", "repair"],
-        default="scan",
-        help="Command to run",
-    )
-    parser.add_argument("check_id", nargs="?", help="ack/unack: the check id; repair: the subcommand")
-    parser.add_argument("rest", nargs="*", help="repair: subcommand arguments")
-    parser.add_argument("--by", default="cli", help="repair: identity recorded for approve/deny/execute")
-    parser.add_argument("--confirm", default=None, help="repair: typed-confirmation token for destructive execute")
-    parser.add_argument("--config", default="config.yaml", help="Path to YAML config file")
-    parser.add_argument("--note", default="", help="ack: why this check is muted")
-    parser.add_argument("--days", type=float, default=0, help="ack: auto-expire after this many days")
-    parser.add_argument("--until", default="", help="ack: auto-expire at this ISO date/time")
-    parser.add_argument("--doctor", action="store_true", help="Run preflight checks instead of a normal scan")
-    parser.add_argument("--force", action="store_true", help="init: overwrite an existing config file")
-    parser.add_argument(
-        "--no-discover", action="store_true", help="init: skip the local network service discovery step"
-    )
-    parser.add_argument("--host", default="127.0.0.1", help="serve / mcp --http: address to bind (default localhost only)")
-    parser.add_argument("--port", type=int, default=0, help="serve / mcp --http: port (default 8674 for serve, 8675 for mcp --http)")
-    parser.add_argument("--http", action="store_true", help="mcp: serve over streamable HTTP (bearer-token auth) instead of stdio")
-    parser.add_argument(
-        "--interval",
-        type=int,
-        default=0,
-        metavar="SECONDS",
-        help="Repeat the scan every N seconds instead of running once. With "
-        "serve, runs scans in the background of the web view.",
-    )
-    args = parser.parse_args()
+    args = build_parser().parse_args()
+    command = args.command or ("doctor" if args.doctor else "scan")
 
-    if args.command == "init":
+    if command == "init":
         from homelab_guardian.wizard import run_init
 
         return run_init(args.config, force=args.force, discover_network=False if args.no_discover else None)
 
     load_dotenv()
-    if args.command in {"ack", "unack"}:
-        return run_ack(args.config, args.command, args.check_id, args.note, args.days, args.until)
-    if args.command == "repair":
-        return run_repair(args.config, args.check_id, args.rest, by=args.by, confirm=args.confirm)
-    if args.doctor or args.command == "doctor":
+    if command == "ack":
+        return run_ack(args.config, "ack", args.check_id, args.note, args.days, args.until)
+    if command == "unack":
+        return run_ack(args.config, "unack", args.check_id, "", 0, "")
+    if command == "repair":
+        return run_repair(args.config, args.action, args.args, by=args.by, confirm=args.confirm)
+    if command == "doctor":
         return run_doctor(args.config)
-    if args.command == "serve":
+    if command == "serve":
         from homelab_guardian.web import serve
 
+        interval = getattr(args, "interval", 0)
         return serve(
             load_config(args.config),
             host=args.host,
             port=args.port or 8674,
-            scan_interval=args.interval,
-            scan_loop=(lambda: run_scan_loop(args.config, args.interval)) if args.interval > 0 else None,
+            scan_interval=interval,
+            scan_loop=(lambda: run_scan_loop(args.config, interval)) if interval > 0 else None,
             config_path=args.config,
         )
-    if args.command == "mcp":
+    if command == "mcp":
         if args.http:
             from homelab_guardian.mcp_server import run_http
 
@@ -608,8 +655,9 @@ def main() -> int:
         from homelab_guardian.mcp_server import run_stdio
 
         return run_stdio(args.config)
-    if args.interval > 0:
-        return run_scan_loop(args.config, args.interval)
+    interval = getattr(args, "interval", 0)
+    if interval > 0:
+        return run_scan_loop(args.config, interval)
     return run_scan(args.config)
 
 

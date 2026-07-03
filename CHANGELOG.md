@@ -15,6 +15,11 @@
 
 ### Changed
 
+- CLI migrated to argparse subparsers: `guardian scan|doctor|init|serve|mcp|ack|unack|repair`
+  each own their arguments and per-command `--help`. All documented
+  invocations keep working, including `--config` before or after the
+  subcommand and the legacy `guardian --doctor` / `guardian --interval N`
+  spellings.
 - Packaging: license metadata migrated to a PEP 639 SPDX expression
   (`license = "AGPL-3.0-or-later"`), removing the deprecated TOML-table form
   and license classifier that setuptools warns will break builds in 2027.
