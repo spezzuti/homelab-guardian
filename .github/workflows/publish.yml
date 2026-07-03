@@ -1,18 +1,23 @@
 name: Publish to PyPI
 
-# Releases are published with `twine` using the PyPI API token (PYPI_PASSWORD in
-# the homelab vault). Trusted Publishing (OIDC) was tried but the pending-
-# publisher handshake never matched, so this workflow is MANUAL-ONLY (no
-# tag-trigger) to avoid failing runs — run it from the Actions tab after adding
-# the repo secret `PYPI_API_TOKEN` (your pypi-... token). Until then, publish
-# locally:  python -m build  &&  TWINE_USERNAME=__token__ TWINE_PASSWORD=<token> twine upload dist/*
+# Publishes via PyPI Trusted Publishing (OIDC) — no API token or repo secret.
+# The trusted publisher on pypi.org is bound to spezzuti/homelab-guardian +
+# publish.yml + the `pypi` environment. Manual-only: push the release tag,
+# then run this from the Actions tab. skip-existing tolerates re-runs where
+# some files already uploaded (a duplicate version is skipped, not an error).
 
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   publish:
     runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -22,7 +27,6 @@ jobs:
       - run: python -m build
       - run: python -m twine check dist/*
       - name: Publish
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-        run: python -m twine upload dist/*
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
