@@ -171,3 +171,81 @@ def test_no_auth_mode_is_read_only(tmp_path):
         assert resp.status == 403  # editing blocked without auth
     finally:
         server.shutdown()
+
+
+CONFIG_THRESHOLDS = """app:
+  database_path: {db}
+  retention_days: 60
+collectors:
+  disks:
+    enabled: true
+    paths:
+    - id: disk_root
+      path: /
+      warn_percent: 85
+web:
+  auth:
+    mode: basic
+    username: admin
+    password: pw
+"""
+
+
+def test_settings_page_renders_threshold_inputs(tmp_path):
+    server, _ = _start(tmp_path, CONFIG_THRESHOLDS)
+    port = server.server_address[1]
+    try:
+        resp, body = _req(port, "GET", "/settings", {"Authorization": _basic()})
+        assert resp.status == 200
+        assert "Thresholds" in body
+        assert 'name="setting:app.retention_days"' in body
+        assert 'name="setting:collectors.disks.paths[id=disk_root].warn_percent"' in body
+    finally:
+        server.shutdown()
+
+
+def test_save_threshold_edits_config_file(tmp_path):
+    server, cfg_path = _start(tmp_path, CONFIG_THRESHOLDS)
+    port = server.server_address[1]
+    try:
+        _, body = _req(port, "GET", "/settings", {"Authorization": _basic()})
+        csrf = re.search(r'name="csrf" value="([^"]+)"', body).group(1)
+        post = urllib.parse.urlencode({
+            "csrf": csrf,
+            "collector:disks": "on",  # unchanged toggle state
+            "setting:app.retention_days": "90",
+            "setting:collectors.disks.paths[id=disk_root].warn_percent": "88",
+        })
+        resp, _ = _req(
+            port, "POST", "/settings",
+            {"Authorization": _basic(), "Content-Type": "application/x-www-form-urlencoded"},
+            post,
+        )
+        assert resp.status == 302 and "saved=1" in resp.getheader("Location")
+        parsed = yaml.safe_load(open(cfg_path, encoding="utf-8"))
+        assert parsed["app"]["retention_days"] == 90
+        assert parsed["collectors"]["disks"]["paths"][0]["warn_percent"] == 88
+    finally:
+        server.shutdown()
+
+
+def test_save_rejects_out_of_range_threshold(tmp_path):
+    server, cfg_path = _start(tmp_path, CONFIG_THRESHOLDS)
+    port = server.server_address[1]
+    try:
+        _, body = _req(port, "GET", "/settings", {"Authorization": _basic()})
+        csrf = re.search(r'name="csrf" value="([^"]+)"', body).group(1)
+        post = urllib.parse.urlencode({
+            "csrf": csrf,
+            "setting:collectors.disks.paths[id=disk_root].warn_percent": "5",
+        })
+        resp, _ = _req(
+            port, "POST", "/settings",
+            {"Authorization": _basic(), "Content-Type": "application/x-www-form-urlencoded"},
+            post,
+        )
+        assert resp.status == 302 and "error=" in resp.getheader("Location")
+        parsed = yaml.safe_load(open(cfg_path, encoding="utf-8"))
+        assert parsed["collectors"]["disks"]["paths"][0]["warn_percent"] == 85  # unchanged
+    finally:
+        server.shutdown()

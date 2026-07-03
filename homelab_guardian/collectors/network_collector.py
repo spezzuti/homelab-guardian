@@ -74,7 +74,7 @@ def collect(config: dict[str, Any], secrets: Any = None) -> list[HealthCheck]:
             if server:
                 addresses = sorted(set(dnsquery.query_a(hostname, str(server), timeout=timeout)))
             else:
-                addresses = sorted({result[4][0] for result in socket.getaddrinfo(hostname, None)})
+                addresses = sorted({str(result[4][0]) for result in socket.getaddrinfo(hostname, None)})
         except Exception as exc:
             evidence["error"] = str(exc)
             where = f" via {server}" if server else ""
