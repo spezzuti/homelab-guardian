@@ -10,6 +10,12 @@
   addresses). A resolver that answers with the wrong record is a `warning`
   with the split-horizon guidance; an unreachable resolver stays `critical`.
 
+- Dashboard brand refresh ("interlock"): a breaker-switch-G logo as inline
+  SVG favicon and header mark, a slate brand accent (`--brand`) for identity
+  surfaces (wordmark, focus rings, toggles) that never competes with the
+  four status colors, and a monospace stack for the wordmark, check ids,
+  counts, and code. Pure CSS/constant changes ??? no framework, no build
+  step, no new markup structure.
 - Guided config edits v2: the `/settings` page now edits numeric thresholds
   and timing — disk warn/critical percent, TLS expiry warn/critical days,
   backup-age limits, snapshot retention, confirm-scans, and the agent ack
