@@ -10,6 +10,14 @@
   addresses). A resolver that answers with the wrong record is a `warning`
   with the split-horizon guidance; an unreachable resolver stays `critical`.
 
+- Guided config edits v2: the `/settings` page now edits numeric thresholds
+  and timing — disk warn/critical percent, TLS expiry warn/critical days,
+  backup-age limits, snapshot retention, confirm-scans, and the agent ack
+  deadline — through a whitelisted registry (the dashboard can never write
+  an arbitrary config path). Same surgical comment-preserving editor and
+  auth + CSRF gating as the collector toggles; out-of-range values are
+  rejected whole, never partially applied.
+
 ### Security
 
 - Published the project threat model (`docs/threat-model.md`) and a security

@@ -13,7 +13,14 @@ from urllib.parse import parse_qs, quote, urlparse
 
 from homelab_guardian import db
 from homelab_guardian.config import load_config
-from homelab_guardian.configedit import apply_collector_toggles, toggleable_collectors, write_config
+from homelab_guardian.configedit import (
+    apply_collector_toggles,
+    apply_setting_edits,
+    editable_settings,
+    parse_setting_edits,
+    toggleable_collectors,
+    write_config,
+)
 from homelab_guardian.diff import ScanDiff, diff_scans
 from homelab_guardian.models import HealthCheck
 from homelab_guardian.webauth import Authenticator, NoAuth, build_authenticator
@@ -150,6 +157,11 @@ a.settings-link {
 .settings-row .cid { color: var(--muted); font-size: 0.82rem; }
 .settings-row .cdesc { display: block; color: var(--muted); font-size: 0.82rem; margin-top: 3px; }
 input.toggle { width: 18px; height: 18px; }
+.settings-row input.num {
+  width: 96px; padding: 5px 8px; border: 1px solid var(--border);
+  border-radius: 8px; background: var(--bg); color: var(--text); font-size: 0.92rem;
+}
+h3.sgroup { margin: 16px 0 2px; font-size: 0.95rem; color: var(--muted); }
 .savebar { margin-top: 18px; display: flex; gap: 14px; align-items: center; }
 button.save {
   background: var(--ok); color: #fff; border: none; border-radius: 8px;
@@ -566,6 +578,37 @@ def render_empty_page() -> str:
     )
 
 
+def _render_setting_inputs(settings: list[dict[str, Any]], editable: bool) -> str:
+    """The Thresholds & timing card: whitelisted numeric inputs, grouped."""
+    if not settings:
+        return ""
+    disabled = "" if editable else " disabled"
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for s in settings:
+        groups.setdefault(s["group"], []).append(s)
+    parts = [
+        '<div class="card"><h2>Thresholds &amp; timing</h2>',
+        '<p class="notice">Numeric limits for the enabled checks. Values outside the allowed range are rejected; comments in config.yaml are preserved.</p>',
+    ]
+    for group, entries in groups.items():
+        parts.append(f'<h3 class="sgroup">{html.escape(group)}</h3>')
+        for s in entries:
+            ctx = f'<span class="cid">{html.escape(s["context"])}</span> · ' if s.get("context") else ""
+            step = "1" if s["kind"] == "int" else "any"
+            value = f"{s['value']:g}"
+            parts.append(
+                f'<label class="settings-row"><span>'
+                f'<span class="label">{html.escape(s["label"])}</span> '
+                f'<span class="cid">{html.escape(s["unit"])}</span>'
+                f'<span class="cdesc">{ctx}allowed {s["min"]:g}–{s["max"]:g}</span></span>'
+                f'<input class="num" type="number" name="setting:{html.escape(s["token"])}" '
+                f'value="{value}" min="{s["min"]:g}" max="{s["max"]:g}" step="{step}"{disabled}>'
+                f"</label>"
+            )
+    parts.append("</div>")
+    return "".join(parts)
+
+
 def render_settings_page(
     collectors: list[dict[str, Any]],
     *,
@@ -575,6 +618,7 @@ def render_settings_page(
     saved: bool = False,
     error: str | None = None,
     auth_mode: str = "none",
+    settings: list[dict[str, Any]] | None = None,
 ) -> str:
     rows = []
     for c in collectors:
@@ -599,6 +643,7 @@ def render_settings_page(
     else:
         banner = ""
 
+    settings_html = _render_setting_inputs(settings or [], editable)
     if editable:
         who = f"Signed in as <b>{html.escape(identity.user)}</b>." if identity else ""
         logout = ' · <a href="/auth/logout">Sign out</a>' if auth_mode == "oidc" else ""
@@ -607,8 +652,9 @@ def render_settings_page(
             f'<input type="hidden" name="csrf" value="{html.escape(csrf_token)}">'
             f'<div class="card"><h2>Collectors</h2>'
             f'<p class="notice">Turn checks on or off. Saved to config.yaml; the running scan picks up changes automatically.</p>'
-            f"{rows_html}"
-            f'<div class="savebar"><button class="save" type="submit">Save</button>'
+            f"{rows_html}</div>"
+            f"{settings_html}"
+            f'<div class="card"><div class="savebar"><button class="save" type="submit">Save</button>'
             f'<span class="notice">{who}{logout}</span></div></div></form>'
         )
     else:
@@ -619,6 +665,7 @@ def render_settings_page(
             "Set <code>web.auth.mode</code> in config.yaml (basic / forward_auth / oidc), then reload. "
             "Current configuration:</p>"
             f"{rows_html}</div>"
+            f"{settings_html}"
         )
 
     return f"""<!doctype html>
@@ -854,6 +901,7 @@ class GuardianRequestHandler(BaseHTTPRequestHandler):
             saved=query.get("saved") == ["1"],
             error=next(iter(query.get("error") or []), None),
             auth_mode=self.auth_mode,
+            settings=editable_settings(config),
         ))
 
     def _save_settings(self) -> None:
@@ -882,11 +930,24 @@ class GuardianRequestHandler(BaseHTTPRequestHandler):
             now = f"collector:{col['name']}" in form
             if now != col["enabled"]:
                 desired[col["name"]] = now
-        if desired:
+        # Whitelisted numeric edits: only tokens the registry derives from the
+        # CURRENT config are accepted — a client cannot post arbitrary paths.
+        posted = {key[len("setting:"):]: values[0] for key, values in form.items()
+                  if key.startswith("setting:") and values}
+        try:
+            edits = parse_setting_edits(config, posted)
+        except ValueError as exc:
+            self._redirect("/settings?error=" + quote(str(exc)[:200]))
+            return
+        if desired or edits:
             try:
                 with open(self.config_path, "r", encoding="utf-8") as handle:
                     text = handle.read()
-                write_config(self.config_path, apply_collector_toggles(text, desired))
+                if desired:
+                    text = apply_collector_toggles(text, desired)
+                if edits:
+                    text = apply_setting_edits(text, edits)
+                write_config(self.config_path, text)
             except Exception as exc:
                 self._redirect("/settings?error=" + quote(str(exc)[:200]))
                 return
