@@ -509,7 +509,7 @@ def run_scan_loop(config_path: str, interval_seconds: int) -> int:
 
                 try:
                     wait_for_network_ready(load_config(config_path))
-                except Exception:
+                except Exception:  # nosec B110
                     pass  # readiness is best-effort; never block the scan loop
                 first = False
             run_scan(config_path)

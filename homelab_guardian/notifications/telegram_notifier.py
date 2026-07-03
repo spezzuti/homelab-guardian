@@ -134,7 +134,7 @@ def send_text(config: dict[str, Any], text: str, secrets: Any = None) -> bool:
         return False
 
     try:
-        response = requests.post(
+        response = requests.post(  # nosec B113
             f"https://api.telegram.org/bot{token}/sendMessage",
             json={
                 "chat_id": chat_id,

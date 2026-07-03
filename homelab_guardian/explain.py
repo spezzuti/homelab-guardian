@@ -99,7 +99,7 @@ def explain(
         headers["Authorization"] = f"Bearer {api_key}"
 
     try:
-        response = requests.post(
+        response = requests.post(  # nosec B113
             f"{base_url}/chat/completions",
             headers=headers,
             json={

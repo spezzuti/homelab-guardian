@@ -18,6 +18,20 @@ jobs:
       - run: ruff check homelab_guardian tests
       - run: mypy homelab_guardian
 
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install "bandit[toml]" pip-audit
+      - name: Static security scan
+        run: bandit -c pyproject.toml -r homelab_guardian
+      - name: Audit runtime dependencies for known CVEs
+        run: pip-audit .
+
   test:
     runs-on: ${{ matrix.os }}
     strategy:

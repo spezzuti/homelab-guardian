@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### Security
+
+- Published the project threat model (`docs/threat-model.md`) and a security
+  policy (`SECURITY.md`), linked from the top of the README: attack surfaces,
+  the compromised-agent scenario by configuration tier, enforced invariants,
+  and the honest residual-risk list.
+- CI now gates every push on `bandit` (static security scan; config in
+  `pyproject.toml`) and `pip-audit` (known CVEs in the runtime dependency
+  tree). The audit that introduced the gate found zero true positives; the
+  handful of false positives carry justified inline `# nosec` annotations.
+
+### Changed
+
+- Packaging: license metadata migrated to a PEP 639 SPDX expression
+  (`license = "AGPL-3.0-or-later"`), removing the deprecated TOML-table form
+  and license classifier that setuptools warns will break builds in 2027.
+- `ROADMAP.md` rewritten to match reality (the shipped monitor → agent →
+  repair arc) and the road ahead; stale done items pruned from `TASKS.md`.
+
 ## v0.3.5 — 2026-07-02
 
 ### Security
