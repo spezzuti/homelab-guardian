@@ -8,6 +8,7 @@ from typing import Any
 import requests
 import urllib3
 
+from homelab_guardian import dnsquery
 from homelab_guardian.models import HealthCheck, HealthStatus
 from homelab_guardian.tls import fetch_cert_expiry
 
@@ -48,27 +49,74 @@ def collect(config: dict[str, Any], secrets: Any = None) -> list[HealthCheck]:
         check_id = item.get("id") or f"dns_{item.get('hostname', 'unknown')}"
         name = item.get("name") or f"DNS check: {item.get('hostname', 'unknown')}"
         hostname = item.get("hostname")
-        record_type = item.get("record_type", "A/AAAA")
+        # `server:` asks that resolver directly (split-horizon validation: what
+        # does MY Pi-hole answer?) instead of the system resolver path.
+        server = item.get("server")
+        record_type = item.get("record_type", "A" if server else "A/AAAA")
+        # `expected:` asserts the answer — every listed address must be present,
+        # so a broken local DNS override is caught while the name still resolves.
+        expected = item.get("expected")
+        expected_ips = [str(expected)] if isinstance(expected, str) else [str(e) for e in (expected or [])]
         if not hostname:
             checks.append(HealthCheck(check_id, name, "unknown", "DNS check is missing a hostname.", item, "Add a hostname or remove this check.", group=group))
             continue
         try:
-            addresses = sorted({result[4][0] for result in socket.getaddrinfo(hostname, None)})
+            timeout = float(item.get("timeout", 3))
+        except (TypeError, ValueError):
+            checks.append(HealthCheck(check_id, name, "unknown", "DNS check has an invalid timeout.", {"hostname": hostname, "timeout": item.get("timeout")}, "Set timeout to a number of seconds.", group=group))
+            continue
+        evidence: dict[str, Any] = {"hostname": hostname, "record_type": record_type}
+        if server:
+            evidence["server"] = str(server)
+        if expected_ips:
+            evidence["expected"] = expected_ips
+        try:
+            if server:
+                addresses = sorted(set(dnsquery.query_a(hostname, str(server), timeout=timeout)))
+            else:
+                addresses = sorted({result[4][0] for result in socket.getaddrinfo(hostname, None)})
+        except Exception as exc:
+            evidence["error"] = str(exc)
+            where = f" via {server}" if server else ""
+            checks.append(
+                HealthCheck(
+                    check_id, name, _unreachable_status(item),
+                    f"{hostname} did not resolve{where}.",
+                    evidence,
+                    "Check DNS service, upstream resolver, or local network path.", group=group,
+                )
+            )
+            continue
+        evidence["addresses"] = addresses
+        missing = [ip for ip in expected_ips if ip not in addresses]
+        if missing:
+            # Resolvable-but-wrong is degraded, not unreachable: the resolver
+            # answers, but the split-horizon/local-override record is off.
+            checks.append(
+                HealthCheck(
+                    check_id, name, "warning",
+                    f"{hostname} resolved to {', '.join(addresses) or '(no A records)'}; expected {', '.join(expected_ips)}.",
+                    evidence,
+                    "The resolver is answering, but not with the expected address — check the local DNS override / split-horizon entry.",
+                    group=group,
+                )
+            )
+        elif expected_ips:
+            checks.append(
+                HealthCheck(
+                    check_id, name, "ok",
+                    f"{hostname} resolves to the expected address(es).",
+                    evidence,
+                    "No action required.", group=group,
+                )
+            )
+        else:
             checks.append(
                 HealthCheck(
                     check_id, name, "ok",
                     f"{hostname} resolves to {len(addresses)} address(es).",
-                    {"hostname": hostname, "record_type": record_type, "addresses": addresses},
+                    evidence,
                     "No action required.", group=group,
-                )
-            )
-        except Exception as exc:
-            checks.append(
-                HealthCheck(
-                    check_id, name, _unreachable_status(item),
-                    f"{hostname} did not resolve.",
-                    {"hostname": hostname, "record_type": record_type, "error": str(exc)},
-                    "Check DNS service, upstream resolver, or local network path.", group=group,
                 )
             )
 

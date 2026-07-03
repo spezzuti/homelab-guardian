@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Added
+
+- Split-horizon DNS validation: `dns_checks` entries take an optional
+  `server:` (query that resolver directly — dependency-free A-record client,
+  UDP with TCP retry on truncation) and `expected:` (assert the returned
+  addresses). A resolver that answers with the wrong record is a `warning`
+  with the split-horizon guidance; an unreachable resolver stays `critical`.
+
 ### Security
 
 - Published the project threat model (`docs/threat-model.md`) and a security

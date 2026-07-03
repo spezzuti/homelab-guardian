@@ -55,6 +55,16 @@ collectors:
         name: Public DNS sanity check
         hostname: example.com
         record_type: A/AAAA
+      # Split-horizon validation: ask a SPECIFIC resolver and assert its
+      # answer, so a broken local DNS override is caught while the name
+      # still resolves publicly. `server:` queries that resolver directly
+      # (A records over UDP, no extra dependency); `expected:` (one IP or a
+      # list) must all be present in the answer or the check is a warning.
+      # - id: dns_split_horizon_portal
+      #   name: Pi-hole answers portal with the LAN address
+      #   hostname: portal.example.com
+      #   server: 192.168.0.2
+      #   expected: 192.168.0.87
     tcp_checks:
       - id: tcp_example_https
         name: Example HTTPS TCP reachability

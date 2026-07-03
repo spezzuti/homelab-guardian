@@ -100,3 +100,60 @@ def test_tls_invalid_port_is_unknown():
         {"tls_checks": [{"id": "t1", "host": "example.com", "port": "https"}]}
     )
     assert checks[0].status == "unknown"
+
+
+# --- split-horizon DNS: server + expected assertions ---
+
+
+def test_dns_expected_match_via_server_is_ok(monkeypatch):
+    monkeypatch.setattr(network_collector.dnsquery, "query_a",
+                        lambda hostname, server, timeout=3.0: ["192.168.0.87"])
+    checks = network_collector.collect(
+        {"dns_checks": [{"id": "d1", "hostname": "port.example.lan",
+                         "server": "192.168.0.2", "expected": "192.168.0.87"}]}
+    )
+    assert checks[0].status == "ok"
+    assert checks[0].evidence["server"] == "192.168.0.2"
+    assert checks[0].evidence["addresses"] == ["192.168.0.87"]
+
+
+def test_dns_expected_mismatch_is_warning_not_critical(monkeypatch):
+    # Resolvable-but-wrong is degraded, not unreachable: the resolver answers,
+    # but the split-horizon override is broken.
+    monkeypatch.setattr(network_collector.dnsquery, "query_a",
+                        lambda hostname, server, timeout=3.0: ["203.0.113.7"])
+    checks = network_collector.collect(
+        {"dns_checks": [{"id": "d1", "hostname": "port.example.lan",
+                         "server": "192.168.0.2", "expected": ["192.168.0.87"]}]}
+    )
+    assert checks[0].status == "warning"
+    assert "expected" in checks[0].summary
+    assert checks[0].evidence["expected"] == ["192.168.0.87"]
+
+
+def test_dns_server_unreachable_is_critical_by_default(monkeypatch):
+    def _boom(hostname, server, timeout=3.0):
+        raise OSError("timed out")
+    monkeypatch.setattr(network_collector.dnsquery, "query_a", _boom)
+    checks = network_collector.collect(
+        {"dns_checks": [{"id": "d1", "hostname": "port.example.lan",
+                         "server": "192.168.0.2"}]}
+    )
+    assert checks[0].status == "critical"
+    assert "via 192.168.0.2" in checks[0].summary
+
+
+def test_dns_expected_works_with_system_resolver(monkeypatch):
+    monkeypatch.setattr(network_collector.socket, "getaddrinfo",
+                        lambda hostname, port: [(2, 1, 6, "", ("10.0.0.5", 0))])
+    checks = network_collector.collect(
+        {"dns_checks": [{"id": "d1", "hostname": "nas.example.lan", "expected": "10.0.0.5"}]}
+    )
+    assert checks[0].status == "ok"
+
+
+def test_dns_invalid_timeout_degrades_to_unknown():
+    checks = network_collector.collect(
+        {"dns_checks": [{"id": "d1", "hostname": "x.lan", "timeout": "soon"}]}
+    )
+    assert checks[0].status == "unknown"
