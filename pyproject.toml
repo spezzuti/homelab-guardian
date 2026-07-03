@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,14 +8,13 @@ version = "0.3.5"
 description = "Local-first homelab health monitoring with optional AI-agent integration and approval-gated repair"
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "AGPL-3.0-or-later"}
+license = "AGPL-3.0-or-later"
 keywords = ["homelab", "monitoring", "health-check", "self-hosted", "mcp", "docker", "systemd"]
 authors = [{name = "spezzuti"}]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Environment :: Console",
     "Intended Audience :: System Administrators",
-    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3 :: Only",
     "Topic :: System :: Monitoring",
@@ -45,6 +44,20 @@ guardian = "homelab_guardian.main:main"
 
 [tool.setuptools.packages.find]
 include = ["homelab_guardian*"]
+
+[tool.bandit]
+# Skips are checks that flag this project's deliberate design, not defects:
+#   B404/B603 - Guardian's whole job is running argv-only subprocesses
+#               (never shell=True; enforced by tests/test_repair_safety.py).
+#   B607      - system tools (systemctl, docker, bws) are invoked from PATH.
+#   B105/B107 - environment-variable NAMES are not hardcoded passwords.
+# Anything else bandit finds fails CI. One-off false positives carry a bare
+# inline `# nosec BXXX` instead of widening these skips; as of the audit that
+# added this config those are: B608 (SQL built from module-constant column
+# names, values always bound), B104 (comparing host to '0.0.0.0' to WARN the
+# user, not a bind), B113 (requests calls that do set timeout= on a later
+# line of the same call), B110 (best-effort network-readiness gate).
+skips = ["B404", "B603", "B607", "B105", "B107"]
 
 [tool.ruff]
 target-version = "py310"

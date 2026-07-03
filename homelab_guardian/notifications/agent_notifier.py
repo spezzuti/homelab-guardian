@@ -138,7 +138,7 @@ def notify(
         headers["X-GitHub-Event"] = str(event_type)
 
     try:
-        response = requests.post(
+        response = requests.post(  # nosec B113
             url,
             data=body,
             headers=headers,

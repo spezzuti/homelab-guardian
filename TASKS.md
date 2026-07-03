@@ -218,7 +218,7 @@ connection details in `docs/mcp.md`.
       (`agent.ack_timeout_minutes`, default 10) and go to Telegram if not
       confirmed relayed. Serve loop rechecks every 60s. 227 tests; both paths
       dogfooded live on Marcus (webhook prompt now tells Marcus to call back).
-- [ ] **Approval-gated repair playbooks** (whitelisted, never raw shell).
+- [x] **Approval-gated repair playbooks** (whitelisted, never raw shell).
       - [x] 3a: safety design doc drafted (`docs/repair.md`, 2026-06-14) —
             AWAITING SIGN-OFF before code. Propose(agent)/approve(human-only)/
             execute/verify; `repair.enabled` default off; first playbook
@@ -272,7 +272,7 @@ connection details in `docs/mcp.md`.
             (`NOPASSWD: /usr/bin/systemctl restart fail2ban.service` only).
             Doctor preflight validates; dogfooded the privileged fail2ban repair
             end-to-end via the scoped grant. auto_approve still off (propose-only).
-- [ ] **HTTP transport + auth** once the dashboard auth foundation lands.
+- [x] **HTTP transport + auth** once the dashboard auth foundation lands.
 
 ## Sprint 7 — reliability quartet (2026-06-13)
 

@@ -2,6 +2,8 @@
 
 [![PyPI](https://img.shields.io/pypi/v/homelab-guardian.svg)](https://pypi.org/project/homelab-guardian/)
 
+**Security:** Guardian can act on your systems, so its safety story is documented up front — see the [threat model](docs/threat-model.md) (what a compromised AI agent can and cannot do) and [SECURITY.md](SECURITY.md) for reporting.
+
 Homelab Guardian is a local-first homelab operations assistant built around
 read-only infrastructure collectors and local reports.
 

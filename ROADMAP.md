@@ -1,60 +1,81 @@
 # Roadmap
 
-## v0.1 — Daily Homelab Doctor
+Guardian's bet: **the safety layer between an AI agent and root.** Plenty of
+tools can tell you a service is down; Guardian gives any MCP-capable agent
+eyes (structured health data) and hands (approval-gated, allowlisted,
+audited repairs) without ever trusting it with a shell. Monitoring is the
+substrate; the deterministic actuation contract is the product.
 
-Goal: generate a local Markdown report from optional read-only collectors.
+## Shipped (v0.1 → v0.3.x)
 
-Delivered capabilities:
+The founding arc is complete and runs in production on the maintainer's
+homelab:
 
-- Inspect Docker containers
-- Detect stopped, unhealthy, or restarting containers
-- Identify mounts, volumes, exposed ports, and compose projects
-- Connect to Home Assistant via read-only API
-- Report unavailable or unknown Home Assistant entities
-- Run DNS, TCP, HTTP, and TLS/network checks
-- Check backup folder freshness by local path
-- Store snapshots locally in SQLite
-- Compare current scan against the previous scan
-- Generate a Markdown health report
-- Optionally send Telegram notifications
+- **Monitor** — 12 read-only collectors (Docker, Home Assistant,
+  DNS/TCP/HTTP/TLS, disks, mounts, systemd, firewall, SSH, exposed services,
+  updates, backup health), snapshot diffing, flap damping, acknowledgments.
+- **Report** — Markdown reports, read-only web dashboard with auth modes
+  (basic / forward-auth / native OIDC), guided config edits, optional BYOM
+  AI briefing, flap-damped Telegram notifications.
+- **Attach an agent** — MCP server (stdio + bearer-gated HTTP), agent-webhook
+  notification mode with HMAC signing and a deterministic Telegram fallback
+  for criticals the agent fails to acknowledge.
+- **Act** — approval-gated repair playbooks (restart unit/container, remount,
+  reclaim family) with risk tiers, allowlists, argv-only execution, scoped
+  sudoers, loop guards, backup interlocks, append-only audit, opt-in
+  auto-repair for non-destructive reflexes, and reflex→specialist→human
+  escalation.
 
-## v0.2 — Product-shaped local Guardian
+## Now — the solid base
 
-Goal: keep the read-only collector model, but make Guardian usable as a small
-installed tool rather than only a scaffold.
+Trust artifacts before new features:
 
-Delivered capabilities:
+- [x] Published threat model (`docs/threat-model.md`) + `SECURITY.md`
+- [x] bandit + pip-audit gates in CI (audit found zero true positives)
+- [x] PEP 639 SPDX license metadata
+- [ ] CLI migrated to argparse subparsers (before multi-host adds commands)
+- [ ] Split-horizon DNS assertion (`dns_checks` gains `server:`/`expected:`)
+- [ ] Guided edits v2 — thresholds and targets from `/settings`
+  (comment-preserving nested edits)
 
-- Packaged `guardian` CLI (`pip install -e .`)
-- Setup wizard with optional read-only LAN discovery
-- Read-only web dashboard (`guardian serve`) with scan history
-- Acknowledgments for muting known issues without hiding them
-- Flap-damped Telegram notifications
-- Optional bring-your-own-model AI briefing layer
-- Secrets provider abstraction with env and Bitwarden Secrets Manager support
-- New collectors: systemd, disk space, TLS certificate expiry
-- Snapshot retention pruning
-- Multi-arch GHCR image workflow
-- AGPL-3.0-or-later license
+## Next — brand, reach, and depth
 
-## Validated after v0.2.0
+- Brand identity + logo; dashboard reskin (CSS-only first — the stdlib,
+  no-framework dashboard is deliberate and stays)
+- Public landing page (GitHub Pages) + a recorded demo of the real incident
+  loop: detect → agent narrates → "go ahead" → gated repair → verify
+- Launch sequence: MCP directory listings → r/selfhosted → Show HN, in that
+  order, only once the trust artifacts are live
+- **Multi-host via agentless SSH** — a `hosts:` block, collectors run over
+  `ssh host -- <argv>` with the same argv-only discipline, host-namespaced
+  snapshots, MCP tools gain a `host` parameter. (Satellite agents are
+  deliberately rejected for now: they multiply the trust surface.)
+- Dashboard structural pass riding a `web/` package split: an activity
+  timeline (repairs, approvals, agent actions) and a richer repair-approval
+  view
+- More demo-worthy playbooks: restic unlock, service rollback, cert renew
+- MCP prompts/resources so any client is good at Guardian on first connect
 
-- Docker socket-proxy mode on a real Docker host: read endpoints worked, Guardian inventory matched `docker ps`, write-oriented `POST /containers/create` was blocked with `403`, and temporary validation artifacts were cleaned up.
+## Later
 
-## v0.3 candidates — harden before widening scope
+- Agent evaluation harness: scripted incident drills that score an attached
+  agent's detect→diagnose→repair performance against ground truth
+- Prometheus `/metrics` exporter (coexist with Grafana stacks)
+- ntfy + generic webhook notifiers
+- Entry-points plugin API for third-party collectors (after multi-host
+  settles the collector interface)
+- Paid hosted features above the single host (alert relay, fleet view) —
+  the self-hosted tool stays complete and free (AGPL)
 
-- Finish backup freshness dogfood with dummy local folders before real backup paths
-- Make doctor/preflight semantics explicit: practical writable preflight vs. optional check-only mode
-- Add web dashboard deployment guidance for reverse proxy/auth
-- Add static safety checks for mutating collector operations and secret leakage
-- Add Python 3.10 CI coverage because the package supports `>=3.10`
+## v1.0 criteria
 
-## Later, after local mode is boring
+Threat model published; subparser CLI; `web/` package split; split-horizon
+DNS + guided-edits v2 shipped; 30 days of production soak with zero
+priority-1 incidents.
 
-- Rich diffing and trend analysis beyond previous-scan comparison
-- Policy/rule engine
-- Remote collector model over least-privilege APIs, not broad shell access
-- Additional notification adapters
-- Additional secrets providers
-- Self-healing workflows only after an explicit safety design and operator approval model
-- Paid hosted features
+## Non-goals
+
+- Windows/macOS collector or repair parity (homelab servers are Linux; the
+  core and network collectors stay cross-platform)
+- A JS framework or build step for the dashboard
+- A generic "run command" repair playbook — never

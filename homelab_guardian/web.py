@@ -1031,7 +1031,7 @@ def serve(
     shown_host = "localhost" if host in {"127.0.0.1", "::1"} else host
     print(f"Guardian web view on http://{shown_host}:{port} (read-only). Press Ctrl+C to stop.")
     print(f"Auth: {auth_mode}.")
-    if host == "0.0.0.0" and auth_mode == "none":
+    if host == "0.0.0.0" and auth_mode == "none":  # nosec B104
         print("Listening on all interfaces with no auth — anyone on your network can view reports.")
     try:
         server.serve_forever()

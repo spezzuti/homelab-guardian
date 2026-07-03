@@ -143,7 +143,7 @@ def create_repair_proposal(conn, check_id, action, plan, proposed_by="") -> int:
 
 
 def get_repair_proposal(conn, proposal_id) -> dict[str, Any] | None:
-    row = conn.execute(f"SELECT {_REPAIR_COLUMNS} FROM repair_proposals WHERE id = ?", (proposal_id,)).fetchone()
+    row = conn.execute(f"SELECT {_REPAIR_COLUMNS} FROM repair_proposals WHERE id = ?", (proposal_id,)).fetchone()  # nosec B608
     return _repair_dict(row)
 
 
@@ -196,7 +196,7 @@ def record_repair_execution(conn, proposal_id, status, result, verify) -> None:
 
 def list_repair_proposals(conn, limit=20) -> list[dict[str, Any]]:
     rows = conn.execute(
-        f"SELECT {_REPAIR_COLUMNS} FROM repair_proposals ORDER BY id DESC LIMIT ?", (limit,)
+        f"SELECT {_REPAIR_COLUMNS} FROM repair_proposals ORDER BY id DESC LIMIT ?", (limit,)  # nosec B608
     ).fetchall()
     return [d for r in rows if (d := _repair_dict(r)) is not None]
 
@@ -265,7 +265,7 @@ def clear_pending_alerts(conn: sqlite3.Connection, check_ids: list[str]) -> int:
     if not check_ids:
         return 0
     placeholders = ",".join("?" for _ in check_ids)
-    cursor = conn.execute(f"DELETE FROM pending_alerts WHERE check_id IN ({placeholders})", check_ids)
+    cursor = conn.execute(f"DELETE FROM pending_alerts WHERE check_id IN ({placeholders})", check_ids)  # nosec B608
     conn.commit()
     return cursor.rowcount
 
@@ -281,7 +281,7 @@ def defer_pending_alerts(conn: sqlite3.Connection, check_ids: list[str], new_dea
     now = datetime.now(timezone.utc).isoformat()
     placeholders = ",".join("?" for _ in check_ids)
     cursor = conn.execute(
-        f"UPDATE pending_alerts SET deadline = ?, agent_acked_at = ? "
+        f"UPDATE pending_alerts SET deadline = ?, agent_acked_at = ? "  # nosec B608
         f"WHERE check_id IN ({placeholders}) AND agent_acked_at IS NULL",
         [new_deadline, now, *check_ids],
     )
@@ -299,7 +299,7 @@ def _pending_dict(r) -> dict[str, Any]:
 
 def list_pending_alerts(conn: sqlite3.Connection) -> list[dict[str, Any]]:
     rows = conn.execute(
-        f"SELECT {_PENDING_COLUMNS} FROM pending_alerts ORDER BY deadline"
+        f"SELECT {_PENDING_COLUMNS} FROM pending_alerts ORDER BY deadline"  # nosec B608
     ).fetchall()
     return [_pending_dict(r) for r in rows]
 
@@ -308,7 +308,7 @@ def overdue_pending_alerts(conn: sqlite3.Connection, now: datetime | None = None
     """Pending alerts whose acknowledgement deadline has passed."""
     current = (now or datetime.now(timezone.utc)).isoformat()
     rows = conn.execute(
-        f"SELECT {_PENDING_COLUMNS} FROM pending_alerts WHERE deadline <= ? ORDER BY deadline",
+        f"SELECT {_PENDING_COLUMNS} FROM pending_alerts WHERE deadline <= ? ORDER BY deadline",  # nosec B608
         (current,),
     ).fetchall()
     return [_pending_dict(r) for r in rows]
