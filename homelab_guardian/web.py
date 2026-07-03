@@ -37,10 +37,36 @@ STATUS_META = {
 }
 STATUS_ORDER = ["critical", "warning", "unknown", "ok"]
 
+# The mark: a G drawn as a breaker switch — an open ring whose crossbar is a
+# switch bar. Reads as both the initial and "the circuit breaker between the
+# agent and root". Inline SVG so the dashboard stays a single self-contained
+# response; currentColor lets it follow the brand variable in either theme.
+LOGO_SVG = (
+    '<svg class="logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" '
+    'width="20" height="20" aria-hidden="true">'
+    '<circle cx="16" cy="16" r="11" fill="none" stroke="currentColor" stroke-width="4.5" '
+    'stroke-linecap="round" stroke-dasharray="54 15.1" transform="rotate(38 16 16)"/>'
+    '<rect x="15" y="13.75" width="11.5" height="4.5" rx="2.25" fill="currentColor"/>'
+    "</svg>"
+)
+
+# Same mark as the favicon (fixed slate — favicons don't inherit CSS).
+FAVICON_LINK = (
+    '<link rel="icon" href="data:image/svg+xml,'
+    "%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E"
+    "%3Ccircle cx='16' cy='16' r='11' fill='none' stroke='%233d4c66' stroke-width='4.5' "
+    "stroke-linecap='round' stroke-dasharray='54 15.1' transform='rotate(38 16 16)'/%3E"
+    "%3Crect x='15' y='13.75' width='11.5' height='4.5' rx='2.25' fill='%233d4c66'/%3E"
+    '%3C/svg%3E">'
+)
+
+# Brand ("interlock"): a slate accent for identity surfaces — wordmark, logo,
+# focus rings. Deliberately NOT green/red/amber: status colors keep exclusive
+# ownership of meaning, the brand never competes with them.
 _DARK_VARS = """
     --bg: #14171c; --card: #1d222a; --text: #e8eaee; --muted: #9aa3b0;
     --critical: #ff5d64; --warning: #ffb454; --unknown: #8fa1bd; --ok: #4ecb71;
-    --border: #2a313b;
+    --border: #2a313b; --brand: #93a5c4;
 """
 
 PAGE_STYLE = f"""
@@ -48,7 +74,8 @@ PAGE_STYLE = f"""
   color-scheme: light dark;
   --bg: #f5f6f8; --card: #ffffff; --text: #1c2330; --muted: #69707d;
   --critical: #d4373e; --warning: #c77d00; --unknown: #6c7a93; --ok: #2c8a4b;
-  --border: #e3e6ea;
+  --border: #e3e6ea; --brand: #3d4c66;
+  --mono: ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, monospace;
 }}
 @media (prefers-color-scheme: dark) {{
   :root:not([data-theme="light"]) {{{_DARK_VARS}}}
@@ -69,7 +96,12 @@ header.overall {
   border-left: 8px solid var(--accent, var(--unknown));
 }
 header.overall { position: relative; }
-header.overall h1 { margin: 0 0 2px; font-size: 1.15rem; font-weight: 600; }
+header.overall h1 {
+  margin: 0 0 2px; font-size: 1.12rem; font-weight: 600;
+  font-family: var(--mono); text-transform: lowercase; letter-spacing: 0.02em;
+  display: flex; align-items: center; gap: 8px;
+}
+h1 .logo { color: var(--brand); flex: none; }
 header.overall .status { font-size: 1.7rem; font-weight: 700; }
 header.overall .meta { color: var(--muted); font-size: 0.85rem; margin-top: 4px; }
 .theme-toggle {
@@ -142,6 +174,9 @@ table.history th, table.history td {
 table.history th { color: var(--muted); font-weight: 600; }
 table.history tr.current td { font-weight: 650; }
 footer { color: var(--muted); font-size: 0.8rem; margin-top: 28px; text-align: center; }
+code, pre, .cid { font-family: var(--mono); }
+.pill b { font-family: var(--mono); }
+button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 4px; }
 h2.sectionhead { margin: 22px 2px 10px; font-size: 1.02rem; }
 a.settings-link {
   position: absolute; top: 14px; right: 56px; text-decoration: none;
@@ -156,11 +191,13 @@ a.settings-link {
 .settings-row .label { font-weight: 600; }
 .settings-row .cid { color: var(--muted); font-size: 0.82rem; }
 .settings-row .cdesc { display: block; color: var(--muted); font-size: 0.82rem; margin-top: 3px; }
-input.toggle { width: 18px; height: 18px; }
+input.toggle { width: 18px; height: 18px; accent-color: var(--brand); }
 .settings-row input.num {
   width: 96px; padding: 5px 8px; border: 1px solid var(--border);
   border-radius: 8px; background: var(--bg); color: var(--text); font-size: 0.92rem;
+  font-family: var(--mono);
 }
+.settings-row input.num:focus { outline: 2px solid var(--brand); border-color: var(--brand); }
 h3.sgroup { margin: 16px 0 2px; font-size: 0.95rem; color: var(--muted); }
 .savebar { margin-top: 18px; display: flex; gap: 14px; align-items: center; }
 button.save {
@@ -550,13 +587,13 @@ def render_scan_page(
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">{refresh}
-<title>{app_name} — {label}</title><style>{PAGE_STYLE}</style>{THEME_SCRIPT}</head>
+<title>{app_name} — {label}</title>{FAVICON_LINK}<style>{PAGE_STYLE}</style>{THEME_SCRIPT}</head>
 <body><main>
 <header class="overall {_STATUS_CLASS.get(overall, 'unk')}">
 <a class="settings-link" href="/settings" title="Settings">⚙</a>
 {_repairs_link(repairs_pending)}
 <button class="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark theme">🌓</button>
-<h1>{app_name}</h1>
+<h1>{LOGO_SVG}{app_name}</h1>
 <div class="status">{icon} {label.upper()}</div>
 <div class="meta">Scan #{scan_id} · {_fmt_time(created_at)}{' · auto-refreshes every %ds' % refresh_seconds if refresh_seconds else ''}</div>
 </header>
@@ -572,7 +609,7 @@ def render_scan_page(
 def render_empty_page() -> str:
     return (
         f"<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>Homelab Guardian</title>"
-        f"<style>{PAGE_STYLE}</style></head><body><main><div class=\"card\"><h2>No scans yet</h2>"
+        f"{FAVICON_LINK}<style>{PAGE_STYLE}</style></head><body><main><div class=\"card\"><h2>No scans yet</h2>"
         f"<p>Run <code>guardian --config config.yaml</code> to produce the first scan, "
         f"or start the server with <code>--interval</code> to scan continuously.</p></div></main></body></html>"
     )
@@ -671,11 +708,11 @@ def render_settings_page(
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Homelab Guardian — Settings</title><style>{PAGE_STYLE}</style>{THEME_SCRIPT}</head>
+<title>Homelab Guardian — Settings</title>{FAVICON_LINK}<style>{PAGE_STYLE}</style>{THEME_SCRIPT}</head>
 <body><main>
 <header class="overall okc">
 <button class="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark theme">🌓</button>
-<h1>Settings</h1>
+<h1>{LOGO_SVG}Settings</h1>
 <div class="meta"><a href="/">← Back to dashboard</a></div>
 </header>
 {banner}
@@ -766,11 +803,11 @@ def render_repairs_page(
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Homelab Guardian — Repairs</title><style>{PAGE_STYLE}</style>{THEME_SCRIPT}</head>
+<title>Homelab Guardian — Repairs</title>{FAVICON_LINK}<style>{PAGE_STYLE}</style>{THEME_SCRIPT}</head>
 <body><main>
 <header class="overall okc">
 <button class="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark theme">🌓</button>
-<h1>Repairs</h1>
+<h1>{LOGO_SVG}Repairs</h1>
 <div class="meta"><a href="/">← Back to dashboard</a></div>
 </header>
 {banner}
