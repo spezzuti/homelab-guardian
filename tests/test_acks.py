@@ -79,6 +79,6 @@ def test_web_page_shows_acked_section_and_pill():
     snapshot = {"app": "G", "checks": [c.to_dict() for c in checks]}
     page = render_scan_page((1, "2026-06-13T00:00:00+00:00", snapshot), ScanDiff(), [], refresh_seconds=0)
     assert "OK" in page
-    assert "Acknowledged — muted known issues (1)" in page
-    assert "Acknowledged</span>" in page  # the command-strip stat plate
-    assert "guardian unack" in page
+    assert ">ACK<" in page  # the muted check carries an ACK chip in its group
+    assert "known" in page  # its note is shown inline
+    assert "ACKNOWLEDGED</span>" in page  # and it is tallied in the counts

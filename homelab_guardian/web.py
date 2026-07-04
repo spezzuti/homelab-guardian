@@ -49,7 +49,16 @@ _BRAND_FILES = {
     "hero.png": "image/png",
     "logotype.webp": "image/webp",
     "logotype.png": "image/png",
+    "logotype-cut.png": "image/png",
     "favicon.png": "image/png",
+    # vendored fonts: the dashboard never calls out to a font CDN
+    "fonts/oswald-500.woff2": "font/woff2",
+    "fonts/oswald-600.woff2": "font/woff2",
+    "fonts/plexsans-400.woff2": "font/woff2",
+    "fonts/plexsans-500.woff2": "font/woff2",
+    "fonts/plexsans-600.woff2": "font/woff2",
+    "fonts/plexmono-400.woff2": "font/woff2",
+    "fonts/plexmono-600.woff2": "font/woff2",
 }
 
 
@@ -60,7 +69,7 @@ def _assets_dir() -> Path:
 def brand_assets() -> dict[str, str]:
     """kind -> /brand/ URL for each present asset (webp preferred)."""
     found: dict[str, str] = {}
-    for kind in ("hero", "logotype"):
+    for kind in ("hero", "logotype", "logotype-cut"):
         for ext in ("webp", "png"):
             if (_assets_dir() / f"{kind}.{ext}").is_file():
                 found[kind] = f"/brand/{kind}.{ext}"
@@ -89,512 +98,272 @@ FAVICON_LINK = (
     '%3C/svg%3E">'
 )
 
-# Brand ("interlock"): a slate accent for identity surfaces — wordmark, logo,
-# focus rings. Deliberately NOT green/red/amber: status colors keep exclusive
-# ownership of meaning, the brand never competes with them.
-_DARK_VARS = """
-    --bg: #0d1118; --card: #151b25; --text: #e8eaee; --muted: #97a1b0;
-    --critical: #ff5d64; --warning: #ffb454; --unknown: #8fa1bd; --ok: #4ecb71;
-    --border: #242e3c; --brand: #93a5c4; --rune: #6ec3e8;
-    --plate-hi: rgba(255, 255, 255, 0.05); --rivet: rgba(190, 205, 225, 0.22);
-"""
+# Design system: "Stronghold refined" (option 2A of the user's Claude Design
+# project). Single committed dark theme — the design's world is a night watch;
+# there is no light mode by choice. Fonts are vendored under /brand/fonts.
 
-PAGE_STYLE = f"""
-:root {{
-  color-scheme: light dark;
-  --bg: #e9edf2; --card: #f9fafc; --text: #1c2330; --muted: #64707f;
-  --critical: #d4373e; --warning: #c77d00; --unknown: #6c7a93; --ok: #2c8a4b;
-  --border: #d4dae2; --brand: #3d4c66; --rune: #1f7fae;
-  --plate-hi: rgba(255, 255, 255, 0.75); --rivet: rgba(61, 76, 102, 0.28);
-  --mono: ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, monospace;
-}}
-@media (prefers-color-scheme: dark) {{
-  :root:not([data-theme="light"]) {{{_DARK_VARS}}}
-}}
-:root[data-theme="dark"] {{{_DARK_VARS}}}"""
+_FONT_FACES = "".join(
+    f"@font-face {{ font-family:'{fam}'; font-weight:{w}; font-style:normal; "
+    f"font-display:swap; src:url('/brand/fonts/{slug}.woff2') format('woff2'); }}"
+    for fam, w, slug in [
+        ("Oswald", 500, "oswald-500"), ("Oswald", 600, "oswald-600"),
+        ("IBM Plex Sans", 400, "plexsans-400"), ("IBM Plex Sans", 500, "plexsans-500"),
+        ("IBM Plex Sans", 600, "plexsans-600"),
+        ("IBM Plex Mono", 400, "plexmono-400"), ("IBM Plex Mono", 600, "plexmono-600"),
+    ]
+)
 
-PAGE_STYLE += """
+PAGE_STYLE = _FONT_FACES + """
+:root {
+  color-scheme: dark;
+  --bg: #0b0e14; --shell: #151b26; --hero: #171c26; --panel: #1a2130;
+  --inner: #141a28; --code: #10141c;
+  --bd: #2b3547; --bd-in: #262f42; --row: #232b3a;
+  --t1: #e2e7f0; --t2: #d6dce8; --t3: #c7cfdd; --mut: #8f9db3; --mut2: #7d8aa0;
+  --dim: #5d6a80; --dim2: #6b788f;
+  --acc: #63a4d8; --link: #8ec3ea;
+  --ok: #4cb572; --ok-t: #7fd6a0; --crit: #d9584a; --crit-t: #f0897d;
+  --warn: #d9a13b; --warn-t: #e8bf6e; --unk: #7d8aa0; --unk-t: #a9b6c9;
+  --oswald: 'Oswald', system-ui, sans-serif;
+  --sans: 'IBM Plex Sans', system-ui, sans-serif;
+  --mono: 'IBM Plex Mono', ui-monospace, Consolas, monospace;
+}
 * { box-sizing: border-box; }
-body {
-  margin: 0; color: var(--text);
-  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
-  background:
-    radial-gradient(1100px 520px at 50% -160px, color-mix(in srgb, var(--brand) 12%, var(--bg)), transparent),
-    radial-gradient(900px 700px at 105% 110%, color-mix(in srgb, var(--brand) 7%, var(--bg)), transparent),
-    var(--bg);
-  background-attachment: fixed;
+body { margin: 0; background: var(--bg); color: var(--t3); font: 14px/1.5 var(--sans); }
+a { color: var(--link); text-decoration: none; }
+a:hover { text-decoration: underline; }
+::selection { background: rgba(99, 164, 216, 0.3); }
+main { max-width: 1280px; margin: 0 auto; padding: 28px 20px 64px; }
+@keyframes hgPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+@keyframes hgGlow { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+
+/* --- the stronghold shell -------------------------------------------- */
+.shell-card { background: var(--shell); border: 1px solid var(--bd); border-radius: 14px; overflow: hidden; }
+.hero { position: relative; height: 290px; background: var(--hero); }
+.hero-art {
+  position: absolute; right: 0; top: 0; height: 100%; width: 560px;
+  object-fit: cover; object-position: 60% 12%;
 }
-body::before { /* stone grain over the whole watch room */
-  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: 0.5;
-  background:
-    repeating-linear-gradient(115deg, color-mix(in srgb, var(--text) 1.5%, transparent) 0 2px, transparent 2px 9px),
-    repeating-linear-gradient(25deg, color-mix(in srgb, var(--text) 1%, transparent) 0 1px, transparent 1px 13px);
+.hero-wash {
+  position: absolute; inset: 0;
+  background: linear-gradient(90deg, var(--shell) 42%, rgba(21, 27, 38, 0.55) 68%, rgba(21, 27, 38, 0) 100%);
 }
-/* --- the war room: a tower rail and the field it watches ---------------- */
-.shell { display: grid; grid-template-columns: 264px minmax(0, 1fr); min-height: 100vh; }
-.rail { /* the tower runs the page's full height and scrolls with it */
-  position: relative; min-height: 100vh; overflow: hidden;
-  display: flex; flex-direction: column; gap: 14px; padding: 18px 16px 24px;
-  background: linear-gradient(180deg, #141a24 0%, #0c1017 60%, #0a0d13 100%);
-  border-right: 1px solid #232c3a;
-  box-shadow: inset -14px 0 30px -24px rgba(0, 0, 0, 0.8);
+.hero-glow {
+  position: absolute; left: 2px; top: -11px; width: 520px; height: 160px;
+  background: radial-gradient(ellipse 50% 46% at 50% 50%, var(--glow, rgba(76, 181, 114, 0.16)) 0%, transparent 70%);
+  animation: hgGlow 5.5s ease-in-out infinite; pointer-events: none;
 }
-.rail::before {
-  content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0.5;
-  background: repeating-linear-gradient(115deg, rgba(255, 255, 255, 0.02) 0 2px, transparent 2px 8px);
+.hero-body { position: absolute; left: 32px; top: 30px; right: 480px; }
+.hero-logo { width: 460px; max-width: 100%; display: block; position: relative; }
+.hero-logo-text { font: 600 34px var(--oswald); letter-spacing: 4px; color: var(--t2); text-transform: uppercase; }
+.hero-row { display: flex; align-items: center; gap: 14px; margin-top: 20px; flex-wrap: wrap; }
+.ochip {
+  border: 1px solid var(--oc, var(--ok-t)); color: var(--oc, var(--ok-t));
+  background: var(--ocbg, rgba(76, 181, 114, 0.14));
+  font: 600 13px var(--mono); letter-spacing: 2px; padding: 7px 16px; border-radius: 6px;
 }
-.rail > * { position: relative; flex: none; } /* never squash the nameplate or sigil */
-.rail-logo { /* the carved nameplate on a back-lit plinth */
-  display: block; position: relative; margin: 0 -6px; padding: 10px 8px 12px;
-  background: radial-gradient(85% 130% at 50% 0%, rgba(210, 226, 248, 0.08), transparent 72%);
-  border-bottom: 1px solid #222b38;
+.omsg { color: var(--mut); font-size: 13.5px; }
+.hero-meta {
+  display: flex; align-items: center; gap: 7px; margin-top: 12px;
+  color: var(--dim); font: 12px var(--mono);
 }
-.rail-logo img { width: 100%; height: auto; display: block; filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.6)); }
-.rail-logo-text {
-  text-align: center; font-family: Georgia, serif; text-transform: uppercase;
-  letter-spacing: 0.18em; font-weight: 700; color: #c7d1de; text-decoration: none; font-size: 0.95rem;
+.pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); animation: hgPulse 2.4s infinite; }
+
+/* folder tabs riding the hero's bottom edge */
+.tabs { position: absolute; left: 32px; bottom: 0; display: flex; gap: 4px; }
+.tab {
+  display: flex; align-items: center; gap: 8px; cursor: pointer;
+  font: 500 14px var(--oswald); letter-spacing: 2px; text-transform: uppercase;
+  padding: 11px 22px; border-radius: 8px 8px 0 0; text-decoration: none;
+  color: var(--mut2); background: rgba(11, 14, 20, 0.55);
+  border: 1px solid var(--row); border-bottom: none;
 }
-.rail-nav { display: flex; flex-direction: column; gap: 5px; }
-.rail-link {
-  display: block; width: 100%; text-align: left; cursor: pointer; text-decoration: none;
-  font: 650 0.86rem/1.3 system-ui, sans-serif; letter-spacing: 0.04em; color: #aeb9c8;
-  background: transparent; border: 1px solid transparent; border-left: 3px solid transparent;
-  padding: 8px 10px; border-radius: 0 8px 8px 0; transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
-}
-.rail-link:hover { color: #e6edf6; background: rgba(255, 255, 255, 0.04); border-left-color: var(--rune); }
-.rail-link.active { color: #e6edf6; background: rgba(255, 255, 255, 0.05); border-left-color: var(--brand); }
-.rail-portrait { /* the guardian's window: face first, base fading to stone */
-  position: relative; margin: 0 -16px;
-  border-top: 1px solid #232c3a;
-}
-.rail-portrait img {
-  display: block; width: 100%; height: 250px; object-fit: cover; object-position: top center;
-  -webkit-mask-image: linear-gradient(180deg, #000 74%, transparent 100%);
-  mask-image: linear-gradient(180deg, #000 74%, transparent 100%);
-}
-.rail-portrait.has-sigil { margin-bottom: 42px; }
-.rail-portrait .sigil { /* the medallion pinned at the portrait's base */
-  position: absolute; left: 50%; bottom: -38px; transform: translateX(-50%);
-  margin: 0; width: 92px; height: 92px;
-  background: radial-gradient(circle, #0d1118 62%, transparent 63%);
-  border-radius: 50%;
-}
-/* the status sigil: a radar ring in the overall status color */
-.sigil { position: relative; width: 106px; height: 106px; margin: 2px auto; }
-.sigil::before {
-  content: ""; position: absolute; inset: 7px; border-radius: 50%;
-  border: 2px solid color-mix(in srgb, var(--accent, #55617a) 45%, transparent);
-  box-shadow: 0 0 26px -6px var(--accent, transparent), inset 0 0 18px -8px var(--accent, transparent);
-}
-.sigil-ring { /* the radar: a bold sweep arc riding a faint full track */
-  position: absolute; inset: 0; border-radius: 50%;
-  background: conic-gradient(from -90deg, transparent 0 62%,
-    color-mix(in srgb, var(--accent, #55617a) 35%, transparent) 74%,
-    var(--accent, #55617a) 96%, transparent 100%);
-  -webkit-mask: radial-gradient(circle, transparent 69%, #000 71.5%);
-  mask: radial-gradient(circle, transparent 69%, #000 71.5%);
-}
-.sigil::after { /* signal haze behind the gem */
-  content: ""; position: absolute; inset: 24%; border-radius: 50%;
-  background: radial-gradient(circle, color-mix(in srgb, var(--accent, #55617a) 26%, transparent), transparent 70%);
-}
-.sigil-gem { /* a faceted signal gem at the radar's heart */
-  position: absolute; left: 50%; top: 50%; width: 38px; height: 38px;
-  transform: translate(-50%, -50%);
-  background: linear-gradient(135deg,
-    color-mix(in srgb, var(--accent, #55617a) 55%, #fff) 0%,
-    var(--accent, #55617a) 48%,
-    color-mix(in srgb, var(--accent, #55617a) 55%, #000) 100%);
-  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
-  filter: drop-shadow(0 0 14px color-mix(in srgb, var(--accent, #55617a) 70%, transparent));
-}
-.sigil-gem::after { /* inner facet */
-  content: ""; position: absolute; inset: 8px;
-  background: linear-gradient(315deg, rgba(255, 255, 255, 0.35), transparent 60%);
-  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
-}
-/* count ranks: small forged tallies under the sigil */
-.ranks { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-.rank {
-  display: flex; align-items: baseline; gap: 7px; padding: 6px 9px; min-width: 0;
-  background: rgba(255, 255, 255, 0.03); border: 1px solid #222b38;
-  border-left: 3px solid var(--accent, #334053);
-  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%);
-}
-.rank b { font-family: var(--mono); font-size: 1.05rem; color: var(--accent, #c3cddb); }
-.rank-label {
-  font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.09em;
-  color: #8b97a8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-/* status marks: cut gems, the same stone as the sigil's heart ------------ */
-.mark {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 19px; height: 19px; flex: none; vertical-align: -4px;
-  font: 800 10px/1 var(--mono); color: rgba(255, 255, 255, 0.95);
-  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.5);
-  background: linear-gradient(135deg,
-    color-mix(in srgb, var(--accent, var(--muted)) 55%, #fff) 0%,
-    var(--accent, var(--muted)) 48%,
-    color-mix(in srgb, var(--accent, var(--muted)) 60%, #000) 100%);
-  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
-}
-.mark.mute { --accent: var(--muted); opacity: 0.8; }
-.field { padding: 22px 30px 60px; max-width: 1220px; min-width: 0; }
-.field-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 18px; align-items: start; }
-.fside { position: sticky; top: 18px; }
-@media (max-width: 1120px) { .field-grid { grid-template-columns: 1fr; } .fside { position: static; } }
-@media (max-width: 860px) {
-  .shell { grid-template-columns: 1fr; }
-  .rail { min-height: 0; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; padding: 12px 14px; gap: 10px; }
-  .rail-logo { margin: 0 auto; flex: 1 1 100%; max-width: 300px; }
-  .rail-nav { flex-direction: row; flex-wrap: wrap; }
-  .rail-link { width: auto; border-radius: 8px; border-left-width: 1px; }
-  .rail-portrait { flex: 1 1 100%; margin: 0 -14px; }
-  .rail-portrait img { height: 150px; object-position: center 12%; }
-  .rail-portrait.has-sigil { margin-bottom: 34px; }
-  .rail-portrait .sigil { width: 62px; height: 62px; bottom: -26px; }
-  .sigil { width: 62px; height: 62px; margin: 0; }
-  .sigil-gem { width: 22px; height: 22px; }
-  .sigil-gem::after { inset: 5px; }
-  .ranks { display: flex; flex-wrap: wrap; flex: 1 1 100%; }
-  .field { padding: 16px 14px 50px; }
-}
-a { color: inherit; }
-.card a, ul.changes a { color: var(--rune); }
-::selection { background: color-mix(in srgb, var(--rune) 30%, transparent); }
-::-webkit-scrollbar { width: 11px; }
-::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--brand) 40%, var(--bg)); border-radius: 6px; border: 3px solid var(--bg); }
-::-webkit-scrollbar-track { background: transparent; }
-/* --- the banner: the wall's own voice, skewed like a war standard ------- */
-.banner {
-  position: relative; overflow: hidden; margin: 0 0 18px; padding: 24px 34px 20px;
-  background: linear-gradient(160deg, #1a212b 0%, #10141a 60%, #151b24 100%);
-  border-left: 6px solid var(--accent, #3a4556);
-  clip-path: polygon(0 0, 100% 0, calc(100% - 28px) 100%, 0 100%);
-}
-.banner::before {
-  content: ""; position: absolute; inset: 0; pointer-events: none;
-  background: repeating-linear-gradient(115deg, rgba(255, 255, 255, 0.022) 0 2px, transparent 2px 7px);
-}
-.banner::after {
-  content: ""; position: absolute; right: -60px; top: -80px; width: 300px; height: 300px;
-  pointer-events: none; border-radius: 50%;
-  background: radial-gradient(closest-side, var(--accent, #3a4556), transparent 70%);
-  opacity: 0.25; filter: blur(10px);
-}
-.banner-title {
-  font-family: Georgia, "Times New Roman", serif; text-transform: uppercase;
-  letter-spacing: 0.13em; font-weight: 700; font-size: clamp(1.3rem, 2.6vw, 2rem); line-height: 1.1;
-  background: linear-gradient(180deg, #e3e9f2 0%, #a9b5c5 55%, #71809a 100%);
-  -webkit-background-clip: text; background-clip: text; color: transparent;
-  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.55));
-}
-.banner-sub {
-  color: #93a0b2; font-family: var(--mono); font-size: 0.78rem;
-  margin-top: 7px; letter-spacing: 0.04em;
-}
-/* --- plates: cut steel, not boxes — every panel shares the banner's cut - */
-.card {
-  position: relative;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--text) 2.5%, var(--card)), var(--card) 46px);
-  border: 1px solid var(--border); border-radius: 2px;
-  clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 0 100%);
-  box-shadow: inset 0 1px 0 var(--plate-hi);
-  padding: 16px 20px; margin-bottom: 16px;
-}
-.card::after { /* the cut corner catches the light */
-  content: ""; position: absolute; top: 0; right: 0; width: 16px; height: 16px;
-  background: linear-gradient(225deg, color-mix(in srgb, var(--brand) 35%, var(--border)) 0 1.5px, transparent 1.5px);
-}
-.card h2 { /* an engraved plaque bolted to the plate */
-  display: inline-block; margin: -4px 0 12px; padding: 5px 18px;
-  font-size: 0.72rem; font-weight: 750; text-transform: uppercase;
-  letter-spacing: 0.2em; color: color-mix(in srgb, var(--text) 72%, var(--muted));
-  background: linear-gradient(180deg, color-mix(in srgb, var(--text) 9%, var(--card)), color-mix(in srgb, var(--text) 3%, var(--card)));
-  border: 1px solid var(--border);
-  clip-path: polygon(9px 0, calc(100% - 9px) 0, 100% 50%, calc(100% - 9px) 100%, 9px 100%, 0 50%);
-  text-shadow: 0 1px 0 var(--plate-hi);
-}
-.check { /* a threat report: tagged, framed, status-washed */
-  position: relative; overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--accent, var(--border)) 30%, var(--border));
-  border-left: 5px solid var(--accent, var(--border));
-  background: color-mix(in srgb, var(--accent, var(--border)) 6%, var(--card));
-  border-radius: 4px 10px 10px 4px;
-  padding: 10px 14px; margin: 12px 0;
-}
-.check::after { /* the severity tag riveted to the corner */
-  position: absolute; top: 0; right: 0; padding: 3px 12px 3px 16px;
-  font-size: 0.6rem; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase;
-  color: var(--card); background: var(--accent, var(--muted));
-  clip-path: polygon(9px 0, 100% 0, 100% 100%, 0 100%);
-}
-.check.crit::after { content: "critical"; }
-.check.warn::after { content: "warning"; }
-.check.unk::after { content: "unknown"; }
-.check .name { padding-right: 90px; }
-.check .name { font-weight: 650; }
-.check .summary { margin: 2px 0; }
-.check .action { color: var(--muted); font-size: 0.9rem; }
-.check details { margin-top: 6px; }
-.check summary { cursor: pointer; color: var(--muted); font-size: 0.85rem; }
-.check pre { /* evidence reads as a terminal, in both themes */
-  background: #0b0f15; color: #b8c4d6; border: 1px solid #212b39;
-  border-radius: 8px; padding: 10px 12px; overflow-x: auto; font-size: 0.8rem;
-  box-shadow: inset 0 0 22px rgba(0, 0, 0, 0.35);
-}
-.crit { --accent: var(--critical); } .warn { --accent: var(--warning); }
-.unk { --accent: var(--unknown); } .okc { --accent: var(--ok); }
-.tilegrid {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 12px; margin: 4px 0 16px; align-items: start;
-}
-details.tile {
-  background: var(--card); border: 1px solid var(--border);
-  border-left: 4px solid var(--accent, var(--ok));
-  border-radius: 2px; min-width: 0;
-  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%);
-}
-details.tile > summary {
-  cursor: pointer; list-style: none; padding: 9px 13px;
-  font-weight: 650; font-size: 0.94rem; display: flex; align-items: center; gap: 7px;
-}
-details.tile > summary::-webkit-details-marker { display: none; }
-details.tile > summary .tcount { color: var(--muted); font-weight: 500; font-size: 0.85rem; }
-details.tile > summary::after { content: "▸"; margin-left: auto; color: var(--muted); font-weight: 400; }
-details.tile[open] > summary::after { content: "▾"; }
-details.tile[open] > summary { border-bottom: 1px solid var(--border); }
-details.tile ul { list-style: none; margin: 0; padding: 8px 13px 11px; }
-details.tile li {
-  margin: 4px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  font-size: 0.9rem;
-}
-details.morehistory summary { cursor: pointer; color: var(--muted); font-size: 0.88rem; padding: 6px 0; }
-/* the what-changed timeline: a cold rail with brand nodes */
-ul.changes { margin: 0; padding-left: 4px; list-style: none; position: relative; }
-ul.changes::before {
-  content: ""; position: absolute; left: 3px; top: 10px; bottom: 8px; width: 2px;
-  background: linear-gradient(180deg, var(--brand), transparent);
-  opacity: 0.5; border-radius: 2px;
-}
-ul.changes li { margin: 9px 0; padding-left: 18px; position: relative; }
-ul.changes li::before {
-  content: ""; position: absolute; left: -1px; top: 0.5em; width: 10px; height: 10px;
-  border-radius: 50%; background: var(--card); border: 2px solid var(--brand);
-}
-.briefing p { margin: 9px 0; font-family: Georgia, "Times New Roman", serif; font-size: 1.02rem; }
-.card.briefing { border-left: 3px solid var(--brand); overflow: hidden; }
-.card.briefing::after { /* the guardian's sigil watermarks the report */
-  content: "\\2694"; position: absolute; right: -6px; bottom: -26px;
-  font-size: 108px; line-height: 1; opacity: 0.055; pointer-events: none;
-  color: var(--brand); transform: rotate(-12deg);
-}
-.card.acked summary { cursor: pointer; list-style: revert; }
-.card.acked summary h2 { display: inline; }
-.ackhint { color: var(--muted); font-size: 0.88rem; }
-.acknote { color: var(--muted); font-style: italic; }
-table.history { width: 100%; border-collapse: collapse; font-size: 0.92rem; font-variant-numeric: tabular-nums; }
-table.history th, table.history td {
-  text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border);
-}
-table.history th {
-  color: var(--muted); font-weight: 700; font-size: 0.72rem;
-  text-transform: uppercase; letter-spacing: 0.1em;
-}
-table.history tbody tr:hover td { background: color-mix(in srgb, var(--brand) 6%, transparent); }
-table.history tr.current td { font-weight: 650; }
-footer { color: var(--muted); font-size: 0.8rem; margin-top: 28px; text-align: center; }
-.f-logo { display: block; height: 18px; width: auto; margin: 0 auto 8px; opacity: 0.45; }
-code, pre, .cid { font-family: var(--mono); }
-.pill b { font-family: var(--mono); }
-button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 4px; }
-/* --- motion: quiet, semantic, and off for reduced-motion users ---------- */
-@media (prefers-reduced-motion: no-preference) {
-  /* the room assembles: tower slides in, banner drops, plates rise */
-  .rail { animation: tower 0.55s cubic-bezier(0.2, 0.7, 0.3, 1) both; }
-  @keyframes tower { from { opacity: 0; transform: translateX(-22px); } to { opacity: 1; transform: none; } }
-  .banner { animation: drop 0.5s cubic-bezier(0.2, 0.7, 0.3, 1) 0.1s both; }
-  @keyframes drop { from { opacity: 0; transform: translateY(-14px); } to { opacity: 1; transform: none; } }
-  .card, details.tile, details.group { animation: rise 0.5s cubic-bezier(0.2, 0.7, 0.3, 1) both; }
-  .fmain > *:nth-child(1) { animation-delay: 0.16s; }
-  .fmain > *:nth-child(2) { animation-delay: 0.22s; }
-  .fmain > *:nth-child(n+3) { animation-delay: 0.28s; }
-  .fside > * { animation-delay: 0.3s; }
-  details.tile { animation-delay: 0.34s; }
-  @keyframes rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
-  .banner::after { animation: breathe 9s ease-in-out infinite; }
-  @keyframes breathe { 0%, 100% { opacity: 0.18; } 50% { opacity: 0.36; } }
-  .sigil-ring { animation: sweep 7s linear infinite; }
-  @keyframes sweep { to { transform: rotate(360deg); } }
-  .sigil.crit .sigil-gem { animation: gempulse 1.6s ease-in-out infinite; }
-  @keyframes gempulse {
-    0%, 100% { filter: drop-shadow(0 0 10px color-mix(in srgb, var(--accent) 55%, transparent)); }
-    50% { filter: drop-shadow(0 0 26px color-mix(in srgb, var(--accent) 95%, transparent)); }
-  }
-  .banner.crit { box-shadow: 0 0 36px -14px var(--critical); }
-  details.tile, .card { transition: transform 0.16s ease, border-color 0.16s ease; }
-  details.tile:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--accent, var(--brand)) 55%, var(--border)); }
-  .rail-logo { overflow: hidden; }
-  .rail-logo::after { /* a cold light sweeps the carved letters, rarely */
-    content: ""; position: absolute; inset: 0;
-    background: linear-gradient(105deg, transparent 42%, rgba(215, 232, 255, 0.13) 50%, transparent 58%);
-    transform: translateX(-130%); animation: glint 12s ease-in-out infinite;
-    pointer-events: none;
-  }
-  @keyframes glint { 0%, 82% { transform: translateX(-130%); } 96%, 100% { transform: translateX(130%); } }
-  .rank b { transition: transform 0.15s ease; }
-  .rank:hover b { transform: scale(1.1); }
-}
-h2.sectionhead { margin: 22px 2px 10px; font-size: 1.02rem; }
-.settings-row {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 12px; padding: 11px 4px; border-bottom: 1px solid var(--border);
-}
-.settings-row:last-child { border-bottom: none; }
-.settings-row .label { font-weight: 600; }
-.settings-row .cid { color: var(--muted); font-size: 0.82rem; }
-.settings-row .cdesc { display: block; color: var(--muted); font-size: 0.82rem; margin-top: 3px; }
-input.toggle { width: 18px; height: 18px; accent-color: var(--brand); }
-.settings-row input.num {
-  width: 96px; padding: 5px 8px; border: 1px solid var(--border);
-  border-radius: 8px; background: var(--bg); color: var(--text); font-size: 0.92rem;
-  font-family: var(--mono);
-}
-.settings-row input.num:focus { outline: 2px solid var(--brand); border-color: var(--brand); }
-h3.sgroup { margin: 16px 0 2px; font-size: 0.95rem; color: var(--muted); }
-.savebar { margin-top: 18px; display: flex; gap: 14px; align-items: center; }
-button.save {
-  background: linear-gradient(180deg, color-mix(in srgb, var(--ok) 88%, #fff), var(--ok));
-  color: #fff; border: none; border-radius: 8px;
-  padding: 9px 20px; font-size: 0.85rem; font-weight: 700; cursor: pointer;
-  text-transform: uppercase; letter-spacing: 0.07em;
-  box-shadow: 0 8px 18px -12px color-mix(in srgb, var(--ok) 70%, transparent);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-}
-button.save:hover { transform: translateY(-1px); box-shadow: 0 10px 22px -12px color-mix(in srgb, var(--ok) 80%, transparent); }
+.tab:hover { color: var(--t2); text-decoration: none; }
+.tab.active { color: var(--t2); background: var(--shell); border-color: var(--bd); position: relative; z-index: 1; }
 .rbadge {
-  background: var(--critical); color: #fff; border-radius: 999px;
-  font-size: 0.7rem; font-weight: 700; padding: 1px 6px; margin-left: 5px; vertical-align: top;
+  background: var(--crit); color: #fff; font: 600 10px var(--mono);
+  padding: 1px 6px; border-radius: 8px;
 }
-.rcard {
-  border: 1px solid var(--border); border-left: 5px solid var(--accent, var(--border));
-  border-radius: 10px; padding: 12px 14px; margin-top: 12px;
+.deck { padding: 28px 32px; display: flex; flex-direction: column; gap: 22px; border-top: 1px solid var(--bd); }
+
+/* --- panels ------------------------------------------------------------ */
+.panel { background: var(--panel); border: 1px solid var(--bd); border-radius: 12px; padding: 18px 24px; }
+.ptitle {
+  font: 500 13px var(--oswald); letter-spacing: 2px; color: var(--mut2);
+  text-transform: uppercase; margin: 0 0 14px;
 }
-.rcard .rhead { font-size: 1.02rem; }
-.rcard .cid { color: var(--muted); font-size: 0.82rem; margin-top: 2px; }
-.rcard .rplan { margin-top: 6px; }
-.rcard .notice { margin-top: 6px; }
-.rstatus {
-  background: var(--accent, var(--unknown)); color: #fff; border-radius: 999px;
-  font-size: 0.7rem; font-weight: 700; text-transform: uppercase; padding: 2px 9px; margin-left: 6px;
+.ptitle-lg { font: 500 15px var(--oswald); letter-spacing: 2px; color: var(--t2); text-transform: uppercase; margin: 0; }
+.pnote { color: var(--dim); font-size: 12px; margin: -6px 0 10px; }
+
+/* network strip */
+.net { display: flex; align-items: flex-start; gap: 0; overflow-x: auto; padding-bottom: 4px; }
+.net-node { text-align: center; flex: none; }
+.net-wan {
+  width: 44px; height: 44px; border-radius: 50%; border: 2px solid #3a465c; background: var(--shell);
+  margin: 0 auto; display: flex; align-items: center; justify-content: center;
+  color: var(--mut2); font: 600 9px var(--mono);
 }
-.rform { margin-top: 10px; display: flex; gap: 10px; }
-button.deny {
-  background: transparent; color: var(--critical); border: 1px solid var(--critical);
-  border-radius: 8px; padding: 9px 20px; font-size: 0.85rem; font-weight: 700; cursor: pointer;
-  text-transform: uppercase; letter-spacing: 0.07em;
-  transition: background 0.15s ease, transform 0.15s ease;
+.net-box { width: 44px; height: 44px; border-radius: 10px; border: 2px solid var(--nb, var(--ok)); background: var(--shell); margin: 0 auto; }
+.net-name { color: var(--mut); font-size: 12px; margin-top: 7px; max-width: 86px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.net-link { width: 40px; height: 2px; background: var(--bd); margin-top: 22px; flex: none; }
+
+/* counts + changed */
+.duo { display: grid; grid-template-columns: 1fr 340px; gap: 22px; align-items: start; }
+.counts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.count { border-radius: 12px; padding: 12px 16px; display: flex; align-items: center; gap: 12px; background: var(--cbg, var(--inner)); }
+.count b { font: 500 26px var(--oswald); color: var(--ctx, var(--t2)); }
+.count span { font: 10.5px var(--mono); letter-spacing: 1px; color: var(--ctx, var(--mut)); opacity: 0.8; }
+.changes { display: flex; flex-direction: column; gap: 9px; }
+.chg { display: flex; align-items: baseline; gap: 10px; font-size: 13.5px; }
+.chg .arrow { font-family: var(--mono); width: 12px; flex: none; }
+.chg .meta { color: var(--dim); font-size: 11.5px; font-family: var(--mono); }
+
+/* group cards */
+.groups { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; align-items: start; }
+.gtally { font: 11px var(--mono); }
+.grow { display: flex; align-items: flex-start; gap: 12px; padding: 9px 0; border-top: 1px solid var(--row); }
+.gdot { width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; background: var(--gd, var(--ok)); }
+.grow .body { flex: 1; min-width: 0; }
+.grow .top { display: flex; justify-content: space-between; gap: 10px; }
+.grow .name { color: var(--t3); font-size: 13.5px; font-weight: 500; }
+.grow .chip {
+  font: 9.5px var(--mono); letter-spacing: 1px; padding: 3px 8px; border-radius: 4px;
+  height: fit-content; flex: none; background: var(--chbg); color: var(--chtx);
 }
-button.deny:hover { background: color-mix(in srgb, var(--critical) 10%, transparent); transform: translateY(-1px); }
-.banner { border-radius: 10px; padding: 10px 14px; margin-bottom: 14px;
-  background: var(--card); border: 1px solid var(--border); }
-.banner.ok { border-left: 5px solid var(--ok); }
-.banner.err { border-left: 5px solid var(--critical); }
-.notice { color: var(--muted); }
-details.group { /* a problem group is a war banner: chamfered, edge-lit */
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--accent, var(--border)) 9%, var(--card)), var(--card) 56px);
-  border: 1px solid color-mix(in srgb, var(--accent, var(--border)) 35%, var(--border));
-  border-left: 8px solid var(--accent, var(--border));
-  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
-  border-radius: 3px; margin-bottom: 14px;
+.grow .summary { color: var(--mut2); font-size: 12.5px; margin-top: 2px; }
+.grow .action { color: var(--acc); font-size: 12px; margin-top: 3px; }
+.grow .acknote { color: var(--dim); font-size: 11.5px; margin-top: 3px; font-style: italic; }
+.grow details { margin-top: 4px; }
+.grow summary { cursor: pointer; color: var(--dim); font-size: 11.5px; }
+.grow pre {
+  background: var(--code); border: 1px solid var(--bd); color: var(--link);
+  border-radius: 6px; padding: 8px 10px; overflow-x: auto; font: 12px var(--mono); margin: 6px 0 0;
 }
-details.group > summary {
-  cursor: pointer; list-style: none; padding: 14px 20px;
-  display: flex; align-items: center; gap: 10px; font-weight: 650; font-size: 1.02rem;
-  text-shadow: 0 1px 0 var(--plate-hi);
+
+/* briefing + history */
+.briefing p { margin: 8px 0; color: var(--t3); font-size: 13.5px; }
+.histrip { display: flex; flex-wrap: wrap; gap: 8px 14px; font: 12px var(--mono); color: var(--dim); }
+.histrip a { color: var(--mut); }
+.histrip .cur { color: var(--t2); font-weight: 600; }
+
+/* settings */
+.setgrid { display: grid; grid-template-columns: 1fr 400px; gap: 22px; align-items: start; }
+.setrow { display: flex; align-items: center; gap: 14px; padding: 11px 0; border-top: 1px solid var(--row); }
+.setrow .sname { width: 160px; color: var(--t2); font-size: 13.5px; font-weight: 500; flex-shrink: 0; }
+.setrow .sdesc { flex: 1; color: var(--mut2); font-size: 12.5px; }
+.switch { position: relative; width: 40px; height: 22px; flex-shrink: 0; cursor: pointer; }
+.switch input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
+.switch .track { position: absolute; inset: 0; border-radius: 11px; background: var(--bd); transition: background 0.2s; }
+.switch .knob {
+  position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%;
+  background: #e8edf6; transition: left 0.2s;
 }
-details.group > summary::-webkit-details-marker { display: none; }
-details.group > summary::after {
-  content: "▸"; color: var(--muted); font-weight: 400; margin-left: 4px;
+.switch input:checked ~ .track { background: #2e7d4f; }
+.switch input:checked ~ .knob { left: 20px; }
+.switch input:disabled ~ .track { opacity: 0.55; }
+.setrow input.num {
+  width: 96px; padding: 5px 8px; border: 1px solid var(--bd); border-radius: 6px;
+  background: var(--code); color: var(--t2); font: 12.5px var(--mono); flex-shrink: 0;
 }
-details.group[open] > summary::after { content: "▾"; }
-details.group > summary .gcount {
-  color: var(--muted); font-weight: 500; font-size: 0.85rem; margin-left: auto;
+.setrow input.num:focus { outline: 1px solid var(--acc); border-color: var(--acc); }
+.postpill { font: 10px var(--mono); letter-spacing: 1px; padding: 4px 10px; border-radius: 4px; flex: none; }
+.warncard {
+  background: rgba(217, 161, 59, 0.07); border: 1px solid rgba(217, 161, 59, 0.25);
+  border-radius: 12px; padding: 16px 20px; color: #c9a869; font-size: 12.5px;
 }
-details.group[open] > summary { border-bottom: 1px solid var(--border); }
-.group .gbody { padding: 4px 20px 14px; }
-.group ul.oklist { list-style: none; margin: 10px 0 0; padding: 0; columns: 2; column-gap: 18px; }
-.group ul.oklist li {
-  margin: 5px 0; font-size: 0.93rem; break-inside: avoid;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+.savebar { display: flex; align-items: center; gap: 14px; }
+.btn-go {
+  cursor: pointer; background: #2e7d4f; color: #eaf6ee; border: none;
+  font: 500 15px var(--oswald); letter-spacing: 2px; text-transform: uppercase;
+  text-align: center; padding: 12px 26px; border-radius: 8px;
 }
-@media (max-width: 520px) { .group ul.oklist { columns: 1; } }
+.btn-go:hover { background: #35935c; }
+.btn-no {
+  cursor: pointer; background: transparent; border: 1px solid #3a465c; color: var(--mut);
+  font: 500 15px var(--oswald); letter-spacing: 2px; text-transform: uppercase;
+  text-align: center; padding: 11px 26px; border-radius: 8px;
+}
+.btn-no:hover { border-color: var(--crit); color: var(--crit-t); }
+.notice { color: var(--dim); font-size: 12px; }
+
+/* repairs */
+.prop { background: var(--panel); border: 1px solid var(--bd); border-radius: 12px; padding: 24px; display: grid; grid-template-columns: 1fr 300px; gap: 24px; }
+.prop-title { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; color: var(--t2); font-size: 17px; font-weight: 600; }
+.prop-title code { font-family: var(--mono); color: var(--acc); font-size: 15px; }
+.pstat { font: 10px var(--mono); letter-spacing: 1px; padding: 4px 10px; border-radius: 4px; background: var(--chbg); color: var(--chtx); }
+.prop-meta { color: var(--mut2); font-size: 12.5px; margin-top: 6px; }
+.prop-meta code { font-family: var(--mono); }
+.prop-grid { display: grid; grid-template-columns: 120px 1fr; gap: 9px 16px; margin-top: 18px; font-size: 13px; }
+.prop-grid .k { color: var(--dim); }
+.prop-grid .v { color: var(--t3); }
+.prop-grid code {
+  background: var(--code); border: 1px solid var(--bd); color: var(--link);
+  padding: 3px 8px; border-radius: 4px; font: 12.5px var(--mono);
+}
+.prop-side { border-left: 1px solid var(--bd); padding-left: 24px; display: flex; flex-direction: column; justify-content: center; gap: 10px; }
+.prop-empty { background: var(--panel); border: 1px dashed var(--bd); border-radius: 12px; padding: 28px; text-align: center; color: var(--dim); font-size: 13.5px; }
+.audit { background: var(--panel); border: 1px solid var(--bd); border-radius: 12px; overflow: hidden; }
+.audit-row { display: flex; align-items: center; gap: 18px; padding: 13px 22px; border-bottom: 1px solid var(--row); font-size: 13px; }
+.audit-row:last-child { border-bottom: none; }
+.audit-row .when { width: 95px; color: var(--dim); font: 12px var(--mono); flex-shrink: 0; }
+.audit-row .act { width: 205px; color: var(--link); font: 12px var(--mono); flex-shrink: 0; }
+.audit-row .tgt { width: 185px; color: var(--t3); flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; }
+.audit-row .by { flex: 1; color: var(--mut2); }
+.audit-row .res { font: 12px var(--mono); }
+
+.banner-flash { border-radius: 10px; padding: 10px 14px; background: var(--panel); border: 1px solid var(--bd); }
+.banner-flash.ok { border-left: 4px solid var(--ok); }
+.banner-flash.err { border-left: 4px solid var(--crit); color: var(--crit-t); }
+footer { color: var(--dim); font-size: 12px; margin-top: 22px; text-align: center; }
+button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+
+@media (max-width: 1080px) {
+  .duo, .groups, .setgrid { grid-template-columns: 1fr; }
+  .prop { grid-template-columns: 1fr; }
+  .prop-side { border-left: none; padding-left: 0; border-top: 1px solid var(--bd); padding-top: 18px; }
+}
+@media (max-width: 900px) {
+  .hero { height: auto; min-height: 250px; }
+  .hero-art { opacity: 0.35; width: 100%; }
+  .hero-body { right: 32px; position: relative; left: 0; top: 0; padding: 26px 32px 58px; }
+  .hero-logo { width: 100%; }
+  .tabs { left: 16px; right: 16px; overflow-x: auto; }
+  .deck { padding: 18px 16px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-glow, .pulse { animation: none; }
+}
 """
 
 _STATUS_CLASS = {"critical": "crit", "warning": "warn", "unknown": "unk", "ok": "okc"}
 
-# Themed status marks: cold terminal glyphs in notched steel chips. The web
-# surface never uses emoji — reports and Telegram keep them (text channels).
-_MARK_GLYPHS = {"critical": "✕", "warning": "!", "unknown": "?", "ok": "✓"}
+# Status ink for design 2A: solid dot color, chip text/background, hero glow.
+_INK = {
+    "critical": {"chip": "CRIT", "tx": "var(--crit-t)", "solid": "var(--crit)",
+                 "bg": "rgba(217,88,74,.14)", "glow": "rgba(217,88,74,.22)"},
+    "warning": {"chip": "WARN", "tx": "var(--warn-t)", "solid": "var(--warn)",
+                "bg": "rgba(217,161,59,.14)", "glow": "rgba(217,161,59,.20)"},
+    "unknown": {"chip": "UNK", "tx": "var(--unk-t)", "solid": "var(--unk)",
+                "bg": "rgba(125,138,160,.14)", "glow": "rgba(125,138,160,.16)"},
+    "ok": {"chip": "OK", "tx": "var(--ok-t)", "solid": "var(--ok)",
+           "bg": "rgba(76,181,114,.14)", "glow": "rgba(76,181,114,.16)"},
+}
 
-
-def _mark(status: str, glyph: str | None = None) -> str:
-    cls = _STATUS_CLASS.get(status, "unk")
-    return f'<span class="mark {cls}">{glyph or _MARK_GLYPHS.get(status, "·")}</span>'
-
-
-_MUTE_MARK = '<span class="mark mute">⊘</span>'
+_HERO_MSG = {
+    "ok": "The wall holds. Nothing needs you.",
+    "warning": "Threats sighted — worth a look when you have a minute.",
+    "critical": "The wall is breached. Start at the top.",
+    "unknown": "Fog of war — Guardian could not see everything.",
+}
 
 _CATEGORY_PREFIXES = [
-    ("http_", "Web services"),
-    ("tcp_", "TCP services"),
-    ("tls_", "Certificates"),
-    ("dns_", "DNS"),
-    ("ha_", "Home Assistant"),
-    ("backup", "Backups"),
-    ("docker", "Docker"),
-    ("systemd_", "Services"),
-    ("disk_", "Disks"),
-    ("preflight_", "Preflight"),
-    ("network_", "Network"),
+    ("docker", "Containers"), ("hass", "Home Assistant"), ("homeassistant", "Home Assistant"),
+    ("dns", "Network"), ("tcp", "Network"), ("http", "Web services"), ("tls", "Certificates"),
+    ("backup", "Backups"), ("systemd", "Services"), ("disk", "Storage"),
+    ("firewall", "Security"), ("exposed", "Security"), ("ssh", "Security"),
+    ("updates", "Updates"), ("mount", "Storage"),
 ]
-
-THEME_SCRIPT = """
-<script>
-(function () {
-  var saved = localStorage.getItem("guardian-theme");
-  if (saved) document.documentElement.dataset.theme = saved;
-  window.toggleTheme = function () {
-    var current = document.documentElement.dataset.theme ||
-      (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
-    var next = current === "dark" ? "light" : "dark";
-    document.documentElement.dataset.theme = next;
-    localStorage.setItem("guardian-theme", next);
-  };
-})();
-</script>"""
-
-# Remember each health tile's open/closed state across the page's auto-refresh,
-# so collapsing a tile sticks instead of springing back open every cycle.
-TILE_SCRIPT = """
-<script>
-(function () {
-  function key(d) { return "guardian-tile:" + (d.getAttribute("data-tile") || ""); }
-  function init() {
-    document.querySelectorAll("details.tile").forEach(function (d) {
-      var saved = localStorage.getItem(key(d));
-      if (saved === "open") d.open = true;
-      else if (saved === "closed") d.open = false;
-      d.addEventListener("toggle", function () {
-        localStorage.setItem(key(d), d.open ? "open" : "closed");
-      });
-    });
-  }
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
-  else init();
-})();
-</script>"""
+_SEVERITY = {"critical": 0, "warning": 1, "unknown": 2, "ok": 3}
 
 
 def _category(check_id: str) -> str:
@@ -602,6 +371,12 @@ def _category(check_id: str) -> str:
         if check_id.startswith(prefix):
             return label
     return "Other"
+
+
+def effective_group(check: HealthCheck) -> str:
+    """The heading a check rolls up under: its explicit group, or a sensible
+    one derived from its id so older snapshots still group cleanly."""
+    return check.group or _category(check.id)
 
 
 def checks_from_snapshot(snapshot: dict[str, Any]) -> list[HealthCheck]:
@@ -627,98 +402,10 @@ def checks_from_snapshot(snapshot: dict[str, Any]) -> list[HealthCheck]:
 
 def overall_of(checks: list[HealthCheck]) -> str:
     statuses = {check.status for check in checks if not check.acknowledged}
-    for status in STATUS_ORDER[:-1]:
+    for status in ("critical", "warning", "unknown"):
         if status in statuses:
             return status
-    return "ok" if checks else "unknown"
-
-
-def _fmt_time(created_at: str) -> str:
-    try:
-        return datetime.fromisoformat(created_at).strftime("%Y-%m-%d %H:%M UTC")
-    except ValueError:
-        return html.escape(created_at)
-
-
-def _counts(checks: list[HealthCheck]) -> dict[str, int]:
-    return {status: sum(1 for c in checks if c.status == status and not c.acknowledged) for status in STATUS_ORDER}
-
-
-def _render_acknowledged(acked: list[HealthCheck]) -> str:
-    items: list[str] = []
-    for check in sorted(acked, key=lambda c: c.name.lower()):
-        icon, _ = STATUS_META.get(check.status, ("•", check.status))
-        note = f' <span class="acknote">— {html.escape(check.ack_note)}</span>' if check.ack_note else ""
-        items.append(
-            f"<li>{_MUTE_MARK}{_mark(check.status)} <b>{html.escape(check.name)}</b> (currently {check.status}): "
-            f"{html.escape(check.summary)}{note}</li>"
-        )
-    return (
-        f'<div class="card acked"><details><summary><h2>Acknowledged — muted known issues ({len(acked)})</h2></summary>'
-        f'<p class="ackhint">Excluded from overall status, change detection, and notifications. '
-        f"Unmute with <code>guardian unack &lt;check-id&gt;</code>.</p>"
-        f'<ul class="changes">{"".join(items)}</ul></details></div>'
-    )
-
-
-def _render_check(check: HealthCheck) -> str:
-    evidence = html.escape(json.dumps(check.evidence, indent=2, sort_keys=True, default=str))
-    icon, _ = STATUS_META.get(check.status, ("•", check.status))
-    return (
-        f'<div class="check {_STATUS_CLASS.get(check.status, "unk")}">'
-        f'<div class="name">{_mark(check.status)} {html.escape(check.name)}</div>'
-        f'<div class="summary">{html.escape(check.summary)}</div>'
-        f'<div class="action">Safest next step: {html.escape(check.recommended_action)}</div>'
-        f"<details><summary>Evidence</summary><pre>{evidence}</pre></details>"
-        f"</div>"
-    )
-
-
-def _render_changes(diff: ScanDiff) -> str:
-    if not diff.has_previous:
-        return '<div class="card"><h2>What changed</h2><p>First recorded scan — nothing to compare against yet.</p></div>'
-    if not diff.has_changes:
-        return (
-            f'<div class="card"><h2>What changed</h2>'
-            f"<p>No changes since scan #{diff.previous_scan_id}. "
-            f"All {diff.unchanged_count} checks have the same status as before.</p></div>"
-        )
-    items: list[str] = []
-    for change in diff.regressions:
-        items.append(
-            f"<li>{_mark(change['current_status'], '▼')} <b>{html.escape(change['name'])}</b>: {change['previous_status']} → "
-            f"<b>{change['current_status']}</b> — {html.escape(change['summary'])}</li>"
-        )
-    for change in diff.improvements:
-        items.append(
-            f"<li>{_mark('ok', '▲')} <b>{html.escape(change['name'])}</b>: {change['previous_status']} → "
-            f"<b>{change['current_status']}</b></li>"
-        )
-    for check in diff.new_checks:
-        icon, _ = STATUS_META.get(check["status"], ("•", ""))
-        items.append(f"<li>{_mark(check['status'], '+')} <b>{html.escape(check['name'])}</b>: new check, currently {check['status']}</li>")
-    for check in diff.removed_checks:
-        items.append(f"<li>{_MUTE_MARK} <b>{html.escape(check['name'])}</b>: no longer checked</li>")
-    unchanged = (
-        f"<p>{diff.unchanged_count} other checks unchanged (vs scan #{diff.previous_scan_id}).</p>"
-        if diff.unchanged_count
-        else ""
-    )
-    return f'<div class="card"><h2>What changed</h2><ul class="changes">{"".join(items)}</ul>{unchanged}</div>'
-
-
-def _render_briefing(narrative: str) -> str:
-    paragraphs = "".join(f"<p>{html.escape(p.strip())}</p>" for p in narrative.split("\n\n") if p.strip())
-    return f'<div class="card briefing"><h2>Briefing</h2>{paragraphs}</div>'
-
-
-def effective_group(check: HealthCheck) -> str:
-    """The heading a check rolls up under: its explicit group, or a sensible
-    one derived from its id so older snapshots still group cleanly."""
-    return check.group or _category(check.id)
-
-
-_SEVERITY = {status: index for index, status in enumerate(STATUS_ORDER)}
+    return "ok" if statuses else "unknown"
 
 
 def _worst(checks: list[HealthCheck]) -> str:
@@ -729,162 +416,222 @@ def _worst(checks: list[HealthCheck]) -> str:
     return "ok"
 
 
-def _render_groups(checks: list[HealthCheck]) -> str:
-    """Group-primary view: one collapsible card per group, showing the
-    worst-of-children status. Groups with a problem sort first and open by
-    default; all-healthy groups stay collapsed and quiet."""
-    acked = [c for c in checks if c.acknowledged]
-    active = [c for c in checks if not c.acknowledged]
+def _counts(checks: list[HealthCheck]) -> dict[str, int]:
+    return {status: sum(1 for c in checks if c.status == status and not c.acknowledged) for status in STATUS_ORDER}
 
+
+def _fmt_time(created_at: str) -> str:
+    try:
+        stamp = datetime.fromisoformat(created_at)
+        return stamp.strftime("%Y-%m-%d %H:%M UTC")
+    except (TypeError, ValueError):
+        return str(created_at)
+
+
+def _ago(created_at: str) -> str:
+    try:
+        stamp = datetime.fromisoformat(created_at)
+        seconds = max(0, int((datetime.now(stamp.tzinfo) - stamp).total_seconds()))
+    except (TypeError, ValueError):
+        return "?"
+    if seconds < 90:
+        return f"{seconds}s"
+    if seconds < 5400:
+        return f"{seconds // 60} min"
+    return f"{seconds // 3600} h"
+
+
+def _repairs_link(repairs_pending: int | None) -> str:  # kept for callers
+    return ""
+
+
+# --- the stronghold shell -------------------------------------------------
+
+
+def _tabs(active: str, repairs_pending: int | None) -> str:
+    entries = [("/", "Overview"), ("/repairs", "Repairs"), ("/settings", "Settings")]
+    out = []
+    for href, label in entries:
+        if href == "/repairs" and repairs_pending is None:
+            continue
+        badge = ""
+        if href == "/repairs" and repairs_pending:
+            badge = f' <span class="rbadge">{repairs_pending}</span>'
+        cls = "tab active" if href == active else "tab"
+        out.append(f'<a class="{cls}" href="{href}">{label}{badge}</a>')
+    return f'<nav class="tabs">{"".join(out)}</nav>'
+
+
+def _hero(brand: dict[str, str], *, overall: str, msg: str, meta: str,
+          active: str, repairs_pending: int | None) -> str:
+    ink = _INK.get(overall, _INK["unknown"])
+    art = f'<img class="hero-art" src="{brand["hero"]}" alt="">' if "hero" in brand else ""
+    if "logotype-cut" in brand:
+        logo = f'<img class="hero-logo" src="{brand["logotype-cut"]}" alt="Homelab Guardian">'
+    elif "logotype" in brand:
+        logo = f'<img class="hero-logo" src="{brand["logotype"]}" alt="Homelab Guardian">'
+    else:
+        logo = '<div class="hero-logo-text">Homelab Guardian</div>'
+    label = f"{ink['chip']} — " + {"ok": "ALL SYSTEMS", "critical": "ATTENTION", "warning": "DEGRADED",
+                                   "unknown": "PARTIAL VIEW"}.get(overall, "STATUS")
+    return (
+        f'<div class="hero">{art}<div class="hero-wash"></div>'
+        f'<div class="hero-glow" style="--glow:{ink["glow"]}"></div>'
+        f'<div class="hero-body">{logo}'
+        f'<div class="hero-row"><span class="ochip" style="--oc:{ink["tx"]};--ocbg:{ink["bg"]}">{label}</span>'
+        f'<span class="omsg">{html.escape(msg)}</span></div>'
+        f'<div class="hero-meta"><span class="pulse"></span>{meta}</div>'
+        f"</div>{_tabs(active, repairs_pending)}</div>"
+    )
+
+
+def _shell(head_title: str, hero_html: str, deck_html: str, *, refresh: str = "") -> str:
+    return f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">{refresh}
+<title>{head_title}</title>{favicon_link()}<style>{PAGE_STYLE}</style></head>
+<body><main>
+<div class="shell-card">
+{hero_html}
+<div class="deck">
+{deck_html}
+</div>
+</div>
+<footer>Homelab Guardian — deterministic watch · approval-gated hands · never raw shell</footer>
+</main></body></html>"""
+
+
+# --- overview panels -------------------------------------------------------
+
+
+def _render_network_strip(checks: list[HealthCheck]) -> str:
+    nodes = [c for c in checks if effective_group(c) == "Network"][:7]
+    if not nodes:
+        return ""
+    parts = ['<div class="net-node"><div class="net-wan">WAN</div><div class="net-name">Internet</div></div>']
+    for check in nodes:
+        ink = _INK.get(check.status, _INK["unknown"])
+        name = html.escape(check.name.split(":")[0][:24])
+        parts.append('<div class="net-link"></div>')
+        parts.append(
+            f'<div class="net-node" title="{html.escape(check.summary)}">'
+            f'<div class="net-box" style="--nb:{ink["solid"]}"></div>'
+            f'<div class="net-name">{name}</div></div>'
+        )
+    return f'<div class="panel"><h2 class="ptitle">Network</h2><div class="net">{"".join(parts)}</div></div>'
+
+
+def _render_changes(diff: ScanDiff) -> str:
+    rows = []
+
+    def row(arrow: str, color: str, text: str, meta: str) -> None:
+        rows.append(
+            f'<div class="chg"><span class="arrow" style="color:{color}">{arrow}</span>'
+            f'<span>{text}</span><span class="meta">{meta}</span></div>'
+        )
+
+    for change in diff.regressions:
+        ink = _INK.get(change.get("current_status", "critical"), _INK["critical"])
+        row("▼", ink["tx"], f'<b>{html.escape(change["name"])}</b>: {change["previous_status"]} → {change["current_status"]}',
+            html.escape(str(change.get("summary", "")))[:80])
+    for change in diff.improvements:
+        row("▲", "var(--ok-t)", f'<b>{html.escape(change["name"])}</b>: {change["previous_status"]} → {change["current_status"]}', "")
+    for check in diff.new_checks:
+        ink = _INK.get(check.get("status", "ok"), _INK["ok"])
+        row("+", ink["tx"], f'<b>{html.escape(check["name"])}</b>: new check, currently {check["status"]}', "")
+    for check in diff.removed_checks:
+        row("−", "var(--dim)", f'<b>{html.escape(check["name"])}</b>: no longer checked', "")
+    if not rows:
+        rows.append('<div class="chg"><span class="arrow" style="color:var(--dim)">·</span>'
+                    '<span style="color:var(--dim)">Nothing changed since the previous scan.</span></div>')
+    return f'<div class="panel"><h2 class="ptitle">What changed</h2><div class="changes">{"".join(rows)}</div></div>'
+
+
+def _render_counts(counts: dict[str, int], acked: int) -> str:
+    tiles = []
+    for status in STATUS_ORDER:
+        ink = _INK[status]
+        tiles.append(
+            f'<div class="count" style="--cbg:{ink["bg"]};--ctx:{ink["tx"]}">'
+            f'<b>{counts.get(status, 0)}</b><span>{STATUS_META[status][1].upper()}</span></div>'
+        )
+    if acked:
+        tiles.append(f'<div class="count"><b>{acked}</b><span>ACKNOWLEDGED</span></div>')
+    return f'<div class="counts">{"".join(tiles)}</div>'
+
+
+def _render_briefing(narrative: str) -> str:
+    paragraphs = "".join(f"<p>{html.escape(p.strip())}</p>" for p in narrative.split("\n\n") if p.strip())
+    return f'<div class="panel briefing"><h2 class="ptitle">Briefing</h2>{paragraphs}</div>'
+
+
+def _render_check_row(check: HealthCheck) -> str:
+    ink = _INK.get(check.status, _INK["unknown"])
+    if check.acknowledged:
+        chip_label, chip_bg, chip_tx = "ACK", "rgba(125,138,160,.14)", "var(--unk-t)"
+    else:
+        chip_label, chip_bg, chip_tx = ink["chip"], ink["bg"], ink["tx"]
+    name_col = ink["tx"] if check.status != "ok" and not check.acknowledged else "var(--t3)"
+    parts = [
+        f'<div class="grow"><div class="gdot" style="--gd:{ink["solid"]};'
+        f'{"opacity:.45;" if check.acknowledged else ""}"></div><div class="body">',
+        f'<div class="top"><div class="name" style="color:{name_col}">{html.escape(check.name)}</div>',
+        f'<div class="chip" style="--chbg:{chip_bg};--chtx:{chip_tx}">{chip_label}</div></div>',
+        f'<div class="summary">{html.escape(check.summary)}</div>',
+    ]
+    if check.status != "ok" and not check.acknowledged and check.recommended_action:
+        parts.append(f'<div class="action">→ {html.escape(check.recommended_action)}</div>')
+    if check.acknowledged and check.ack_note:
+        parts.append(f'<div class="acknote">{html.escape(check.ack_note)}</div>')
+    if check.evidence and check.status != "ok":
+        evidence = html.escape(json.dumps(check.evidence, indent=2, default=str)[:2000])
+        parts.append(f"<details><summary>evidence</summary><pre>{evidence}</pre></details>")
+    parts.append("</div></div>")
+    return "".join(parts)
+
+
+def _render_groups(checks: list[HealthCheck]) -> str:
     grouped: dict[str, list[HealthCheck]] = {}
-    for check in active:
+    for check in checks:
         grouped.setdefault(effective_group(check), []).append(check)
 
-    problem_groups = [(n, m) for n, m in grouped.items() if _worst(m) != "ok"]
-    healthy_groups = [(n, m) for n, m in grouped.items() if _worst(m) == "ok"]
+    def group_key(item: tuple[str, list[HealthCheck]]) -> tuple[int, str]:
+        name, members = item
+        worst = min((_SEVERITY.get(c.status, 3) for c in members if not c.acknowledged), default=3)
+        return (worst, name.lower())
 
-    sections: list[str] = []
-
-    # Groups with something wrong: full-width roll-up cards, worst first, open.
-    problem_groups.sort(key=lambda kv: (_SEVERITY[_worst(kv[1])], kv[0].lower()))
-    for name, members in problem_groups:
-        worst = _worst(members)
-        counts: dict[str, int] = {}
-        for check in members:
-            counts[check.status] = counts.get(check.status, 0) + 1
-        summary_counts = " · ".join(
-            f"{counts[s]} {STATUS_META[s][1].lower()}" for s in STATUS_ORDER if counts.get(s)
+    cards = []
+    for name, members in sorted(grouped.items(), key=group_key):
+        members = sorted(members, key=lambda c: (_SEVERITY.get(c.status, 3), c.acknowledged, c.name.lower()))
+        ok_count = sum(1 for c in members if c.status == "ok" or c.acknowledged)
+        worst = overall_of(members)
+        tally_color = _INK[worst]["tx"] if worst != "ok" else "var(--ok-t)"
+        rows = "".join(_render_check_row(c) for c in members)
+        cards.append(
+            f'<div class="panel gcard" data-group="{html.escape(name)}">'
+            f'<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px">'
+            f'<h2 class="ptitle-lg">{html.escape(name)}</h2>'
+            f'<span class="gtally" style="color:{tally_color}">{ok_count}/{len(members)} OK</span></div>'
+            f"{rows}</div>"
         )
-        icon, _ = STATUS_META.get(worst, ("•", worst))
-        problems = sorted(
-            (c for c in members if c.status != "ok"),
-            key=lambda c: (_SEVERITY[c.status], c.name.lower()),
-        )
-        healthy = sorted((c for c in members if c.status == "ok"), key=lambda c: c.name.lower())
-        body = "".join(_render_check(check) for check in problems)
-        if healthy:
-            items = "".join(
-                f'<li title="{html.escape(c.summary)}">{_mark("ok")} {html.escape(c.name)}</li>' for c in healthy
-            )
-            body += f'<ul class="oklist">{items}</ul>'
-        sections.append(
-            f'<details class="group {_STATUS_CLASS.get(worst, "unk")}" open>'
-            f'<summary>{_mark(worst)} {html.escape(name)}'
-            f'<span class="gcount">{summary_counts}</span></summary>'
-            f'<div class="gbody">{body}</div></details>'
-        )
-
-    # Fully-healthy groups: collapsible tiles in a 2-column grid. Each tile
-    # rolls its checks up under a green header and opens by default so the
-    # checks stay visible, but can be collapsed to tidy the view.
-    if healthy_groups:
-        total_ok = sum(len(m) for _, m in healthy_groups)
-        # Largest tiles first so paired rows are closer in height; collapsed by
-        # default (even + calm), with per-tile open state remembered client-side
-        # so an auto-refresh never re-expands what you collapsed.
-        healthy_groups.sort(key=lambda kv: (-len(kv[1]), kv[0].lower()))
-        tiles = []
-        for name, members in healthy_groups:
-            items = "".join(
-                f'<li title="{html.escape(c.summary)}">✅ {html.escape(c.name)}</li>'
-                for c in sorted(members, key=lambda c: c.name.lower())
-            )
-            tiles.append(
-                f'<details class="tile okc" data-tile="{html.escape(name)}"><summary>{_mark("ok")} {html.escape(name)}'
-                f'<span class="tcount">({len(members)})</span></summary>'
-                f'<ul>{items}</ul></details>'
-            )
-        sections.append(
-            f'<h2 class="sectionhead">Healthy ({total_ok})</h2>'
-            f'<div class="tilegrid">{"".join(tiles)}</div>'
-        )
-
-    if acked:
-        sections.append(_render_acknowledged(acked))
-    return "".join(sections)
+    return f'<div class="groups">{"".join(cards)}</div>'
 
 
-HISTORY_VISIBLE_ROWS = 5
-
-
-def _history_row(scan: tuple[int, str, dict[str, Any]], current_id: int | None) -> str:
-    scan_id, created_at, snapshot = scan
-    checks = checks_from_snapshot(snapshot)
-    overall = overall_of(checks)
-    icon, label = STATUS_META.get(overall, ("•", overall))
-    counts = _counts(checks)
-    current = ' class="current"' if scan_id == current_id else ""
-    return (
-        f"<tr{current}><td><a href=\"/scan/{scan_id}\">#{scan_id}</a></td>"
-        f"<td>{_fmt_time(created_at)}</td><td>{_mark(overall)} {label}</td>"
-        f"<td>{counts['critical']} / {counts['warning']} / {counts['unknown']} / {counts['ok']}</td></tr>"
-    )
-
-
-def _render_history(history: list[tuple[int, str, dict[str, Any]]], current_id: int | None) -> str:
+def _render_history(history: list[tuple[int, str, dict[str, Any]]], current_id: int) -> str:
     if not history:
         return ""
-    header = "<tr><th>Scan</th><th>Time</th><th>Status</th><th>crit / warn / unk / ok</th></tr>"
-    recent = "".join(_history_row(scan, current_id) for scan in history[:HISTORY_VISIBLE_ROWS])
-    body = f'<table class="history">{header}{recent}</table>'
-    older = history[HISTORY_VISIBLE_ROWS:]
-    if older:
-        older_rows = "".join(_history_row(scan, current_id) for scan in older)
-        body += (
-            f'<details class="morehistory"><summary>Show {len(older)} older scans</summary>'
-            f'<table class="history">{older_rows}</table></details>'
-        )
-    return f'<div class="card"><h2>Scan history</h2>{body}</div>'
-
-
-def _repairs_link(repairs_pending: int | None) -> str:
-    """The 🔧 header link, shown only when repairs are enabled. A badge shows the
-    count of proposals awaiting approval."""
-    if repairs_pending is None:
-        return ""
-    badge = f'<span class="rbadge">{repairs_pending}</span>' if repairs_pending else ""
-    return f'<a class="rail-link" href="/repairs" title="Repairs">⚒&#xFE0E; Repairs{badge}</a>'
-
-
-# The wall has a voice: the overall status as the watch would call it.
-_FLAVOR = {
-    "ok": "All quiet on the wall",
-    "warning": "Threats sighted",
-    "critical": "The wall is breached",
-    "unknown": "Fog of war",
-}
-
-
-def _rail(brand: dict[str, str], *, active: str = "/", sigil: str = "",
-          ranks: str = "", repairs_pending: int | None = None) -> str:
-    """The tower rail: brand, status sigil, count ranks, nav, and the guardian
-    himself standing watch along the page's left edge."""
-    if "logotype" in brand:
-        mark = f'<a class="rail-logo" href="/"><img src="{brand["logotype"]}" alt="Homelab Guardian"></a>'
-    else:
-        mark = '<a class="rail-logo rail-logo-text" href="/">Homelab Guardian</a>'
-    # The guardian LEADS: a framed portrait window right under the nameplate,
-    # face always visible, with the sigil pinned as a medallion on its base.
-    if "hero" in brand:
-        classes = "rail-portrait has-sigil" if sigil else "rail-portrait"
-        portrait = f'<div class="{classes}"><img src="{brand["hero"]}" alt="">{sigil}</div>'
-    else:
-        portrait = sigil  # no art installed: the sigil stands alone
-
-    def link(href: str, label: str) -> str:
-        cls = "rail-link active" if href == active else "rail-link"
-        return f'<a class="{cls}" href="{href}">{label}</a>'
-
-    nav = (
-        link("/", "⌖ The Watch")
-        + _repairs_link(repairs_pending)
-        + link("/settings", "⚙&#xFE0E; Settings")
-        + '<button class="rail-link theme-toggle" onclick="toggleTheme()" title="Toggle light/dark theme">◐ Theme</button>'
-    )
-    return (
-        f'<aside class="rail">{mark}{portrait}{ranks}'
-        f'<nav class="rail-nav">{nav}</nav></aside>'
-    )
+    links = []
+    for scan_id, created_at, snapshot in history[:20]:
+        overall = overall_of(checks_from_snapshot(snapshot))
+        ink = _INK.get(overall, _INK["unknown"])
+        label = f"#{scan_id}"
+        if scan_id == current_id:
+            links.append(f'<span class="cur" style="color:{ink["tx"]}">{label}</span>')
+        else:
+            links.append(f'<a href="/scan/{scan_id}" title="{_fmt_time(created_at)}" '
+                         f'style="color:{ink["tx"]}">{label}</a>')
+    return (f'<div class="panel"><h2 class="ptitle">Scan history</h2>'
+            f'<div class="histrip">{"".join(links)}</div></div>')
 
 
 def render_scan_page(
@@ -898,96 +645,60 @@ def render_scan_page(
     scan_id, created_at, snapshot = scan
     checks = checks_from_snapshot(snapshot)
     overall = overall_of(checks)
-    icon, label = STATUS_META.get(overall, ("•", overall))
     counts = _counts(checks)
+    acked = sum(1 for c in checks if c.acknowledged)
     narrative = snapshot.get("narrative") or ""
     app_name = html.escape(str(snapshot.get("app", "Homelab Guardian")))
-
     brand = brand or {}
-    status_class = _STATUS_CLASS.get(overall, "unk")
 
-    sigil = (
-        f'<div class="sigil {status_class}" title="{label}">'
-        '<span class="sigil-ring"></span><span class="sigil-gem"></span></div>'
-    )
-    ranks = "".join(
-        f'<div class="rank {_STATUS_CLASS[s]}"><b>{counts[s]}</b>'
-        f'<span class="rank-label">{STATUS_META[s][1]}</span></div>'
-        for s in STATUS_ORDER
-    )
-    acked_count = sum(1 for c in checks if c.acknowledged)
-    if acked_count:
-        ranks += f'<div class="rank"><b>{acked_count}</b><span class="rank-label">⊘ Acknowledged</span></div>'
-    ranks = f'<div class="ranks">{ranks}</div>'
-
-    flavor = _FLAVOR.get(overall, label)
-    refresh_note = f" · auto-refreshes every {refresh_seconds}s" if refresh_seconds else ""
-    banner = (
-        f'<header class="banner {status_class}">'
-        f'<div class="banner-title">{flavor}</div>'
-        f'<div class="banner-sub">{_mark(overall)} {label.upper()} · {len(checks)} checks · '
-        f"Scan #{scan_id} · {_fmt_time(created_at)}{refresh_note}</div>"
-        "</header>"
-    )
+    meta = (f"last scan {_ago(created_at)} ago · Scan #{scan_id} · {len(checks)} checks · read-only"
+            + (f" · refreshes every {refresh_seconds}s" if refresh_seconds else ""))
+    hero = _hero(brand, overall=overall, msg=_HERO_MSG.get(overall, ""), meta=meta,
+                 active="/", repairs_pending=repairs_pending)
+    deck = "".join([
+        _render_network_strip(checks),
+        f'<div class="duo">{_render_changes(diff)}{_render_counts(counts, acked)}</div>',
+        _render_briefing(narrative) if narrative else "",
+        _render_groups(checks),
+        _render_history(history, scan_id),
+    ])
     refresh = f'<meta http-equiv="refresh" content="{int(refresh_seconds)}">' if refresh_seconds else ""
-
-    return f"""<!doctype html>
-<html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">{refresh}
-<title>{app_name} — {label}</title>{favicon_link()}<style>{PAGE_STYLE}</style>{THEME_SCRIPT}</head>
-<body><div class="shell">
-{_rail(brand, active="/", sigil=sigil, ranks=ranks, repairs_pending=repairs_pending)}
-<main class="field">
-{banner}
-<div class="field-grid">
-<div class="fmain">
-{_render_briefing(narrative) if narrative else ''}
-{_render_changes(diff)}
-{_render_groups(checks)}
-</div>
-<aside class="fside">
-{_render_history(history, scan_id)}
-</aside>
-</div>
-<footer>Homelab Guardian — read-only view · <a href="/">latest</a></footer>
-</main></div>{TILE_SCRIPT}</body></html>"""
+    label = STATUS_META.get(overall, ("", overall))[1]
+    return _shell(f"{app_name} — {label}", hero, deck, refresh=refresh)
 
 
 def render_empty_page() -> str:
-    return (
-        f"<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>Homelab Guardian</title>"
-        f"{favicon_link()}<style>{PAGE_STYLE}</style></head><body><main><div class=\"card\"><h2>No scans yet</h2>"
-        f"<p>Run <code>guardian --config config.yaml</code> to produce the first scan, "
-        f"or start the server with <code>--interval</code> to scan continuously.</p></div></main></body></html>"
-    )
+    hero = _hero(brand_assets(), overall="unknown", msg="No scans yet.",
+                 meta="waiting for the first scan", active="/", repairs_pending=None)
+    deck = ('<div class="panel"><h2 class="ptitle">No scans yet</h2>'
+            "<p>Run <code>guardian --config config.yaml</code> to produce the first scan, "
+            "or start the server with <code>--interval</code> to scan continuously.</p></div>")
+    return _shell("Homelab Guardian", hero, deck)
+
+
+# --- settings ---------------------------------------------------------------
 
 
 def _render_setting_inputs(settings: list[dict[str, Any]], editable: bool) -> str:
-    """The Thresholds & timing card: whitelisted numeric inputs, grouped."""
     if not settings:
         return ""
     disabled = "" if editable else " disabled"
     groups: dict[str, list[dict[str, Any]]] = {}
-    for s in settings:
-        groups.setdefault(s["group"], []).append(s)
-    parts = [
-        '<div class="card"><h2>Thresholds &amp; timing</h2>',
-        '<p class="notice">Numeric limits for the enabled checks. Values outside the allowed range are rejected; comments in config.yaml are preserved.</p>',
-    ]
+    for entry in settings:
+        groups.setdefault(entry["group"], []).append(entry)
+    parts = ['<div class="panel"><h2 class="ptitle-lg" style="margin-bottom:8px">Thresholds &amp; timing</h2>',
+             '<div class="pnote">Numeric limits for the enabled checks. Out-of-range values reject the whole save.</div>']
     for group, entries in groups.items():
-        parts.append(f'<h3 class="sgroup">{html.escape(group)}</h3>')
-        for s in entries:
-            ctx = f'<span class="cid">{html.escape(s["context"])}</span> · ' if s.get("context") else ""
-            step = "1" if s["kind"] == "int" else "any"
-            value = f"{s['value']:g}"
+        parts.append(f'<div class="pnote" style="margin-top:12px;color:var(--mut2)">{html.escape(group)}</div>')
+        for entry in entries:
+            ctx = f'<span style="font-family:var(--mono);color:var(--dim)">{html.escape(entry["context"])}</span> · ' if entry.get("context") else ""
+            step = "1" if entry["kind"] == "int" else "any"
             parts.append(
-                f'<label class="settings-row"><span>'
-                f'<span class="label">{html.escape(s["label"])}</span> '
-                f'<span class="cid">{html.escape(s["unit"])}</span>'
-                f'<span class="cdesc">{ctx}allowed {s["min"]:g}–{s["max"]:g}</span></span>'
-                f'<input class="num" type="number" name="setting:{html.escape(s["token"])}" '
-                f'value="{value}" min="{s["min"]:g}" max="{s["max"]:g}" step="{step}"{disabled}>'
-                f"</label>"
+                f'<label class="setrow"><span class="sname">{html.escape(entry["label"])}</span>'
+                f'<span class="sdesc">{ctx}{html.escape(entry["unit"])} · allowed {entry["min"]:g}–{entry["max"]:g}</span>'
+                f'<input class="num" type="number" name="setting:{html.escape(entry["token"])}" '
+                f'value="{entry["value"]:g}" min="{entry["min"]:g}" max="{entry["max"]:g}" step="{step}"{disabled}>'
+                "</label>"
             )
     parts.append("</div>")
     return "".join(parts)
@@ -1003,74 +714,89 @@ def render_settings_page(
     error: str | None = None,
     auth_mode: str = "none",
     settings: list[dict[str, Any]] | None = None,
+    hero_ctx: dict[str, Any] | None = None,
+    posture: list[dict[str, Any]] | None = None,
 ) -> str:
+    disabled = "" if editable else " disabled"
     rows = []
     for c in collectors:
         checked = " checked" if c["enabled"] else ""
-        disabled = "" if editable else " disabled"
-        desc = c.get("description") or ""
-        desc_html = f'<span class="cdesc">{html.escape(desc)}</span>' if desc else ""
         rows.append(
-            f'<label class="settings-row"><span>'
-            f'<span class="label">{html.escape(c["label"])}</span> '
-            f'<span class="cid">{html.escape(c["name"])}</span>'
-            f"{desc_html}</span>"
-            f'<input class="toggle" type="checkbox" name="collector:{html.escape(c["name"])}"{checked}{disabled}>'
-            f"</label>"
+            f'<div class="setrow"><span class="sname">{html.escape(c["label"])}</span>'
+            f'<span class="sdesc">{html.escape(c.get("description") or "")}</span>'
+            f'<label class="switch"><input type="checkbox" name="collector:{html.escape(c["name"])}"{checked}{disabled}>'
+            '<span class="track"></span><span class="knob"></span></label></div>'
         )
-    rows_html = "".join(rows)
+    collectors_panel = (
+        '<div class="panel"><h2 class="ptitle-lg" style="margin-bottom:8px">Collectors</h2>'
+        '<div class="pnote">Read-only against your infrastructure. Every one optional; every one degrades gracefully.</div>'
+        + "".join(rows) + "</div>"
+    )
+    thresholds_panel = _render_setting_inputs(settings or [], editable)
+
+    posture_rows = []
+    for p in posture or []:
+        on = p.get("on")
+        pill = ('<span class="postpill" style="background:rgba(76,181,114,.14);color:var(--ok-t)">ON</span>'
+                if on else '<span class="postpill" style="background:rgba(125,138,160,.14);color:var(--unk-t)">OFF</span>')
+        posture_rows.append(
+            f'<div class="setrow"><span style="flex:1"><span class="sname" style="width:auto;display:block">{html.escape(p["name"])}</span>'
+            f'<span class="sdesc" style="display:block;margin-top:2px">{html.escape(p["desc"])}</span></span>{pill}</div>'
+        )
+    posture_panel = (
+        '<div class="panel"><h2 class="ptitle-lg" style="margin-bottom:8px">Integrations &amp; repair</h2>'
+        '<div class="pnote">Security posture is read-only here — armed and disarmed only in config.yaml.</div>'
+        + "".join(posture_rows) + "</div>"
+    ) if posture_rows else ""
 
     if saved:
-        banner = '<div class="banner ok">Saved. Changes take effect on the next scan.</div>'
+        flash = '<div class="banner-flash ok">Saved. Changes take effect on the next scan.</div>'
     elif error:
-        banner = f'<div class="banner err">Could not save: {html.escape(error)}</div>'
+        flash = f'<div class="banner-flash err">Could not save: {html.escape(error)}</div>'
     else:
-        banner = ""
+        flash = ""
 
-    settings_html = _render_setting_inputs(settings or [], editable)
     if editable:
         who = f"Signed in as <b>{html.escape(identity.user)}</b>." if identity else ""
         logout = ' · <a href="/auth/logout">Sign out</a>' if auth_mode == "oidc" else ""
-        body = (
+        left = (
             f'<form method="post" action="/settings">'
             f'<input type="hidden" name="csrf" value="{html.escape(csrf_token)}">'
-            f'<div class="card"><h2>Collectors</h2>'
-            f'<p class="notice">Turn checks on or off. Saved to config.yaml; the running scan picks up changes automatically.</p>'
-            f"{rows_html}</div>"
-            f"{settings_html}"
-            f'<div class="card"><div class="savebar"><button class="save" type="submit">Save</button>'
+            f'<div style="display:flex;flex-direction:column;gap:22px">{collectors_panel}{thresholds_panel}'
+            f'<div class="savebar"><button class="btn-go" type="submit">Save</button>'
             f'<span class="notice">{who}{logout}</span></div></div></form>'
         )
     else:
-        body = (
-            '<div class="banner err">Authentication is off — settings are read-only here.</div>'
-            '<div class="card"><h2>Collectors</h2>'
-            '<p class="notice">Editing the host config over the network needs a login. '
-            "Set <code>web.auth.mode</code> in config.yaml (basic / forward_auth / oidc), then reload. "
-            "Current configuration:</p>"
-            f"{rows_html}</div>"
-            f"{settings_html}"
+        left = (
+            '<div class="banner-flash err">Authentication is off — settings are read-only here. '
+            "Set <code>web.auth.mode</code> in config.yaml (basic / forward_auth / oidc), then reload.</div>"
+            f'<div style="display:flex;flex-direction:column;gap:22px;margin-top:14px">{collectors_panel}{thresholds_panel}</div>'
         )
 
-    return f"""<!doctype html>
-<html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Homelab Guardian — Settings</title>{favicon_link()}<style>{PAGE_STYLE}</style>{THEME_SCRIPT}</head>
-<body><div class="shell">
-{_rail(brand_assets(), active="/settings")}
-<main class="field">
-<header class="banner okc">
-<div class="banner-title">The Armory</div>
-<div class="banner-sub">⚙&#xFE0E; SETTINGS · collectors and thresholds, saved straight into config.yaml</div>
-</header>
-{banner}
-{body}
-<footer>Homelab Guardian — settings</footer>
-</main></div></body></html>"""
+    right = (
+        f'<div style="display:flex;flex-direction:column;gap:22px">{posture_panel}'
+        '<div class="warncard">Destructive actions (anything that deletes) always require a human — '
+        "auto-approve is ignored for them, by construction.</div></div>"
+    )
+    deck = f"{flash}<div class=\"setgrid\"><div>{left}</div>{right}</div>"
+
+    ctx = hero_ctx or {}
+    hero = _hero(brand_assets(), overall=ctx.get("overall", "unknown"),
+                 msg=ctx.get("msg", "Collector and threshold controls."),
+                 meta=ctx.get("meta", "settings · saved straight into config.yaml"),
+                 active="/settings", repairs_pending=ctx.get("repairs_pending"))
+    return _shell("Homelab Guardian — Settings", hero, deck)
 
 
-_REPAIR_STATUS_CLASS = {
-    "proposed": "warn", "approved": "okc", "denied": "unk", "executed": "okc", "failed": "crit",
+# --- repairs ----------------------------------------------------------------
+
+_PROP_INK = {
+    "proposed": ("PENDING", "rgba(217,161,59,.14)", "var(--warn-t)"),
+    "approved": ("APPROVED", "rgba(76,181,114,.14)", "var(--ok-t)"),
+    "denied": ("DENIED", "rgba(217,88,74,.14)", "var(--crit-t)"),
+    "executed": ("EXECUTED", "rgba(76,181,114,.14)", "var(--ok-t)"),
+    "failed": ("FAILED", "rgba(217,88,74,.14)", "var(--crit-t)"),
+    "running": ("RUNNING", "rgba(99,164,216,.14)", "var(--acc)"),
 }
 
 
@@ -1079,47 +805,67 @@ def _render_proposal(p: dict[str, Any], *, editable: bool, csrf_token: str) -> s
     plan: dict[str, Any] = plan_raw if isinstance(plan_raw, dict) else {}
     argv = " ".join(p.get("argv") or plan.get("argv") or [])
     status = str(p.get("status", "proposed"))
-    status_cls = _REPAIR_STATUS_CLASS.get(status, "unk")
-    badge = f'<span class="rstatus">{html.escape(status)}</span>'
-    parts = [
-        f'<div class="rhead"><b>#{p.get("id")}</b> {html.escape(str(p.get("action", "")))} {badge}</div>',
-        f'<div class="cid">on {html.escape(str(p.get("check_id", "")))}</div>',
-    ]
-    if argv:
-        parts.append(f'<div class="rplan">Will run: <code>{html.escape(argv)}</code></div>')
-    if plan.get("risk"):
-        parts.append(f'<div class="cid">risk: {html.escape(str(plan["risk"]))}</div>')
+    chip_label, chip_bg, chip_tx = _PROP_INK.get(status, ("?", "rgba(125,138,160,.14)", "var(--unk-t)"))
+    action = html.escape(str(p.get("action", "")).replace("_", " "))
+    target = html.escape(str(p.get("check_id", "")))
+
+    grid = []
+
+    def kv(k: str, v: str) -> None:
+        grid.append(f'<div class="k">{k}</div><div class="v">{v}</div>')
+
     if plan.get("blast_radius"):
-        parts.append(f'<div class="notice">{html.escape(str(plan["blast_radius"]))}</div>')
+        kv("Blast radius", html.escape(str(plan["blast_radius"])))
+    if plan.get("reversible"):
+        kv("Reversible", html.escape(str(plan["reversible"])))
+    if argv:
+        kv("Exact argv", f"<code>{html.escape(argv)}</code>")
+    if plan.get("risk"):
+        kv("Risk tier", html.escape(str(plan["risk"])))
     if plan.get("preview"):
-        prev = ", ".join(f"{k}={v}" for k, v in plan["preview"].items())
-        parts.append(f'<div class="rplan">Preview: <code>{html.escape(prev[:300])}</code></div>')
-    if plan.get("warning"):
-        parts.append(f'<div class="banner err">⚠ {html.escape(str(plan["warning"]))}</div>')
-    meta = f'proposed by {html.escape(str(p.get("proposed_by") or "—"))} · {html.escape(str(p.get("proposed_at") or ""))}'
+        preview = ", ".join(f"{k}={v}" for k, v in plan["preview"].items())
+        kv("Preview", html.escape(preview[:300]))
+    verify = p.get("verify_json") if isinstance(p.get("verify_json"), dict) else None
+    if verify and p.get("executed_at"):
+        kv("Verify", f'<b style="color:{_INK.get(str(verify.get("status")), _INK["unknown"])["tx"]}">'
+                     f'{html.escape(str(verify.get("status")))}</b> — {html.escape(str(verify.get("summary", "")))}')
+
+    meta = f'Proposed by {html.escape(str(p.get("proposed_by") or "—"))} · {html.escape(str(p.get("proposed_at") or ""))}'
+    meta += (f' · proposal #{p.get("id")} · <code>{html.escape(str(p.get("action", "")))}</code>'
+             f" · applies to <code>{target}</code>")
     if p.get("approved_by"):
         verb = "denied" if status == "denied" else "approved"
         meta += f' · {verb} by {html.escape(str(p["approved_by"]))}'
-    parts.append(f'<div class="cid">{meta}</div>')
-    verify = p.get("verify_json") if isinstance(p.get("verify_json"), dict) else None
-    if verify and p.get("executed_at"):
-        parts.append(f'<div class="notice">Verify: <b>{html.escape(str(verify.get("status")))}</b> — {html.escape(str(verify.get("summary", "")))}</div>')
 
     if status == "proposed":
         if editable:
-            parts.append(
-                '<form method="post" action="/repairs" class="rform">'
+            side = (
+                f'<form method="post" action="/repairs" style="display:flex;flex-direction:column;gap:10px">'
                 f'<input type="hidden" name="csrf" value="{html.escape(csrf_token)}">'
                 f'<input type="hidden" name="proposal_id" value="{p.get("id")}">'
-                '<button class="save" name="decision" value="approve" type="submit">Approve</button>'
-                '<button class="deny" name="decision" value="deny" type="submit">Deny</button>'
+                '<button class="btn-go" name="decision" value="approve" type="submit">Approve</button>'
+                '<button class="btn-no" name="decision" value="deny" type="submit">Deny</button>'
+                '<div class="notice" style="text-align:center">Approval is human-only. The agent can propose — never authorize.</div>'
                 "</form>"
             )
         else:
-            parts.append('<div class="notice">Enable <code>web.auth</code> to approve or deny here.</div>')
+            side = '<div class="notice">Enable <code>web.auth</code> to approve or deny here.</div>'
     elif status == "approved":
-        parts.append(f'<div class="notice">Approved — run <code>guardian repair execute {p.get("id")}</code> (or the agent will).</div>')
-    return f'<div class="rcard {status_cls}">' + "".join(parts) + "</div>"
+        side = (f'<div style="color:var(--ok-t);font-size:13px">Approved — run '
+                f"<code>guardian repair execute {p.get('id')}</code> (or the agent will). Single-use, expires.</div>")
+    elif status == "denied":
+        side = '<div class="notice">Denied — proposal closed and recorded in the audit log.</div>'
+    else:
+        side = f'<div class="notice">{chip_label.lower()} — see the audit log below.</div>'
+
+    return (
+        f'<div class="prop"><div>'
+        f'<div class="prop-title">{action.capitalize()} <code>{target.split("_")[-1]}</code>'
+        f'<span class="pstat" style="--chbg:{chip_bg};--chtx:{chip_tx}">{chip_label}</span></div>'
+        f'<div class="prop-meta">{meta}</div>'
+        f'<div class="prop-grid">{"".join(grid)}</div>'
+        f'</div><div class="prop-side">{side}</div></div>'
+    )
 
 
 def render_repairs_page(
@@ -1130,39 +876,65 @@ def render_repairs_page(
     repair_enabled: bool = True,
     notice: str | None = None,
     error: str | None = None,
+    hero_ctx: dict[str, Any] | None = None,
 ) -> str:
     if not repair_enabled:
-        body = ('<div class="card"><h2>Repairs</h2><p class="notice">Repairs are disabled. '
-                "Set <code>repair.enabled: true</code> in config.yaml to use approval-gated repair "
-                "playbooks (see docs/repair.md).</p></div>")
-        banner = ""
+        deck = ('<div class="prop-empty">Repairs are disabled. '
+                "Set <code>repair.enabled: true</code> in config.yaml to use approval-gated repairs (see docs/repair.md).</div>")
     else:
-        cards = "".join(_render_proposal(p, editable=editable, csrf_token=csrf_token) for p in proposals)
-        notice_html = "" if editable else '<div class="banner err">Authentication is off — approvals are read-only here.</div>'
-        empty = "" if proposals else '<p class="notice">No repair proposals yet. An agent or <code>guardian repair propose</code> creates them; approve here or with <code>guardian repair approve &lt;id&gt;</code>.</p>'
-        body = f'{notice_html}<div class="card"><h2>Repair proposals</h2>{empty}{cards}</div>'
+        flash = ""
         if notice:
-            banner = f'<div class="banner ok">{html.escape(notice)}</div>'
+            flash = f'<div class="banner-flash ok">{html.escape(notice)}</div>'
         elif error:
-            banner = f'<div class="banner err">{html.escape(error)}</div>'
+            flash = f'<div class="banner-flash err">{html.escape(error)}</div>'
+        pending = [p for p in proposals if p.get("status") == "proposed"]
+        done = [p for p in proposals if p.get("status") != "proposed"]
+        parts = [flash, '<h2 class="ptitle-lg">Pending proposals</h2>']
+        if pending:
+            parts += [_render_proposal(p, editable=editable, csrf_token=csrf_token) for p in pending]
         else:
-            banner = ""
+            parts.append('<div class="prop-empty">No pending proposals. Guardian only proposes whitelisted, '
+                         "parameterized actions — never raw shell.</div>")
+        if done:
+            parts.append('<h2 class="ptitle-lg" style="margin-top:6px">Audit log</h2>')
+            rows = []
+            for p in done[:50]:
+                _, chip_bg, chip_tx = _PROP_INK.get(str(p.get("status")), ("?", "", "var(--unk-t)"))
+                rows.append(
+                    f'<div class="audit-row"><div class="when">{html.escape(str(p.get("proposed_at") or ""))[:16]}</div>'
+                    f'<div class="act">{html.escape(str(p.get("action", "")))}</div>'
+                    f'<div class="tgt">{html.escape(str(p.get("check_id", "")))}</div>'
+                    f'<div class="by">{html.escape(str(p.get("approved_by") or p.get("proposed_by") or "—"))}</div>'
+                    f'<div class="res" style="color:{chip_tx}">{html.escape(str(p.get("status", "")))}</div></div>'
+                )
+            parts.append(f'<div class="audit">{"".join(rows)}</div>')
+        deck = "".join(parts)
 
-    return f"""<!doctype html>
-<html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Homelab Guardian — Repairs</title>{favicon_link()}<style>{PAGE_STYLE}</style>{THEME_SCRIPT}</head>
-<body><div class="shell">
-{_rail(brand_assets(), active="/repairs")}
-<main class="field">
-<header class="banner okc">
-<div class="banner-title">The Forge</div>
-<div class="banner-sub">⚒&#xFE0E; REPAIRS · approve or deny proposals — execution stays with the CLI and MCP</div>
-</header>
-{banner}
-{body}
-<footer>Homelab Guardian — repairs · approval-gated, never raw shell</footer>
-</main></div></body></html>"""
+    ctx = hero_ctx or {}
+    hero = _hero(brand_assets(), overall=ctx.get("overall", "unknown"),
+                 msg=ctx.get("msg", "Approve or deny proposals — execution stays with the CLI and MCP."),
+                 meta=ctx.get("meta", "repairs · approval-gated · never raw shell"),
+                 active="/repairs", repairs_pending=ctx.get("repairs_pending"))
+    return _shell("Homelab Guardian — Repairs", hero, deck)
+
+
+def _posture_of(config: dict[str, Any]) -> list[dict[str, Any]]:
+    """Security-posture switches shown READ-ONLY on the settings page — arming
+    and disarming these stays in config.yaml, never on a network surface."""
+    mcp_cfg = config.get("mcp", {}) or {}
+    repair_cfg = config.get("repair", {}) or {}
+    notif = config.get("notifications", {}) or {}
+    auth_mode = ((config.get("web") or {}).get("auth") or {}).get("mode", "none")
+    return [
+        {"name": "MCP write tools", "on": bool(mcp_cfg.get("allow_writes", False)),
+         "desc": "The agent may manage acknowledgments (mcp.allow_writes)."},
+        {"name": "Approval-gated repairs", "on": bool(repair_cfg.get("enabled", False)),
+         "desc": "Playbooks can be proposed and, after human approval, executed (repair.enabled)."},
+        {"name": "Agent notifications", "on": str(notif.get("mode", "direct")).lower() == "agent",
+         "desc": "The attached agent is the voice; Telegram stays as the critical fallback."},
+        {"name": "Dashboard auth", "on": auth_mode != "none",
+         "desc": f"web.auth.mode = {auth_mode}."},
+    ]
 
 
 class GuardianRequestHandler(BaseHTTPRequestHandler):
@@ -1293,6 +1065,25 @@ class GuardianRequestHandler(BaseHTTPRequestHandler):
     def _check_csrf(self, user: str, token: str) -> bool:
         return bool(token) and hmac.compare_digest(self._csrf_token(user), token)
 
+    def _hero_ctx(self, config: dict[str, Any]) -> dict[str, Any]:
+        """Live status for the hero band on secondary pages."""
+        conn = db.connect(self.database_path)
+        try:
+            scan = db.load_latest_scan(conn)
+            pending = None
+            if config.get("repair", {}).get("enabled", False):
+                pending = sum(1 for p in db.list_repair_proposals(conn, limit=200) if p["status"] == "proposed")
+        finally:
+            conn.close()
+        if scan is None:
+            return {"overall": "unknown", "msg": "No scans yet.",
+                    "meta": "waiting for the first scan", "repairs_pending": pending}
+        checks = checks_from_snapshot(scan[2])
+        overall = overall_of(checks)
+        return {"overall": overall, "msg": _HERO_MSG.get(overall, ""),
+                "meta": f"last scan {_ago(scan[1])} ago · Scan #{scan[0]} · {len(checks)} checks · read-only",
+                "repairs_pending": pending}
+
     def _render_settings(self) -> None:
         config = load_config(self.config_path)
         identity = self.auth.identify(self)
@@ -1307,6 +1098,8 @@ class GuardianRequestHandler(BaseHTTPRequestHandler):
             error=next(iter(query.get("error") or []), None),
             auth_mode=self.auth_mode,
             settings=editable_settings(config),
+            hero_ctx=self._hero_ctx(config),
+            posture=_posture_of(config),
         ))
 
     def _save_settings(self) -> None:
@@ -1379,6 +1172,7 @@ class GuardianRequestHandler(BaseHTTPRequestHandler):
             repair_enabled=enabled,
             notice=next(iter(query.get("ok") or []), None),
             error=next(iter(query.get("error") or []), None),
+            hero_ctx=self._hero_ctx(config),
         ))
 
     def _save_repair_decision(self) -> None:
