@@ -45,6 +45,9 @@ guardian = "homelab_guardian.main:main"
 [tool.setuptools.packages.find]
 include = ["homelab_guardian*"]
 
+[tool.setuptools.package-data]
+homelab_guardian = ["assets/*"]
+
 [tool.bandit]
 # Skips are checks that flag this project's deliberate design, not defects:
 #   B404/B603 - Guardian's whole job is running argv-only subprocesses

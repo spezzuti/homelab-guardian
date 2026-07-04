@@ -7,6 +7,7 @@ import json
 import secrets as secrets_mod
 import threading
 from datetime import datetime
+from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 from urllib.parse import parse_qs, quote, urlparse
@@ -37,26 +38,45 @@ STATUS_META = {
 }
 STATUS_ORDER = ["critical", "warning", "unknown", "ok"]
 
-# The mark: a G drawn as a breaker switch — an open ring whose crossbar is a
-# switch bar. Reads as both the initial and "the circuit breaker between the
-# agent and root". Inline SVG so the dashboard stays a single self-contained
-# response; currentColor lets it follow the brand variable in either theme.
-LOGO_SVG = (
-    '<svg class="logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" '
-    'width="20" height="20" aria-hidden="true">'
-    '<circle cx="16" cy="16" r="11" fill="none" stroke="currentColor" stroke-width="4.5" '
-    'stroke-linecap="round" stroke-dasharray="54 15.1" transform="rotate(38 16 16)"/>'
-    '<rect x="15" y="13.75" width="11.5" height="4.5" rx="2.25" fill="currentColor"/>'
-    "</svg>"
-)
+# --- brand art -----------------------------------------------------------
+# Real branding is raster art, not generated vectors. Drop the files below
+# into homelab_guardian/assets/ (see its README for specs) and the dashboard
+# picks them up: `hero` becomes the character art blended into the header
+# band, `logotype` replaces the CSS-lettered title. Absent files fall back
+# to the text-only band — the feature degrades, never breaks.
+_BRAND_FILES = {
+    "hero.webp": "image/webp",
+    "hero.png": "image/png",
+    "logotype.webp": "image/webp",
+    "logotype.png": "image/png",
+}
 
-# Same mark as the favicon (fixed slate — favicons don't inherit CSS).
+
+def _assets_dir() -> Path:
+    return Path(__file__).resolve().parent / "assets"
+
+
+def brand_assets() -> dict[str, str]:
+    """kind -> /brand/ URL for each present asset (webp preferred)."""
+    found: dict[str, str] = {}
+    for kind in ("hero", "logotype"):
+        for ext in ("webp", "png"):
+            if (_assets_dir() / f"{kind}.{ext}").is_file():
+                found[kind] = f"/brand/{kind}.{ext}"
+                break
+    return found
+
+
+# Favicon: a shield-and-helm placeholder until it is cropped from real art.
 FAVICON_LINK = (
     '<link rel="icon" href="data:image/svg+xml,'
-    "%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E"
-    "%3Ccircle cx='16' cy='16' r='11' fill='none' stroke='%233d4c66' stroke-width='4.5' "
-    "stroke-linecap='round' stroke-dasharray='54 15.1' transform='rotate(38 16 16)'/%3E"
-    "%3Crect x='15' y='13.75' width='11.5' height='4.5' rx='2.25' fill='%233d4c66'/%3E"
+    "%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 132'%3E"
+    "%3Cpath fill='%231b222c' d='M60 3 L114 20 V70 C114 100 92 120 60 129 C28 120 6 100 6 70 V20 Z'/%3E"
+    "%3Cpath fill='%23aeb9c6' d='M60 22 Q37 23 35 47 L35 62 L46 71 L46 46 Q47 39 60 39 Q73 39 74 46 L74 71 L85 62 L85 47 Q83 23 60 22 Z'/%3E"
+    "%3Cpath fill='%23515f73' d='M40 32 Q60 10 80 32 L74 37 Q60 22 46 37 Z'/%3E"
+    "%3Cpath fill='%230b0e12' d='M46 46 Q47 40 60 40 Q73 40 74 46 L74 70 L60 78 L46 70 Z'/%3E"
+    "%3Cpath fill='%23aeb9c6' d='M56 40 L64 40 L62 63 L60 66 L58 63 Z'/%3E"
+    "%3Cpath fill='%238792a0' d='M46 70 L60 78 L74 70 L77 83 L68 90 L60 103 L52 90 L43 83 Z'/%3E"
     '%3C/svg%3E">'
 )
 
@@ -90,36 +110,83 @@ body {
 }
 main { max-width: 880px; margin: 0 auto; padding: 24px 16px 64px; }
 a { color: inherit; }
+/* --- the hero band: dark stone in both themes, status-reactive ---------- */
 header.overall {
-  border-radius: 12px; padding: 20px 24px; margin-bottom: 20px;
-  background: var(--card); border: 1px solid var(--border);
-  border-left: 8px solid var(--accent, var(--unknown));
+  position: relative; overflow: hidden;
+  border-radius: 14px; padding: 22px 26px 20px; margin-bottom: 20px;
+  background: linear-gradient(160deg, #1a212b 0%, #10141a 58%, #161d26 100%);
+  border: 1px solid #29323f;
+  border-bottom: 3px solid var(--accent, #3a4556);
+  box-shadow: 0 18px 40px -30px rgba(0, 0, 0, 0.7);
 }
-header.overall { position: relative; }
+header.overall::before { /* faint diagonal stone grain */
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(115deg,
+    rgba(255, 255, 255, 0.022) 0 2px, transparent 2px 7px);
+}
+header.overall::after { /* status glow rising behind the emblem */
+  content: ""; position: absolute; left: -40px; top: -60px; width: 260px; height: 260px;
+  pointer-events: none; border-radius: 50%;
+  background: radial-gradient(closest-side, var(--accent, #3a4556), transparent 70%);
+  opacity: 0.28; filter: blur(8px);
+}
+.hero { position: relative; display: flex; align-items: center; gap: 22px; }
+.hero-text { min-width: 0; }
 header.overall h1 {
-  margin: 0 0 2px; font-size: 1.12rem; font-weight: 600;
-  font-family: var(--mono); text-transform: lowercase; letter-spacing: 0.02em;
-  display: flex; align-items: center; gap: 8px;
+  margin: 0 0 4px; font-size: 1.45rem; font-weight: 700;
+  font-family: Georgia, "Times New Roman", serif;
+  text-transform: uppercase; letter-spacing: 0.16em; line-height: 1.15;
+  background: linear-gradient(180deg, #dde4ee 0%, #a6b2c2 55%, #6f7c8e 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.55));
 }
-h1 .logo { color: var(--brand); flex: none; }
-header.overall .status { font-size: 1.7rem; font-weight: 700; }
-header.overall .meta { color: var(--muted); font-size: 0.85rem; margin-top: 4px; }
+header.overall .status {
+  font-size: 1.55rem; font-weight: 750; letter-spacing: 0.04em;
+  color: var(--accent, #9aa8bb);
+  filter: drop-shadow(0 0 14px color-mix(in srgb, var(--accent, #9aa8bb) 45%, transparent));
+}
+header.overall .meta { color: #96a2b4; font-size: 0.85rem; margin-top: 5px; }
+header.overall .meta a { color: inherit; }
+/* character art blended into the band; lit by the overall status */
+header.overall.has-art { min-height: 176px; }
+header.overall.has-art .hero-text { max-width: 58%; }
+.hero-art {
+  position: absolute; right: 0; top: 0; height: 100%; max-width: 46%;
+  object-fit: cover; object-position: top center; pointer-events: none;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 30%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 30%);
+}
+header.overall.warn .hero-art { filter: drop-shadow(0 0 26px color-mix(in srgb, var(--warning) 40%, transparent)); }
+header.overall.crit .hero-art { filter: drop-shadow(0 0 26px color-mix(in srgb, var(--critical) 50%, transparent)); }
+@media (max-width: 640px) {
+  .hero-art { opacity: 0.3; max-width: 75%; }
+  header.overall.has-art .hero-text { max-width: none; }
+}
+/* carved logotype art replaces the CSS-lettered title when present */
+h1.logotype { background: none; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.6)); }
+h1.logotype img { display: block; max-height: 60px; max-width: 100%; }
 .theme-toggle {
-  position: absolute; top: 14px; right: 14px; cursor: pointer;
-  background: var(--bg); color: var(--text); border: 1px solid var(--border);
+  position: absolute; top: 14px; right: 14px; cursor: pointer; z-index: 1;
+  background: #1a212b; color: #c6cfda; border: 1px solid #2c3542;
   border-radius: 8px; font-size: 1.05rem; padding: 4px 9px; line-height: 1;
 }
 .counts { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-bottom: 20px; }
 .pill {
-  border-radius: 999px; padding: 4px 14px; font-size: 0.9rem; font-weight: 600;
+  border-radius: 999px; padding: 5px 15px; font-size: 0.9rem; font-weight: 600;
   background: var(--card); border: 1px solid var(--border);
+  border-top: 2px solid var(--accent, var(--border));
+  box-shadow: 0 8px 18px -16px rgba(16, 20, 26, 0.5);
 }
 .pill b { font-size: 1.05rem; }
 .card {
-  background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+  background: var(--card); border: 1px solid var(--border); border-radius: 14px;
   padding: 16px 20px; margin-bottom: 16px;
+  box-shadow: 0 1px 2px rgba(16, 20, 26, 0.05), 0 14px 30px -26px rgba(16, 20, 26, 0.45);
 }
-.card h2 { margin: 0 0 10px; font-size: 1.02rem; }
+.card h2 {
+  margin: 0 0 10px; font-size: 0.8rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted);
+}
 .check {
   border-left: 5px solid var(--accent, var(--border));
   background: var(--bg); border-radius: 0 10px 10px 0;
@@ -177,10 +244,27 @@ footer { color: var(--muted); font-size: 0.8rem; margin-top: 28px; text-align: c
 code, pre, .cid { font-family: var(--mono); }
 .pill b { font-family: var(--mono); }
 button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 4px; }
+/* --- motion: quiet, semantic, and off for reduced-motion users ---------- */
+@media (prefers-reduced-motion: no-preference) {
+  header.overall, .counts, .card, details.tile { animation: rise 0.5s cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .counts { animation-delay: 0.05s; }
+  .card:nth-of-type(1) { animation-delay: 0.08s; }
+  .card:nth-of-type(2) { animation-delay: 0.12s; }
+  .card:nth-of-type(3) { animation-delay: 0.16s; }
+  .card:nth-of-type(n+4) { animation-delay: 0.2s; }
+  details.tile { animation-delay: 0.2s; }
+  @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+  header.overall::after { animation: breathe 9s ease-in-out infinite; }
+  @keyframes breathe { 0%, 100% { opacity: 0.22; } 50% { opacity: 0.4; } }
+  header.overall.crit .e-eyes { animation: ember 2.2s ease-in-out infinite; }
+  @keyframes ember { 0%, 100% { opacity: 0.75; } 50% { opacity: 1; } }
+  details.tile, .card { transition: transform 0.16s ease, box-shadow 0.16s ease; }
+  details.tile:hover { transform: translateY(-2px); box-shadow: 0 12px 28px -20px rgba(16, 20, 26, 0.55); }
+}
 h2.sectionhead { margin: 22px 2px 10px; font-size: 1.02rem; }
 a.settings-link {
-  position: absolute; top: 14px; right: 56px; text-decoration: none;
-  background: var(--bg); color: var(--text); border: 1px solid var(--border);
+  position: absolute; top: 14px; right: 56px; text-decoration: none; z-index: 1;
+  background: #1a212b; color: #c6cfda; border: 1px solid #2c3542;
   border-radius: 8px; font-size: 1.05rem; padding: 4px 9px; line-height: 1;
 }
 .settings-row {
@@ -566,6 +650,7 @@ def render_scan_page(
     history: list[tuple[int, str, dict[str, Any]]],
     refresh_seconds: int = 60,
     repairs_pending: int | None = None,
+    brand: dict[str, str] | None = None,
 ) -> str:
     scan_id, created_at, snapshot = scan
     checks = checks_from_snapshot(snapshot)
@@ -574,6 +659,14 @@ def render_scan_page(
     counts = _counts(checks)
     narrative = snapshot.get("narrative") or ""
     app_name = html.escape(str(snapshot.get("app", "Homelab Guardian")))
+
+    brand = brand or {}
+    hero_art = f'<img class="hero-art" src="{brand["hero"]}" alt="">' if "hero" in brand else ""
+    art_class = " has-art" if hero_art else ""
+    if "logotype" in brand:
+        title_html = f'<h1 class="logotype"><img src="{brand["logotype"]}" alt="{app_name}"></h1>'
+    else:
+        title_html = f"<h1>{app_name}</h1>"
 
     pills = "".join(
         f'<span class="pill {_STATUS_CLASS[s]}">{STATUS_META[s][0]} <b>{counts[s]}</b> {STATUS_META[s][1].lower()}</span>'
@@ -589,13 +682,18 @@ def render_scan_page(
 <meta name="viewport" content="width=device-width, initial-scale=1">{refresh}
 <title>{app_name} — {label}</title>{FAVICON_LINK}<style>{PAGE_STYLE}</style>{THEME_SCRIPT}</head>
 <body><main>
-<header class="overall {_STATUS_CLASS.get(overall, 'unk')}">
+<header class="overall {_STATUS_CLASS.get(overall, 'unk')}{art_class}">
 <a class="settings-link" href="/settings" title="Settings">⚙</a>
 {_repairs_link(repairs_pending)}
 <button class="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark theme">🌓</button>
-<h1>{LOGO_SVG}{app_name}</h1>
+{hero_art}
+<div class="hero">
+<div class="hero-text">
+{title_html}
 <div class="status">{icon} {label.upper()}</div>
 <div class="meta">Scan #{scan_id} · {_fmt_time(created_at)}{' · auto-refreshes every %ds' % refresh_seconds if refresh_seconds else ''}</div>
+</div>
+</div>
 </header>
 <div class="counts">{pills}</div>
 {_render_briefing(narrative) if narrative else ''}
@@ -712,7 +810,7 @@ def render_settings_page(
 <body><main>
 <header class="overall okc">
 <button class="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark theme">🌓</button>
-<h1>{LOGO_SVG}Settings</h1>
+<h1>Settings</h1>
 <div class="meta"><a href="/">← Back to dashboard</a></div>
 </header>
 {banner}
@@ -807,7 +905,7 @@ def render_repairs_page(
 <body><main>
 <header class="overall okc">
 <button class="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark theme">🌓</button>
-<h1>{LOGO_SVG}Repairs</h1>
+<h1>Repairs</h1>
 <div class="meta"><a href="/">← Back to dashboard</a></div>
 </header>
 {banner}
@@ -861,6 +959,11 @@ class GuardianRequestHandler(BaseHTTPRequestHandler):
         if path == "/healthz":
             self._send("ok", content_type="text/plain; charset=utf-8")
             return
+        # Brand art is public and cacheable. The name must be in the fixed
+        # allowlist — there is no directory access, so no traversal surface.
+        if path.startswith("/brand/"):
+            self._serve_brand(path.removeprefix("/brand/"))
+            return
         # Auth-owned routes (e.g. OIDC login/callback) run before the gate.
         if self.auth.owns(path):
             self.auth.handle(self, path)
@@ -884,6 +987,20 @@ class GuardianRequestHandler(BaseHTTPRequestHandler):
                 self._send("not found", status=404, content_type="text/plain; charset=utf-8")
             return
         self._send("not found", status=404, content_type="text/plain; charset=utf-8")
+
+    def _serve_brand(self, name: str) -> None:
+        content_type = _BRAND_FILES.get(name)
+        asset = _assets_dir() / name
+        if content_type is None or not asset.is_file():
+            self._send("not found", status=404, content_type="text/plain; charset=utf-8")
+            return
+        payload = asset.read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(payload)))
+        self.send_header("Cache-Control", "public, max-age=86400")
+        self.end_headers()
+        self.wfile.write(payload)
 
     def _read_body(self) -> str:
         length = int(self.headers.get("Content-Length", 0) or 0)
@@ -1082,7 +1199,8 @@ class GuardianRequestHandler(BaseHTTPRequestHandler):
             conn.close()
         # only the live view auto-refreshes; historical scans are static
         refresh = self.refresh_seconds if scan_id is None else 0
-        self._send(render_scan_page(scan, diff, history, refresh_seconds=refresh, repairs_pending=repairs_pending))
+        self._send(render_scan_page(scan, diff, history, refresh_seconds=refresh,
+                                    repairs_pending=repairs_pending, brand=brand_assets()))
 
 
 def serve(
