@@ -143,7 +143,7 @@ body::before { /* stone grain over the whole watch room */
   content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0.5;
   background: repeating-linear-gradient(115deg, rgba(255, 255, 255, 0.02) 0 2px, transparent 2px 8px);
 }
-.rail > * { position: relative; }
+.rail > * { position: relative; flex: none; } /* never squash the nameplate or sigil */
 .rail-logo { /* the carved nameplate on a back-lit plinth */
   display: block; position: relative; margin: 0 -6px; padding: 10px 8px 12px;
   background: radial-gradient(85% 130% at 50% 0%, rgba(210, 226, 248, 0.08), transparent 72%);
@@ -163,7 +163,10 @@ body::before { /* stone grain over the whole watch room */
 }
 .rail-link:hover { color: #e6edf6; background: rgba(255, 255, 255, 0.04); border-left-color: var(--rune); }
 .rail-link.active { color: #e6edf6; background: rgba(255, 255, 255, 0.05); border-left-color: var(--brand); }
-.rail-art { margin: auto -16px 0; }
+.rail-art { /* the guardian absorbs whatever height is left, feet-first */
+  margin: auto -16px 0; flex: 0 1 auto; min-height: 40px;
+  overflow: hidden; display: flex; align-items: flex-end;
+}
 .rail-art img {
   display: block; width: 100%; height: auto;
   -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 18%);
@@ -176,11 +179,17 @@ body::before { /* stone grain over the whole watch room */
   border: 2px solid color-mix(in srgb, var(--accent, #55617a) 45%, transparent);
   box-shadow: 0 0 26px -6px var(--accent, transparent), inset 0 0 18px -8px var(--accent, transparent);
 }
-.sigil-ring {
+.sigil-ring { /* the radar: a bold sweep arc riding a faint full track */
   position: absolute; inset: 0; border-radius: 50%;
-  background: conic-gradient(from 0deg, transparent 0 70%, var(--accent, #55617a) 96%, transparent 100%);
-  -webkit-mask: radial-gradient(circle, transparent 55%, #000 57%);
-  mask: radial-gradient(circle, transparent 55%, #000 57%);
+  background: conic-gradient(from -90deg, transparent 0 62%,
+    color-mix(in srgb, var(--accent, #55617a) 35%, transparent) 74%,
+    var(--accent, #55617a) 96%, transparent 100%);
+  -webkit-mask: radial-gradient(circle, transparent 69%, #000 71.5%);
+  mask: radial-gradient(circle, transparent 69%, #000 71.5%);
+}
+.sigil::after { /* signal haze behind the gem */
+  content: ""; position: absolute; inset: 24%; border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent, #55617a) 26%, transparent), transparent 70%);
 }
 .sigil-gem { /* a faceted signal gem at the radar's heart */
   position: absolute; left: 50%; top: 50%; width: 38px; height: 38px;
@@ -210,15 +219,19 @@ body::before { /* stone grain over the whole watch room */
   font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.09em;
   color: #8b97a8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-/* status marks: notched steel chips with terminal glyphs — the emoji are gone */
+/* status marks: cut gems, the same stone as the sigil's heart ------------ */
 .mark {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 17px; height: 17px; flex: none; vertical-align: -3px;
-  font: 800 11px/1 var(--mono); color: var(--card);
-  background: var(--accent, var(--muted));
-  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%);
+  width: 19px; height: 19px; flex: none; vertical-align: -4px;
+  font: 800 10px/1 var(--mono); color: rgba(255, 255, 255, 0.95);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.5);
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--accent, var(--muted)) 55%, #fff) 0%,
+    var(--accent, var(--muted)) 48%,
+    color-mix(in srgb, var(--accent, var(--muted)) 60%, #000) 100%);
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
 }
-.mark.mute { background: var(--muted); opacity: 0.75; }
+.mark.mute { --accent: var(--muted); opacity: 0.8; }
 .field { padding: 22px 30px 60px; max-width: 1220px; min-width: 0; }
 .field-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 18px; align-items: start; }
 .fside { position: sticky; top: 18px; }
@@ -270,19 +283,18 @@ a { color: inherit; }
   color: #93a0b2; font-family: var(--mono); font-size: 0.78rem;
   margin-top: 7px; letter-spacing: 0.04em;
 }
-/* --- plates: every card is a framed, riveted panel ---------------------- */
+/* --- plates: cut steel, not boxes — every panel shares the banner's cut - */
 .card {
   position: relative;
-  background:
-    radial-gradient(circle at 9px 9px, var(--rivet) 1.6px, transparent 2.4px),
-    radial-gradient(circle at calc(100% - 9px) 9px, var(--rivet) 1.6px, transparent 2.4px),
-    radial-gradient(circle at 9px calc(100% - 9px), var(--rivet) 1.6px, transparent 2.4px),
-    radial-gradient(circle at calc(100% - 9px) calc(100% - 9px), var(--rivet) 1.6px, transparent 2.4px),
-    linear-gradient(180deg, color-mix(in srgb, var(--text) 2%, var(--card)), var(--card) 42px);
-  border: 1px solid var(--border); border-radius: 10px;
-  box-shadow: inset 0 1px 0 var(--plate-hi),
-    0 1px 2px rgba(10, 14, 20, 0.06), 0 16px 34px -28px rgba(10, 14, 20, 0.55);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--text) 2.5%, var(--card)), var(--card) 46px);
+  border: 1px solid var(--border); border-radius: 2px;
+  clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 0 100%);
+  box-shadow: inset 0 1px 0 var(--plate-hi);
   padding: 16px 20px; margin-bottom: 16px;
+}
+.card::after { /* the cut corner catches the light */
+  content: ""; position: absolute; top: 0; right: 0; width: 16px; height: 16px;
+  background: linear-gradient(225deg, color-mix(in srgb, var(--brand) 35%, var(--border)) 0 1.5px, transparent 1.5px);
 }
 .card h2 { /* an engraved plaque bolted to the plate */
   display: inline-block; margin: -4px 0 12px; padding: 5px 18px;
@@ -329,8 +341,9 @@ a { color: inherit; }
 }
 details.tile {
   background: var(--card); border: 1px solid var(--border);
-  border-left: 5px solid var(--accent, var(--ok));
-  border-radius: 10px; min-width: 0;
+  border-left: 4px solid var(--accent, var(--ok));
+  border-radius: 2px; min-width: 0;
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%);
 }
 details.tile > summary {
   cursor: pointer; list-style: none; padding: 9px 13px;
@@ -409,8 +422,8 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px soli
     50% { filter: drop-shadow(0 0 26px color-mix(in srgb, var(--accent) 95%, transparent)); }
   }
   .banner.crit { box-shadow: 0 0 36px -14px var(--critical); }
-  details.tile, .card { transition: transform 0.16s ease, box-shadow 0.16s ease; }
-  details.tile:hover { transform: translateY(-2px); box-shadow: 0 12px 28px -20px rgba(16, 20, 26, 0.55); }
+  details.tile, .card { transition: transform 0.16s ease, border-color 0.16s ease; }
+  details.tile:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--accent, var(--brand)) 55%, var(--border)); }
   .rail-logo { overflow: hidden; }
   .rail-logo::after { /* a cold light sweeps the carved letters, rarely */
     content: ""; position: absolute; inset: 0;
