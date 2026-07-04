@@ -130,105 +130,120 @@ body::before { /* stone grain over the whole watch room */
     repeating-linear-gradient(115deg, color-mix(in srgb, var(--text) 1.5%, transparent) 0 2px, transparent 2px 9px),
     repeating-linear-gradient(25deg, color-mix(in srgb, var(--text) 1%, transparent) 0 1px, transparent 1px 13px);
 }
-main { max-width: 880px; margin: 0 auto; padding: 20px 16px 64px; }
+/* --- the war room: a tower rail and the field it watches ---------------- */
+.shell { display: grid; grid-template-columns: 264px minmax(0, 1fr); min-height: 100vh; }
+.rail {
+  position: sticky; top: 0; height: 100vh; overflow: hidden;
+  display: flex; flex-direction: column; gap: 14px; padding: 18px 16px 0;
+  background: linear-gradient(180deg, #141a24 0%, #0c1017 60%, #0a0d13 100%);
+  border-right: 1px solid #232c3a;
+  box-shadow: inset -14px 0 30px -24px rgba(0, 0, 0, 0.8);
+}
+.rail::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0.5;
+  background: repeating-linear-gradient(115deg, rgba(255, 255, 255, 0.02) 0 2px, transparent 2px 8px);
+}
+.rail > * { position: relative; }
+.rail-logo { display: block; position: relative; margin: 2px auto 0; }
+.rail-logo img { width: 100%; height: auto; display: block; filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.6)); }
+.rail-logo-text {
+  text-align: center; font-family: Georgia, serif; text-transform: uppercase;
+  letter-spacing: 0.18em; font-weight: 700; color: #c7d1de; text-decoration: none; font-size: 0.95rem;
+}
+.rail-nav { display: flex; flex-direction: column; gap: 5px; }
+.rail-link {
+  display: block; width: 100%; text-align: left; cursor: pointer; text-decoration: none;
+  font: 650 0.86rem/1.3 system-ui, sans-serif; letter-spacing: 0.04em; color: #aeb9c8;
+  background: transparent; border: 1px solid transparent; border-left: 3px solid transparent;
+  padding: 8px 10px; border-radius: 0 8px 8px 0; transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+}
+.rail-link:hover { color: #e6edf6; background: rgba(255, 255, 255, 0.04); border-left-color: var(--rune); }
+.rail-link.active { color: #e6edf6; background: rgba(255, 255, 255, 0.05); border-left-color: var(--brand); }
+.rail-art { margin: auto -16px 0; }
+.rail-art img {
+  display: block; width: 100%; height: auto;
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 18%);
+  mask-image: linear-gradient(180deg, transparent 0, #000 18%);
+}
+/* the status sigil: a radar ring in the overall status color */
+.sigil { position: relative; width: 106px; height: 106px; margin: 2px auto; }
+.sigil::before {
+  content: ""; position: absolute; inset: 7px; border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--accent, #55617a) 45%, transparent);
+  box-shadow: 0 0 26px -6px var(--accent, transparent), inset 0 0 18px -8px var(--accent, transparent);
+}
+.sigil-ring {
+  position: absolute; inset: 0; border-radius: 50%;
+  background: conic-gradient(from 0deg, transparent 0 70%, var(--accent, #55617a) 96%, transparent 100%);
+  -webkit-mask: radial-gradient(circle, transparent 55%, #000 57%);
+  mask: radial-gradient(circle, transparent 55%, #000 57%);
+}
+.sigil-icon {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 2rem; filter: drop-shadow(0 0 12px color-mix(in srgb, var(--accent, #55617a) 60%, transparent));
+}
+/* count ranks: small forged tallies under the sigil */
+.ranks { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.rank {
+  display: flex; align-items: baseline; gap: 7px; padding: 6px 9px; min-width: 0;
+  background: rgba(255, 255, 255, 0.03); border: 1px solid #222b38;
+  border-left: 3px solid var(--accent, #334053);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 7px), calc(100% - 7px) 100%, 0 100%);
+}
+.rank b { font-family: var(--mono); font-size: 1.05rem; color: var(--accent, #c3cddb); }
+.rank-label {
+  font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.09em;
+  color: #8b97a8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.field { padding: 22px 30px 60px; max-width: 1220px; min-width: 0; }
+.field-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 18px; align-items: start; }
+.fside { position: sticky; top: 18px; }
+@media (max-width: 1120px) { .field-grid { grid-template-columns: 1fr; } .fside { position: static; } }
+@media (max-width: 860px) {
+  .shell { grid-template-columns: 1fr; }
+  .rail { position: static; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; padding: 12px 14px; gap: 10px; }
+  .rail-logo { margin: 0 auto; flex: 1 1 100%; max-width: 300px; }
+  .rail-nav { flex-direction: row; flex-wrap: wrap; }
+  .rail-link { width: auto; border-radius: 8px; border-left-width: 1px; }
+  .rail-art { display: none; }
+  .sigil { width: 62px; height: 62px; margin: 0; }
+  .sigil-icon { font-size: 1.2rem; }
+  .ranks { display: flex; flex-wrap: wrap; }
+  .field { padding: 16px 14px 50px; }
+}
 a { color: inherit; }
 .card a, ul.changes a { color: var(--rune); }
 ::selection { background: color-mix(in srgb, var(--rune) 30%, transparent); }
 ::-webkit-scrollbar { width: 11px; }
 ::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--brand) 40%, var(--bg)); border-radius: 6px; border: 3px solid var(--bg); }
 ::-webkit-scrollbar-track { background: transparent; }
-/* --- the hero band: dark stone in both themes, status-reactive ---------- */
-header.overall {
-  position: relative; overflow: hidden;
-  border-radius: 14px; padding: 22px 26px 20px; margin-bottom: 20px;
-  background: linear-gradient(160deg, #1a212b 0%, #10141a 58%, #161d26 100%);
-  border: 1px solid #29323f;
-  border-bottom: 3px solid var(--accent, #3a4556);
-  box-shadow: 0 18px 40px -30px rgba(0, 0, 0, 0.7);
+/* --- the banner: the wall's own voice, skewed like a war standard ------- */
+.banner {
+  position: relative; overflow: hidden; margin: 0 0 18px; padding: 24px 34px 20px;
+  background: linear-gradient(160deg, #1a212b 0%, #10141a 60%, #151b24 100%);
+  border-left: 6px solid var(--accent, #3a4556);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 28px) 100%, 0 100%);
 }
-header.overall::before { /* faint diagonal stone grain */
+.banner::before {
   content: ""; position: absolute; inset: 0; pointer-events: none;
-  background: repeating-linear-gradient(115deg,
-    rgba(255, 255, 255, 0.022) 0 2px, transparent 2px 7px);
+  background: repeating-linear-gradient(115deg, rgba(255, 255, 255, 0.022) 0 2px, transparent 2px 7px);
 }
-header.overall::after { /* status glow rising behind the emblem */
-  content: ""; position: absolute; left: -40px; top: -60px; width: 260px; height: 260px;
+.banner::after {
+  content: ""; position: absolute; right: -60px; top: -80px; width: 300px; height: 300px;
   pointer-events: none; border-radius: 50%;
   background: radial-gradient(closest-side, var(--accent, #3a4556), transparent 70%);
-  opacity: 0.28; filter: blur(8px);
+  opacity: 0.25; filter: blur(10px);
 }
-.hero { position: relative; display: flex; align-items: center; gap: 22px; }
-.hero-text { min-width: 0; }
-header.overall h1 {
-  margin: 0 0 4px; font-size: 1.45rem; font-weight: 700;
-  font-family: Georgia, "Times New Roman", serif;
-  text-transform: uppercase; letter-spacing: 0.16em; line-height: 1.15;
-  background: linear-gradient(180deg, #dde4ee 0%, #a6b2c2 55%, #6f7c8e 100%);
+.banner-title {
+  font-family: Georgia, "Times New Roman", serif; text-transform: uppercase;
+  letter-spacing: 0.13em; font-weight: 700; font-size: clamp(1.3rem, 2.6vw, 2rem); line-height: 1.1;
+  background: linear-gradient(180deg, #e3e9f2 0%, #a9b5c5 55%, #71809a 100%);
   -webkit-background-clip: text; background-clip: text; color: transparent;
   filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.55));
 }
-header.overall .status {
-  font-size: 1.55rem; font-weight: 750; letter-spacing: 0.04em;
-  color: var(--accent, #9aa8bb);
-  filter: drop-shadow(0 0 14px color-mix(in srgb, var(--accent, #9aa8bb) 45%, transparent));
-}
-header.overall .meta { color: #96a2b4; font-size: 0.85rem; margin-top: 5px; }
-header.overall .meta a { color: inherit; }
-/* character art blended into the band; lit by the overall status */
-header.overall.has-art { min-height: 196px; display: flex; align-items: center; }
-header.overall.has-art .hero-text { max-width: 56%; }
-.hero-art {
-  position: absolute; right: 0; top: 0; height: 100%; max-width: 46%;
-  object-fit: cover; object-position: right 14%; pointer-events: none;
-  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 30%);
-  mask-image: linear-gradient(90deg, transparent 0, #000 30%);
-}
-header.overall.warn .hero-art { filter: drop-shadow(0 0 26px color-mix(in srgb, var(--warning) 40%, transparent)); }
-header.overall.crit .hero-art { filter: drop-shadow(0 0 26px color-mix(in srgb, var(--critical) 50%, transparent)); }
-@media (max-width: 640px) {
-  .hero-art { opacity: 0.3; max-width: 75%; }
-  header.overall.has-art .hero-text { max-width: none; }
-}
-/* carved logotype art replaces the CSS-lettered title when present */
-h1.logotype { background: none; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.6)); }
-h1.logotype img { display: block; max-height: 60px; max-width: 100%; }
-/* --- top toolbar: brand + controls, out of the art's way ---------------- */
-.topbar {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 10px; padding: 2px 2px 12px;
-}
-.tb-brand {
-  font-family: var(--mono); text-transform: uppercase;
-  letter-spacing: 0.22em; font-size: 0.72rem; color: var(--muted);
-}
-.tb-actions { display: flex; gap: 8px; align-items: center; }
-.tb-btn {
-  cursor: pointer; text-decoration: none; white-space: nowrap;
-  background: var(--card); color: var(--text); border: 1px solid var(--border);
-  border-radius: 8px; font-size: 0.85rem; font-weight: 600;
-  padding: 6px 11px; line-height: 1;
-  transition: border-color 0.15s ease, transform 0.15s ease;
-}
-.tb-btn:hover { border-color: var(--brand); transform: translateY(-1px); }
-/* --- the command strip: forged status plates, not pills ----------------- */
-.counts {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-  gap: 10px; margin-bottom: 18px;
-}
-.stat {
-  position: relative; text-align: center; padding: 10px 8px 9px;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--accent, var(--border)) 9%, var(--card)), var(--card));
-  border: 1px solid color-mix(in srgb, var(--accent, var(--border)) 32%, var(--border));
-  clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
-}
-.stat::before {
-  content: ""; position: absolute; inset: 0 0 auto 0; height: 2px;
-  background: linear-gradient(90deg, transparent, var(--accent, var(--border)), transparent);
-}
-.stat b { display: block; font-family: var(--mono); font-size: 1.5rem; line-height: 1.15; color: var(--accent, var(--text)); }
-.stat .stat-label {
-  font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
-  letter-spacing: 0.14em; color: var(--muted);
+.banner-sub {
+  color: #93a0b2; font-family: var(--mono); font-size: 0.78rem;
+  margin-top: 7px; letter-spacing: 0.04em;
 }
 /* --- plates: every card is a framed, riveted panel ---------------------- */
 .card {
@@ -347,31 +362,35 @@ code, pre, .cid { font-family: var(--mono); }
 button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 4px; }
 /* --- motion: quiet, semantic, and off for reduced-motion users ---------- */
 @media (prefers-reduced-motion: no-preference) {
-  header.overall, .counts, .card, details.tile { animation: rise 0.5s cubic-bezier(0.2, 0.7, 0.3, 1) both; }
-  .counts { animation-delay: 0.05s; }
-  .card:nth-of-type(1) { animation-delay: 0.08s; }
-  .card:nth-of-type(2) { animation-delay: 0.12s; }
-  .card:nth-of-type(3) { animation-delay: 0.16s; }
-  .card:nth-of-type(n+4) { animation-delay: 0.2s; }
-  details.tile { animation-delay: 0.2s; }
-  @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
-  header.overall::after { animation: breathe 9s ease-in-out infinite; }
-  @keyframes breathe { 0%, 100% { opacity: 0.22; } 50% { opacity: 0.4; } }
-  header.overall.crit .hero-art, header.overall.warn .hero-art { animation: ember 2.6s ease-in-out infinite; }
-  @keyframes ember { 0%, 100% { filter: drop-shadow(0 0 18px color-mix(in srgb, var(--accent) 35%, transparent)); }
-    50% { filter: drop-shadow(0 0 30px color-mix(in srgb, var(--accent) 60%, transparent)); } }
+  /* the room assembles: tower slides in, banner drops, plates rise */
+  .rail { animation: tower 0.55s cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  @keyframes tower { from { opacity: 0; transform: translateX(-22px); } to { opacity: 1; transform: none; } }
+  .banner { animation: drop 0.5s cubic-bezier(0.2, 0.7, 0.3, 1) 0.1s both; }
+  @keyframes drop { from { opacity: 0; transform: translateY(-14px); } to { opacity: 1; transform: none; } }
+  .card, details.tile, details.group { animation: rise 0.5s cubic-bezier(0.2, 0.7, 0.3, 1) both; }
+  .fmain > *:nth-child(1) { animation-delay: 0.16s; }
+  .fmain > *:nth-child(2) { animation-delay: 0.22s; }
+  .fmain > *:nth-child(n+3) { animation-delay: 0.28s; }
+  .fside > * { animation-delay: 0.3s; }
+  details.tile { animation-delay: 0.34s; }
+  @keyframes rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+  .banner::after { animation: breathe 9s ease-in-out infinite; }
+  @keyframes breathe { 0%, 100% { opacity: 0.18; } 50% { opacity: 0.36; } }
+  .sigil-ring { animation: sweep 7s linear infinite; }
+  @keyframes sweep { to { transform: rotate(360deg); } }
+  .banner.crit { box-shadow: 0 0 36px -14px var(--critical); }
   details.tile, .card { transition: transform 0.16s ease, box-shadow 0.16s ease; }
   details.tile:hover { transform: translateY(-2px); box-shadow: 0 12px 28px -20px rgba(16, 20, 26, 0.55); }
-  h1.logotype { position: relative; overflow: hidden; }
-  h1.logotype::after { /* a cold light sweeps the carved letters, rarely */
+  .rail-logo { overflow: hidden; }
+  .rail-logo::after { /* a cold light sweeps the carved letters, rarely */
     content: ""; position: absolute; inset: 0;
     background: linear-gradient(105deg, transparent 42%, rgba(215, 232, 255, 0.13) 50%, transparent 58%);
     transform: translateX(-130%); animation: glint 12s ease-in-out infinite;
     pointer-events: none;
   }
   @keyframes glint { 0%, 82% { transform: translateX(-130%); } 96%, 100% { transform: translateX(130%); } }
-  .stat b { transition: transform 0.15s ease; }
-  .stat:hover b { transform: scale(1.08); }
+  .rank b { transition: transform 0.15s ease; }
+  .rank:hover b { transform: scale(1.1); }
 }
 h2.sectionhead { margin: 22px 2px 10px; font-size: 1.02rem; }
 .settings-row {
@@ -759,7 +778,42 @@ def _repairs_link(repairs_pending: int | None) -> str:
     if repairs_pending is None:
         return ""
     badge = f'<span class="rbadge">{repairs_pending}</span>' if repairs_pending else ""
-    return f'<a class="tb-btn" href="/repairs" title="Repairs">🔧 Repairs{badge}</a>'
+    return f'<a class="rail-link" href="/repairs" title="Repairs">🔧 Repairs{badge}</a>'
+
+
+# The wall has a voice: the overall status as the watch would call it.
+_FLAVOR = {
+    "ok": "All quiet on the wall",
+    "warning": "Threats sighted",
+    "critical": "The wall is breached",
+    "unknown": "Fog of war",
+}
+
+
+def _rail(brand: dict[str, str], *, active: str = "/", sigil: str = "",
+          ranks: str = "", repairs_pending: int | None = None) -> str:
+    """The tower rail: brand, status sigil, count ranks, nav, and the guardian
+    himself standing watch along the page's left edge."""
+    if "logotype" in brand:
+        mark = f'<a class="rail-logo" href="/"><img src="{brand["logotype"]}" alt="Homelab Guardian"></a>'
+    else:
+        mark = '<a class="rail-logo rail-logo-text" href="/">Homelab Guardian</a>'
+    art = f'<div class="rail-art"><img src="{brand["hero"]}" alt=""></div>' if "hero" in brand else ""
+
+    def link(href: str, label: str) -> str:
+        cls = "rail-link active" if href == active else "rail-link"
+        return f'<a class="{cls}" href="{href}">{label}</a>'
+
+    nav = (
+        link("/", "🗼 The Watch")
+        + _repairs_link(repairs_pending)
+        + link("/settings", "⚙ Settings")
+        + '<button class="rail-link theme-toggle" onclick="toggleTheme()" title="Toggle light/dark theme">🌓 Theme</button>'
+    )
+    return (
+        f'<aside class="rail">{mark}{sigil}{ranks}'
+        f'<nav class="rail-nav">{nav}</nav>{art}</aside>'
+    )
 
 
 def render_scan_page(
@@ -779,55 +833,54 @@ def render_scan_page(
     app_name = html.escape(str(snapshot.get("app", "Homelab Guardian")))
 
     brand = brand or {}
-    hero_art = f'<img class="hero-art" src="{brand["hero"]}" alt="">' if "hero" in brand else ""
-    art_class = " has-art" if hero_art else ""
-    if "logotype" in brand:
-        title_html = f'<h1 class="logotype"><img src="{brand["logotype"]}" alt="{app_name}"></h1>'
-        footer_mark = f'<img class="f-logo" src="{brand["logotype"]}" alt="">'
-    else:
-        title_html = f"<h1>{app_name}</h1>"
-        footer_mark = ""
+    status_class = _STATUS_CLASS.get(overall, "unk")
 
-    pills = "".join(
-        f'<div class="stat {_STATUS_CLASS[s]}"><b>{counts[s]}</b>'
-        f'<span class="stat-label">{STATUS_META[s][0]} {STATUS_META[s][1]}</span></div>'
+    sigil = (
+        f'<div class="sigil {status_class}" title="{label}">'
+        '<span class="sigil-ring"></span><span class="sigil-icon">'
+        f"{icon}</span></div>"
+    )
+    ranks = "".join(
+        f'<div class="rank {_STATUS_CLASS[s]}"><b>{counts[s]}</b>'
+        f'<span class="rank-label">{STATUS_META[s][1]}</span></div>'
         for s in STATUS_ORDER
     )
     acked_count = sum(1 for c in checks if c.acknowledged)
     if acked_count:
-        pills += f'<div class="stat"><b>{acked_count}</b><span class="stat-label">🔕 Acknowledged</span></div>'
+        ranks += f'<div class="rank"><b>{acked_count}</b><span class="rank-label">🔕 Acknowledged</span></div>'
+    ranks = f'<div class="ranks">{ranks}</div>'
+
+    flavor = _FLAVOR.get(overall, label)
+    refresh_note = f" · auto-refreshes every {refresh_seconds}s" if refresh_seconds else ""
+    banner = (
+        f'<header class="banner {status_class}">'
+        f'<div class="banner-title">{flavor}</div>'
+        f'<div class="banner-sub">{icon} {label.upper()} · {len(checks)} checks · '
+        f"Scan #{scan_id} · {_fmt_time(created_at)}{refresh_note}</div>"
+        "</header>"
+    )
     refresh = f'<meta http-equiv="refresh" content="{int(refresh_seconds)}">' if refresh_seconds else ""
 
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">{refresh}
 <title>{app_name} — {label}</title>{favicon_link()}<style>{PAGE_STYLE}</style>{THEME_SCRIPT}</head>
-<body><main>
-<nav class="topbar">
-<span class="tb-brand">Homelab Guardian</span>
-<span class="tb-actions">
-{_repairs_link(repairs_pending)}
-<a class="tb-btn" href="/settings" title="Settings">⚙ Settings</a>
-<button class="theme-toggle tb-btn" onclick="toggleTheme()" title="Toggle light/dark theme">🌓</button>
-</span>
-</nav>
-<header class="overall {_STATUS_CLASS.get(overall, 'unk')}{art_class}">
-{hero_art}
-<div class="hero">
-<div class="hero-text">
-{title_html}
-<div class="status">{icon} {label.upper()}</div>
-<div class="meta">Scan #{scan_id} · {_fmt_time(created_at)}{' · auto-refreshes every %ds' % refresh_seconds if refresh_seconds else ''}</div>
-</div>
-</div>
-</header>
-<div class="counts">{pills}</div>
+<body><div class="shell">
+{_rail(brand, active="/", sigil=sigil, ranks=ranks, repairs_pending=repairs_pending)}
+<main class="field">
+{banner}
+<div class="field-grid">
+<div class="fmain">
 {_render_briefing(narrative) if narrative else ''}
 {_render_changes(diff)}
 {_render_groups(checks)}
+</div>
+<aside class="fside">
 {_render_history(history, scan_id)}
-<footer>{footer_mark}Homelab Guardian — read-only view · <a href="/">latest</a></footer>
-</main>{TILE_SCRIPT}</body></html>"""
+</aside>
+</div>
+<footer>Homelab Guardian — read-only view · <a href="/">latest</a></footer>
+</main></div>{TILE_SCRIPT}</body></html>"""
 
 
 def render_empty_page() -> str:
@@ -933,22 +986,17 @@ def render_settings_page(
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Homelab Guardian — Settings</title>{favicon_link()}<style>{PAGE_STYLE}</style>{THEME_SCRIPT}</head>
-<body><main>
-<nav class="topbar">
-<span class="tb-brand">Homelab Guardian</span>
-<span class="tb-actions">
-<a class="tb-btn" href="/">← Dashboard</a>
-<button class="theme-toggle tb-btn" onclick="toggleTheme()" title="Toggle light/dark theme">🌓</button>
-</span>
-</nav>
-<header class="overall okc">
-<h1>Settings</h1>
-<div class="meta">Collectors and thresholds — saved straight into config.yaml.</div>
+<body><div class="shell">
+{_rail(brand_assets(), active="/settings")}
+<main class="field">
+<header class="banner okc">
+<div class="banner-title">The Armory</div>
+<div class="banner-sub">⚙ SETTINGS · collectors and thresholds, saved straight into config.yaml</div>
 </header>
 {banner}
 {body}
 <footer>Homelab Guardian — settings</footer>
-</main></body></html>"""
+</main></div></body></html>"""
 
 
 _REPAIR_STATUS_CLASS = {
@@ -1034,22 +1082,17 @@ def render_repairs_page(
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Homelab Guardian — Repairs</title>{favicon_link()}<style>{PAGE_STYLE}</style>{THEME_SCRIPT}</head>
-<body><main>
-<nav class="topbar">
-<span class="tb-brand">Homelab Guardian</span>
-<span class="tb-actions">
-<a class="tb-btn" href="/">← Dashboard</a>
-<button class="theme-toggle tb-btn" onclick="toggleTheme()" title="Toggle light/dark theme">🌓</button>
-</span>
-</nav>
-<header class="overall okc">
-<h1>Repairs</h1>
-<div class="meta">Approve or deny proposed repairs — execution stays with the CLI and MCP.</div>
+<body><div class="shell">
+{_rail(brand_assets(), active="/repairs")}
+<main class="field">
+<header class="banner okc">
+<div class="banner-title">The Forge</div>
+<div class="banner-sub">🔧 REPAIRS · approve or deny proposals — execution stays with the CLI and MCP</div>
 </header>
 {banner}
 {body}
 <footer>Homelab Guardian — repairs · approval-gated, never raw shell</footer>
-</main></body></html>"""
+</main></div></body></html>"""
 
 
 class GuardianRequestHandler(BaseHTTPRequestHandler):
