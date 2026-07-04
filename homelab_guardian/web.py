@@ -132,9 +132,9 @@ body::before { /* stone grain over the whole watch room */
 }
 /* --- the war room: a tower rail and the field it watches ---------------- */
 .shell { display: grid; grid-template-columns: 264px minmax(0, 1fr); min-height: 100vh; }
-.rail {
-  position: sticky; top: 0; height: 100vh; overflow: hidden;
-  display: flex; flex-direction: column; gap: 14px; padding: 18px 16px 0;
+.rail { /* the tower runs the page's full height and scrolls with it */
+  position: relative; min-height: 100vh; overflow: hidden;
+  display: flex; flex-direction: column; gap: 14px; padding: 18px 16px 24px;
   background: linear-gradient(180deg, #141a24 0%, #0c1017 60%, #0a0d13 100%);
   border-right: 1px solid #232c3a;
   box-shadow: inset -14px 0 30px -24px rgba(0, 0, 0, 0.8);
@@ -163,14 +163,21 @@ body::before { /* stone grain over the whole watch room */
 }
 .rail-link:hover { color: #e6edf6; background: rgba(255, 255, 255, 0.04); border-left-color: var(--rune); }
 .rail-link.active { color: #e6edf6; background: rgba(255, 255, 255, 0.05); border-left-color: var(--brand); }
-.rail-art { /* the guardian absorbs whatever height is left, feet-first */
-  margin: auto -16px 0; flex: 0 1 auto; min-height: 40px;
-  overflow: hidden; display: flex; align-items: flex-end;
+.rail-portrait { /* the guardian's window: face first, base fading to stone */
+  position: relative; margin: 0 -16px;
+  border-top: 1px solid #232c3a;
 }
-.rail-art img {
-  display: block; width: 100%; height: auto;
-  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 18%);
-  mask-image: linear-gradient(180deg, transparent 0, #000 18%);
+.rail-portrait img {
+  display: block; width: 100%; height: 250px; object-fit: cover; object-position: top center;
+  -webkit-mask-image: linear-gradient(180deg, #000 74%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 74%, transparent 100%);
+}
+.rail-portrait.has-sigil { margin-bottom: 42px; }
+.rail-portrait .sigil { /* the medallion pinned at the portrait's base */
+  position: absolute; left: 50%; bottom: -38px; transform: translateX(-50%);
+  margin: 0; width: 92px; height: 92px;
+  background: radial-gradient(circle, #0d1118 62%, transparent 63%);
+  border-radius: 50%;
 }
 /* the status sigil: a radar ring in the overall status color */
 .sigil { position: relative; width: 106px; height: 106px; margin: 2px auto; }
@@ -238,15 +245,18 @@ body::before { /* stone grain over the whole watch room */
 @media (max-width: 1120px) { .field-grid { grid-template-columns: 1fr; } .fside { position: static; } }
 @media (max-width: 860px) {
   .shell { grid-template-columns: 1fr; }
-  .rail { position: static; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; padding: 12px 14px; gap: 10px; }
+  .rail { min-height: 0; height: auto; flex-direction: row; flex-wrap: wrap; align-items: center; padding: 12px 14px; gap: 10px; }
   .rail-logo { margin: 0 auto; flex: 1 1 100%; max-width: 300px; }
   .rail-nav { flex-direction: row; flex-wrap: wrap; }
   .rail-link { width: auto; border-radius: 8px; border-left-width: 1px; }
-  .rail-art { display: none; }
+  .rail-portrait { flex: 1 1 100%; margin: 0 -14px; }
+  .rail-portrait img { height: 150px; object-position: center 12%; }
+  .rail-portrait.has-sigil { margin-bottom: 34px; }
+  .rail-portrait .sigil { width: 62px; height: 62px; bottom: -26px; }
   .sigil { width: 62px; height: 62px; margin: 0; }
   .sigil-gem { width: 22px; height: 22px; }
   .sigil-gem::after { inset: 5px; }
-  .ranks { display: flex; flex-wrap: wrap; }
+  .ranks { display: flex; flex-wrap: wrap; flex: 1 1 100%; }
   .field { padding: 16px 14px 50px; }
 }
 a { color: inherit; }
@@ -853,7 +863,13 @@ def _rail(brand: dict[str, str], *, active: str = "/", sigil: str = "",
         mark = f'<a class="rail-logo" href="/"><img src="{brand["logotype"]}" alt="Homelab Guardian"></a>'
     else:
         mark = '<a class="rail-logo rail-logo-text" href="/">Homelab Guardian</a>'
-    art = f'<div class="rail-art"><img src="{brand["hero"]}" alt=""></div>' if "hero" in brand else ""
+    # The guardian LEADS: a framed portrait window right under the nameplate,
+    # face always visible, with the sigil pinned as a medallion on its base.
+    if "hero" in brand:
+        classes = "rail-portrait has-sigil" if sigil else "rail-portrait"
+        portrait = f'<div class="{classes}"><img src="{brand["hero"]}" alt="">{sigil}</div>'
+    else:
+        portrait = sigil  # no art installed: the sigil stands alone
 
     def link(href: str, label: str) -> str:
         cls = "rail-link active" if href == active else "rail-link"
@@ -866,8 +882,8 @@ def _rail(brand: dict[str, str], *, active: str = "/", sigil: str = "",
         + '<button class="rail-link theme-toggle" onclick="toggleTheme()" title="Toggle light/dark theme">◐ Theme</button>'
     )
     return (
-        f'<aside class="rail">{mark}{sigil}{ranks}'
-        f'<nav class="rail-nav">{nav}</nav>{art}</aside>'
+        f'<aside class="rail">{mark}{portrait}{ranks}'
+        f'<nav class="rail-nav">{nav}</nav></aside>'
     )
 
 
