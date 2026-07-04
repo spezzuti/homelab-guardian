@@ -206,9 +206,14 @@ main { max-width: 1280px; margin: 0 auto; padding: 28px 20px 64px; }
 .net-box {
   width: 44px; height: 44px; border-radius: 10px; border: 2px solid var(--nb, var(--ok));
   background: var(--shell); margin: 0 auto;
-  display: flex; align-items: center; justify-content: center;
-  color: var(--dim2); font: 600 8.5px var(--mono); letter-spacing: 1px;
 }
+.host-grid { display: grid; grid-template-columns: repeat(3, minmax(150px, 1fr)); gap: 14px; flex: 1; min-width: 0; }
+.host-card { background: var(--inner); border: 1px solid var(--bd-in); border-radius: 12px; padding: 12px 16px; min-width: 0; }
+.host-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.host-name { color: var(--t1); font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.host-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--gd, var(--ok)); flex: none; }
+.host-sub { color: var(--dim2); font-size: 11.5px; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 900px) { .host-grid { grid-template-columns: 1fr 1fr; } }
 .net-name { color: var(--mut); font-size: 12px; margin-top: 7px; max-width: 86px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .net-link { width: 40px; height: 2px; background: var(--bd); margin-top: 22px; flex: none; }
 
@@ -509,27 +514,56 @@ def _shell(head_title: str, hero_html: str, deck_html: str, *, refresh: str = ""
 # --- overview panels -------------------------------------------------------
 
 
+# The topology chain, in physical order. Each stage matches by name/id so the
+# strip shows the user's REAL devices (worst status of everything matched).
+_CHAIN = [
+    ("Modem", ("modem",)),
+    ("Router", ("router", "gateway")),
+    ("Switch", ("switch",)),
+    ("Pi-hole", ("pi-hole", "pihole")),
+]
+
+
 def _render_network_strip(checks: list[HealthCheck]) -> str:
-    nodes = [c for c in checks if effective_group(c) == "Network"][:7]
-    if not nodes:
-        return ""
-    parts = ['<div class="net-node"><div class="net-wan">WAN</div><div class="net-name">Internet</div></div>']
-    for check in nodes:
-        ink = _INK.get(check.status, _INK["unknown"])
-        # Every node declares WHAT it verifies (DNS / TCP / HTTP / TLS) so a
-        # green DNS node can never masquerade as "the service is up" — DNS
-        # keeps resolving names for hosts that are down, and that is correct.
-        kind = check.id.split("_", 1)[0].upper()
-        if kind not in {"DNS", "TCP", "HTTP", "TLS"}:
-            kind = "NET"
-        name = html.escape(check.name.split(":")[0][:26])
-        parts.append('<div class="net-link"></div>')
-        parts.append(
-            f'<div class="net-node" title="{html.escape(check.summary)}">'
-            f'<div class="net-box" style="--nb:{ink["solid"]}">{kind}</div>'
-            f'<div class="net-name">{name}</div></div>'
+    active = [c for c in checks]
+    consumed: set[str] = set()
+    chain_nodes = []
+    for label, needles in _CHAIN:
+        matched = [c for c in active
+                   if any(n in c.name.lower() or n in c.id.lower() for n in needles)]
+        if not matched:
+            continue
+        consumed.update(c.id for c in matched)
+        worst = overall_of(matched)
+        ink = _INK.get(worst, _INK["unknown"])
+        summary = "; ".join(c.summary for c in matched[:2])
+        chain_nodes.append(
+            f'<div class="net-node" title="{html.escape(summary)}">'
+            f'<div class="net-box" style="--nb:{ink["solid"]}"></div>'
+            f'<div class="net-name">{label}</div></div>'
         )
-    return f'<div class="panel"><h2 class="ptitle">Network</h2><div class="net">{"".join(parts)}</div></div>'
+    # Hosts: the Infrastructure group's remaining targets as sentinel cards.
+    hosts = [c for c in active
+             if effective_group(c) == "Infrastructure" and c.id not in consumed]
+    host_cards = []
+    for check in hosts[:6]:
+        ink = _INK.get(check.status, _INK["unknown"])
+        ack = ' <span class="chip" style="--chbg:rgba(125,138,160,.14);--chtx:var(--unk-t)">ACK</span>' if check.acknowledged else ""
+        host_cards.append(
+            f'<div class="host-card"><div class="host-top">'
+            f'<span class="host-name">{html.escape(check.name[:30])}</span>'
+            f'<span class="host-dot" style="--gd:{ink["solid"]}"></span></div>'
+            f'<div class="host-sub">{html.escape(check.summary[:60])}{ack}</div></div>'
+        )
+    if not chain_nodes and not host_cards:
+        return ""
+    strip = '<div class="net-node"><div class="net-wan">WAN</div><div class="net-name">Internet</div></div>'
+    for node in chain_nodes:
+        strip += '<div class="net-link"></div>' + node
+    grid = f'<div class="net-link"></div><div class="host-grid">{"".join(host_cards)}</div>' if host_cards else ""
+    more = f'<div class="pnote" style="margin:8px 0 0">+ {len(hosts) - 6} more in Infrastructure below</div>' if len(hosts) > 6 else ""
+    return (f'<div class="panel"><h2 class="ptitle">Network</h2>'
+            f'<div class="net">{strip}{grid}</div>{more}</div>')
 
 
 def _render_changes(diff: ScanDiff) -> str:
