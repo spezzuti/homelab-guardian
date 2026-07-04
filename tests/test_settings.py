@@ -249,3 +249,24 @@ def test_save_rejects_out_of_range_threshold(tmp_path):
         assert parsed["collectors"]["disks"]["paths"][0]["warn_percent"] == 85  # unchanged
     finally:
         server.shutdown()
+
+
+def test_brand_route_allowlist(tmp_path, monkeypatch):
+    from homelab_guardian import web as web_mod
+    assets = tmp_path / "assets"
+    assets.mkdir()
+    (assets / "hero.png").write_bytes(b"fake-png-bytes")
+    monkeypatch.setattr(web_mod, "_assets_dir", lambda: assets)
+    server, _ = _start(tmp_path, CONFIG_NONE)
+    port = server.server_address[1]
+    try:
+        resp, body = _req(port, "GET", "/brand/hero.png")  # public, no auth needed
+        assert resp.status == 200
+        assert resp.getheader("Content-Type") == "image/png"
+        assert "max-age" in (resp.getheader("Cache-Control") or "")
+        resp, _ = _req(port, "GET", "/brand/../config.yaml")  # not in the allowlist
+        assert resp.status == 404
+        resp, _ = _req(port, "GET", "/brand/logotype.png")  # allowlisted but absent
+        assert resp.status == 404
+    finally:
+        server.shutdown()
