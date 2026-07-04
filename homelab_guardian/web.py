@@ -152,7 +152,7 @@ header.overall.has-art { min-height: 176px; }
 header.overall.has-art .hero-text { max-width: 58%; }
 .hero-art {
   position: absolute; right: 0; top: 0; height: 100%; max-width: 46%;
-  object-fit: cover; object-position: top center; pointer-events: none;
+  object-fit: cover; object-position: center 18%; pointer-events: none;
   -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 30%);
   mask-image: linear-gradient(90deg, transparent 0, #000 30%);
 }
