@@ -49,6 +49,7 @@ _BRAND_FILES = {
     "hero.png": "image/png",
     "logotype.webp": "image/webp",
     "logotype.png": "image/png",
+    "favicon.png": "image/png",
 }
 
 
@@ -67,7 +68,15 @@ def brand_assets() -> dict[str, str]:
     return found
 
 
-# Favicon: a shield-and-helm placeholder until it is cropped from real art.
+def favicon_link() -> str:
+    """The real-art favicon when present, else the built-in placeholder."""
+    if (_assets_dir() / "favicon.png").is_file():
+        return '<link rel="icon" href="/brand/favicon.png">'
+    return FAVICON_LINK
+
+
+# Favicon fallback: a shield-and-helm placeholder, used only when no real-art
+# favicon has been installed in assets/.
 FAVICON_LINK = (
     '<link rel="icon" href="data:image/svg+xml,'
     "%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 132'%3E"
@@ -105,11 +114,14 @@ PAGE_STYLE = f"""
 PAGE_STYLE += """
 * { box-sizing: border-box; }
 body {
-  margin: 0; background: var(--bg); color: var(--text);
+  margin: 0; color: var(--text);
   font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: radial-gradient(1100px 520px at 50% -160px,
+    color-mix(in srgb, var(--brand) 9%, var(--bg)), var(--bg)) fixed;
 }
-main { max-width: 880px; margin: 0 auto; padding: 24px 16px 64px; }
+main { max-width: 880px; margin: 0 auto; padding: 20px 16px 64px; }
 a { color: inherit; }
+::selection { background: color-mix(in srgb, var(--brand) 28%, transparent); }
 /* --- the hero band: dark stone in both themes, status-reactive ---------- */
 header.overall {
   position: relative; overflow: hidden;
@@ -148,11 +160,11 @@ header.overall .status {
 header.overall .meta { color: #96a2b4; font-size: 0.85rem; margin-top: 5px; }
 header.overall .meta a { color: inherit; }
 /* character art blended into the band; lit by the overall status */
-header.overall.has-art { min-height: 176px; }
-header.overall.has-art .hero-text { max-width: 58%; }
+header.overall.has-art { min-height: 196px; display: flex; align-items: center; }
+header.overall.has-art .hero-text { max-width: 56%; }
 .hero-art {
   position: absolute; right: 0; top: 0; height: 100%; max-width: 46%;
-  object-fit: cover; object-position: center 18%; pointer-events: none;
+  object-fit: cover; object-position: right 14%; pointer-events: none;
   -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 30%);
   mask-image: linear-gradient(90deg, transparent 0, #000 30%);
 }
@@ -165,11 +177,24 @@ header.overall.crit .hero-art { filter: drop-shadow(0 0 26px color-mix(in srgb, 
 /* carved logotype art replaces the CSS-lettered title when present */
 h1.logotype { background: none; filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.6)); }
 h1.logotype img { display: block; max-height: 60px; max-width: 100%; }
-.theme-toggle {
-  position: absolute; top: 14px; right: 14px; cursor: pointer; z-index: 1;
-  background: #1a212b; color: #c6cfda; border: 1px solid #2c3542;
-  border-radius: 8px; font-size: 1.05rem; padding: 4px 9px; line-height: 1;
+/* --- top toolbar: brand + controls, out of the art's way ---------------- */
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; padding: 2px 2px 12px;
 }
+.tb-brand {
+  font-family: var(--mono); text-transform: uppercase;
+  letter-spacing: 0.22em; font-size: 0.72rem; color: var(--muted);
+}
+.tb-actions { display: flex; gap: 8px; align-items: center; }
+.tb-btn {
+  cursor: pointer; text-decoration: none; white-space: nowrap;
+  background: var(--card); color: var(--text); border: 1px solid var(--border);
+  border-radius: 8px; font-size: 0.85rem; font-weight: 600;
+  padding: 6px 11px; line-height: 1;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+.tb-btn:hover { border-color: var(--brand); transform: translateY(-1px); }
 .counts { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-bottom: 20px; }
 .pill {
   border-radius: 999px; padding: 5px 15px; font-size: 0.9rem; font-weight: 600;
@@ -186,10 +211,17 @@ h1.logotype img { display: block; max-height: 60px; max-width: 100%; }
 .card h2 {
   margin: 0 0 10px; font-size: 0.8rem; font-weight: 700;
   text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted);
+  display: flex; align-items: center; gap: 12px;
+}
+.card h2::after {
+  content: ""; flex: 1; height: 1px;
+  background: linear-gradient(90deg, var(--border), transparent);
 }
 .check {
+  border: 1px solid color-mix(in srgb, var(--accent, var(--border)) 30%, var(--border));
   border-left: 5px solid var(--accent, var(--border));
-  background: var(--bg); border-radius: 0 10px 10px 0;
+  background: color-mix(in srgb, var(--accent, var(--border)) 6%, var(--card));
+  border-radius: 4px 10px 10px 4px;
   padding: 10px 14px; margin: 12px 0;
 }
 .check .name { font-weight: 650; }
@@ -227,20 +259,36 @@ details.tile li {
   font-size: 0.9rem;
 }
 details.morehistory summary { cursor: pointer; color: var(--muted); font-size: 0.88rem; padding: 6px 0; }
-ul.changes { margin: 0; padding-left: 22px; }
-ul.changes li { margin: 5px 0; }
-.briefing p { margin: 8px 0; }
+/* the what-changed timeline: a cold rail with brand nodes */
+ul.changes { margin: 0; padding-left: 4px; list-style: none; position: relative; }
+ul.changes::before {
+  content: ""; position: absolute; left: 3px; top: 10px; bottom: 8px; width: 2px;
+  background: linear-gradient(180deg, var(--brand), transparent);
+  opacity: 0.5; border-radius: 2px;
+}
+ul.changes li { margin: 9px 0; padding-left: 18px; position: relative; }
+ul.changes li::before {
+  content: ""; position: absolute; left: -1px; top: 0.5em; width: 10px; height: 10px;
+  border-radius: 50%; background: var(--card); border: 2px solid var(--brand);
+}
+.briefing p { margin: 9px 0; font-family: Georgia, "Times New Roman", serif; font-size: 1.02rem; }
+.card.briefing { border-left: 3px solid var(--brand); }
 .card.acked summary { cursor: pointer; list-style: revert; }
 .card.acked summary h2 { display: inline; }
 .ackhint { color: var(--muted); font-size: 0.88rem; }
 .acknote { color: var(--muted); font-style: italic; }
-table.history { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+table.history { width: 100%; border-collapse: collapse; font-size: 0.92rem; font-variant-numeric: tabular-nums; }
 table.history th, table.history td {
   text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border);
 }
-table.history th { color: var(--muted); font-weight: 600; }
+table.history th {
+  color: var(--muted); font-weight: 700; font-size: 0.72rem;
+  text-transform: uppercase; letter-spacing: 0.1em;
+}
+table.history tbody tr:hover td { background: color-mix(in srgb, var(--brand) 6%, transparent); }
 table.history tr.current td { font-weight: 650; }
 footer { color: var(--muted); font-size: 0.8rem; margin-top: 28px; text-align: center; }
+.f-logo { display: block; height: 18px; width: auto; margin: 0 auto 8px; opacity: 0.45; }
 code, pre, .cid { font-family: var(--mono); }
 .pill b { font-family: var(--mono); }
 button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 4px; }
@@ -256,17 +304,13 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px soli
   @keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
   header.overall::after { animation: breathe 9s ease-in-out infinite; }
   @keyframes breathe { 0%, 100% { opacity: 0.22; } 50% { opacity: 0.4; } }
-  header.overall.crit .e-eyes { animation: ember 2.2s ease-in-out infinite; }
-  @keyframes ember { 0%, 100% { opacity: 0.75; } 50% { opacity: 1; } }
+  header.overall.crit .hero-art, header.overall.warn .hero-art { animation: ember 2.6s ease-in-out infinite; }
+  @keyframes ember { 0%, 100% { filter: drop-shadow(0 0 18px color-mix(in srgb, var(--accent) 35%, transparent)); }
+    50% { filter: drop-shadow(0 0 30px color-mix(in srgb, var(--accent) 60%, transparent)); } }
   details.tile, .card { transition: transform 0.16s ease, box-shadow 0.16s ease; }
   details.tile:hover { transform: translateY(-2px); box-shadow: 0 12px 28px -20px rgba(16, 20, 26, 0.55); }
 }
 h2.sectionhead { margin: 22px 2px 10px; font-size: 1.02rem; }
-a.settings-link {
-  position: absolute; top: 14px; right: 56px; text-decoration: none; z-index: 1;
-  background: #1a212b; color: #c6cfda; border: 1px solid #2c3542;
-  border-radius: 8px; font-size: 1.05rem; padding: 4px 9px; line-height: 1;
-}
 .settings-row {
   display: flex; align-items: center; justify-content: space-between;
   gap: 12px; padding: 11px 4px; border-bottom: 1px solid var(--border);
@@ -285,13 +329,17 @@ input.toggle { width: 18px; height: 18px; accent-color: var(--brand); }
 h3.sgroup { margin: 16px 0 2px; font-size: 0.95rem; color: var(--muted); }
 .savebar { margin-top: 18px; display: flex; gap: 14px; align-items: center; }
 button.save {
-  background: var(--ok); color: #fff; border: none; border-radius: 8px;
-  padding: 8px 18px; font-size: 0.95rem; font-weight: 650; cursor: pointer;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--ok) 88%, #fff), var(--ok));
+  color: #fff; border: none; border-radius: 8px;
+  padding: 9px 20px; font-size: 0.85rem; font-weight: 700; cursor: pointer;
+  text-transform: uppercase; letter-spacing: 0.07em;
+  box-shadow: 0 8px 18px -12px color-mix(in srgb, var(--ok) 70%, transparent);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
-a.repairs-link { right: 98px; }
+button.save:hover { transform: translateY(-1px); box-shadow: 0 10px 22px -12px color-mix(in srgb, var(--ok) 80%, transparent); }
 .rbadge {
   background: var(--critical); color: #fff; border-radius: 999px;
-  font-size: 0.7rem; font-weight: 700; padding: 1px 6px; margin-left: 3px; vertical-align: top;
+  font-size: 0.7rem; font-weight: 700; padding: 1px 6px; margin-left: 5px; vertical-align: top;
 }
 .rcard {
   border: 1px solid var(--border); border-left: 5px solid var(--accent, var(--border));
@@ -641,7 +689,7 @@ def _repairs_link(repairs_pending: int | None) -> str:
     if repairs_pending is None:
         return ""
     badge = f'<span class="rbadge">{repairs_pending}</span>' if repairs_pending else ""
-    return f'<a class="settings-link repairs-link" href="/repairs" title="Repairs">🔧{badge}</a>'
+    return f'<a class="tb-btn" href="/repairs" title="Repairs">🔧 Repairs{badge}</a>'
 
 
 def render_scan_page(
@@ -665,8 +713,10 @@ def render_scan_page(
     art_class = " has-art" if hero_art else ""
     if "logotype" in brand:
         title_html = f'<h1 class="logotype"><img src="{brand["logotype"]}" alt="{app_name}"></h1>'
+        footer_mark = f'<img class="f-logo" src="{brand["logotype"]}" alt="">'
     else:
         title_html = f"<h1>{app_name}</h1>"
+        footer_mark = ""
 
     pills = "".join(
         f'<span class="pill {_STATUS_CLASS[s]}">{STATUS_META[s][0]} <b>{counts[s]}</b> {STATUS_META[s][1].lower()}</span>'
@@ -680,12 +730,17 @@ def render_scan_page(
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">{refresh}
-<title>{app_name} — {label}</title>{FAVICON_LINK}<style>{PAGE_STYLE}</style>{THEME_SCRIPT}</head>
+<title>{app_name} — {label}</title>{favicon_link()}<style>{PAGE_STYLE}</style>{THEME_SCRIPT}</head>
 <body><main>
-<header class="overall {_STATUS_CLASS.get(overall, 'unk')}{art_class}">
-<a class="settings-link" href="/settings" title="Settings">⚙</a>
+<nav class="topbar">
+<span class="tb-brand">Homelab Guardian</span>
+<span class="tb-actions">
 {_repairs_link(repairs_pending)}
-<button class="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark theme">🌓</button>
+<a class="tb-btn" href="/settings" title="Settings">⚙ Settings</a>
+<button class="theme-toggle tb-btn" onclick="toggleTheme()" title="Toggle light/dark theme">🌓</button>
+</span>
+</nav>
+<header class="overall {_STATUS_CLASS.get(overall, 'unk')}{art_class}">
 {hero_art}
 <div class="hero">
 <div class="hero-text">
@@ -700,14 +755,14 @@ def render_scan_page(
 {_render_changes(diff)}
 {_render_groups(checks)}
 {_render_history(history, scan_id)}
-<footer>Homelab Guardian — read-only view · <a href="/">latest</a></footer>
+<footer>{footer_mark}Homelab Guardian — read-only view · <a href="/">latest</a></footer>
 </main>{TILE_SCRIPT}</body></html>"""
 
 
 def render_empty_page() -> str:
     return (
         f"<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>Homelab Guardian</title>"
-        f"{FAVICON_LINK}<style>{PAGE_STYLE}</style></head><body><main><div class=\"card\"><h2>No scans yet</h2>"
+        f"{favicon_link()}<style>{PAGE_STYLE}</style></head><body><main><div class=\"card\"><h2>No scans yet</h2>"
         f"<p>Run <code>guardian --config config.yaml</code> to produce the first scan, "
         f"or start the server with <code>--interval</code> to scan continuously.</p></div></main></body></html>"
     )
@@ -806,12 +861,18 @@ def render_settings_page(
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Homelab Guardian — Settings</title>{FAVICON_LINK}<style>{PAGE_STYLE}</style>{THEME_SCRIPT}</head>
+<title>Homelab Guardian — Settings</title>{favicon_link()}<style>{PAGE_STYLE}</style>{THEME_SCRIPT}</head>
 <body><main>
+<nav class="topbar">
+<span class="tb-brand">Homelab Guardian</span>
+<span class="tb-actions">
+<a class="tb-btn" href="/">← Dashboard</a>
+<button class="theme-toggle tb-btn" onclick="toggleTheme()" title="Toggle light/dark theme">🌓</button>
+</span>
+</nav>
 <header class="overall okc">
-<button class="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark theme">🌓</button>
 <h1>Settings</h1>
-<div class="meta"><a href="/">← Back to dashboard</a></div>
+<div class="meta">Collectors and thresholds — saved straight into config.yaml.</div>
 </header>
 {banner}
 {body}
@@ -901,12 +962,18 @@ def render_repairs_page(
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Homelab Guardian — Repairs</title>{FAVICON_LINK}<style>{PAGE_STYLE}</style>{THEME_SCRIPT}</head>
+<title>Homelab Guardian — Repairs</title>{favicon_link()}<style>{PAGE_STYLE}</style>{THEME_SCRIPT}</head>
 <body><main>
+<nav class="topbar">
+<span class="tb-brand">Homelab Guardian</span>
+<span class="tb-actions">
+<a class="tb-btn" href="/">← Dashboard</a>
+<button class="theme-toggle tb-btn" onclick="toggleTheme()" title="Toggle light/dark theme">🌓</button>
+</span>
+</nav>
 <header class="overall okc">
-<button class="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark theme">🌓</button>
 <h1>Repairs</h1>
-<div class="meta"><a href="/">← Back to dashboard</a></div>
+<div class="meta">Approve or deny proposed repairs — execution stays with the CLI and MCP.</div>
 </header>
 {banner}
 {body}
