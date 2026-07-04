@@ -203,7 +203,12 @@ main { max-width: 1280px; margin: 0 auto; padding: 28px 20px 64px; }
   margin: 0 auto; display: flex; align-items: center; justify-content: center;
   color: var(--mut2); font: 600 9px var(--mono);
 }
-.net-box { width: 44px; height: 44px; border-radius: 10px; border: 2px solid var(--nb, var(--ok)); background: var(--shell); margin: 0 auto; }
+.net-box {
+  width: 44px; height: 44px; border-radius: 10px; border: 2px solid var(--nb, var(--ok));
+  background: var(--shell); margin: 0 auto;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--dim2); font: 600 8.5px var(--mono); letter-spacing: 1px;
+}
 .net-name { color: var(--mut); font-size: 12px; margin-top: 7px; max-width: 86px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .net-link { width: 40px; height: 2px; background: var(--bd); margin-top: 22px; flex: none; }
 
@@ -511,11 +516,17 @@ def _render_network_strip(checks: list[HealthCheck]) -> str:
     parts = ['<div class="net-node"><div class="net-wan">WAN</div><div class="net-name">Internet</div></div>']
     for check in nodes:
         ink = _INK.get(check.status, _INK["unknown"])
-        name = html.escape(check.name.split(":")[0][:24])
+        # Every node declares WHAT it verifies (DNS / TCP / HTTP / TLS) so a
+        # green DNS node can never masquerade as "the service is up" — DNS
+        # keeps resolving names for hosts that are down, and that is correct.
+        kind = check.id.split("_", 1)[0].upper()
+        if kind not in {"DNS", "TCP", "HTTP", "TLS"}:
+            kind = "NET"
+        name = html.escape(check.name.split(":")[0][:26])
         parts.append('<div class="net-link"></div>')
         parts.append(
             f'<div class="net-node" title="{html.escape(check.summary)}">'
-            f'<div class="net-box" style="--nb:{ink["solid"]}"></div>'
+            f'<div class="net-box" style="--nb:{ink["solid"]}">{kind}</div>'
             f'<div class="net-name">{name}</div></div>'
         )
     return f'<div class="panel"><h2 class="ptitle">Network</h2><div class="net">{"".join(parts)}</div></div>'
