@@ -93,17 +93,19 @@ FAVICON_LINK = (
 # focus rings. Deliberately NOT green/red/amber: status colors keep exclusive
 # ownership of meaning, the brand never competes with them.
 _DARK_VARS = """
-    --bg: #14171c; --card: #1d222a; --text: #e8eaee; --muted: #9aa3b0;
+    --bg: #0d1118; --card: #151b25; --text: #e8eaee; --muted: #97a1b0;
     --critical: #ff5d64; --warning: #ffb454; --unknown: #8fa1bd; --ok: #4ecb71;
-    --border: #2a313b; --brand: #93a5c4;
+    --border: #242e3c; --brand: #93a5c4; --rune: #6ec3e8;
+    --plate-hi: rgba(255, 255, 255, 0.05); --rivet: rgba(190, 205, 225, 0.22);
 """
 
 PAGE_STYLE = f"""
 :root {{
   color-scheme: light dark;
-  --bg: #f5f6f8; --card: #ffffff; --text: #1c2330; --muted: #69707d;
+  --bg: #e9edf2; --card: #f9fafc; --text: #1c2330; --muted: #64707f;
   --critical: #d4373e; --warning: #c77d00; --unknown: #6c7a93; --ok: #2c8a4b;
-  --border: #e3e6ea; --brand: #3d4c66;
+  --border: #d4dae2; --brand: #3d4c66; --rune: #1f7fae;
+  --plate-hi: rgba(255, 255, 255, 0.75); --rivet: rgba(61, 76, 102, 0.28);
   --mono: ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, monospace;
 }}
 @media (prefers-color-scheme: dark) {{
@@ -116,12 +118,25 @@ PAGE_STYLE += """
 body {
   margin: 0; color: var(--text);
   font: 16px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
-  background: radial-gradient(1100px 520px at 50% -160px,
-    color-mix(in srgb, var(--brand) 9%, var(--bg)), var(--bg)) fixed;
+  background:
+    radial-gradient(1100px 520px at 50% -160px, color-mix(in srgb, var(--brand) 12%, var(--bg)), transparent),
+    radial-gradient(900px 700px at 105% 110%, color-mix(in srgb, var(--brand) 7%, var(--bg)), transparent),
+    var(--bg);
+  background-attachment: fixed;
+}
+body::before { /* stone grain over the whole watch room */
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: 0.5;
+  background:
+    repeating-linear-gradient(115deg, color-mix(in srgb, var(--text) 1.5%, transparent) 0 2px, transparent 2px 9px),
+    repeating-linear-gradient(25deg, color-mix(in srgb, var(--text) 1%, transparent) 0 1px, transparent 1px 13px);
 }
 main { max-width: 880px; margin: 0 auto; padding: 20px 16px 64px; }
 a { color: inherit; }
-::selection { background: color-mix(in srgb, var(--brand) 28%, transparent); }
+.card a, ul.changes a { color: var(--rune); }
+::selection { background: color-mix(in srgb, var(--rune) 30%, transparent); }
+::-webkit-scrollbar { width: 11px; }
+::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--brand) 40%, var(--bg)); border-radius: 6px; border: 3px solid var(--bg); }
+::-webkit-scrollbar-track { background: transparent; }
 /* --- the hero band: dark stone in both themes, status-reactive ---------- */
 header.overall {
   position: relative; overflow: hidden;
@@ -195,43 +210,76 @@ h1.logotype img { display: block; max-height: 60px; max-width: 100%; }
   transition: border-color 0.15s ease, transform 0.15s ease;
 }
 .tb-btn:hover { border-color: var(--brand); transform: translateY(-1px); }
-.counts { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-bottom: 20px; }
-.pill {
-  border-radius: 999px; padding: 5px 15px; font-size: 0.9rem; font-weight: 600;
-  background: var(--card); border: 1px solid var(--border);
-  border-top: 2px solid var(--accent, var(--border));
-  box-shadow: 0 8px 18px -16px rgba(16, 20, 26, 0.5);
+/* --- the command strip: forged status plates, not pills ----------------- */
+.counts {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px; margin-bottom: 18px;
 }
-.pill b { font-size: 1.05rem; }
+.stat {
+  position: relative; text-align: center; padding: 10px 8px 9px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent, var(--border)) 9%, var(--card)), var(--card));
+  border: 1px solid color-mix(in srgb, var(--accent, var(--border)) 32%, var(--border));
+  clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
+}
+.stat::before {
+  content: ""; position: absolute; inset: 0 0 auto 0; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent, var(--border)), transparent);
+}
+.stat b { display: block; font-family: var(--mono); font-size: 1.5rem; line-height: 1.15; color: var(--accent, var(--text)); }
+.stat .stat-label {
+  font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.14em; color: var(--muted);
+}
+/* --- plates: every card is a framed, riveted panel ---------------------- */
 .card {
-  background: var(--card); border: 1px solid var(--border); border-radius: 14px;
+  position: relative;
+  background:
+    radial-gradient(circle at 9px 9px, var(--rivet) 1.6px, transparent 2.4px),
+    radial-gradient(circle at calc(100% - 9px) 9px, var(--rivet) 1.6px, transparent 2.4px),
+    radial-gradient(circle at 9px calc(100% - 9px), var(--rivet) 1.6px, transparent 2.4px),
+    radial-gradient(circle at calc(100% - 9px) calc(100% - 9px), var(--rivet) 1.6px, transparent 2.4px),
+    linear-gradient(180deg, color-mix(in srgb, var(--text) 2%, var(--card)), var(--card) 42px);
+  border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: inset 0 1px 0 var(--plate-hi),
+    0 1px 2px rgba(10, 14, 20, 0.06), 0 16px 34px -28px rgba(10, 14, 20, 0.55);
   padding: 16px 20px; margin-bottom: 16px;
-  box-shadow: 0 1px 2px rgba(16, 20, 26, 0.05), 0 14px 30px -26px rgba(16, 20, 26, 0.45);
 }
-.card h2 {
-  margin: 0 0 10px; font-size: 0.8rem; font-weight: 700;
-  text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted);
-  display: flex; align-items: center; gap: 12px;
+.card h2 { /* an engraved plaque bolted to the plate */
+  display: inline-block; margin: -4px 0 12px; padding: 5px 18px;
+  font-size: 0.72rem; font-weight: 750; text-transform: uppercase;
+  letter-spacing: 0.2em; color: color-mix(in srgb, var(--text) 72%, var(--muted));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--text) 9%, var(--card)), color-mix(in srgb, var(--text) 3%, var(--card)));
+  border: 1px solid var(--border);
+  clip-path: polygon(9px 0, calc(100% - 9px) 0, 100% 50%, calc(100% - 9px) 100%, 9px 100%, 0 50%);
+  text-shadow: 0 1px 0 var(--plate-hi);
 }
-.card h2::after {
-  content: ""; flex: 1; height: 1px;
-  background: linear-gradient(90deg, var(--border), transparent);
-}
-.check {
+.check { /* a threat report: tagged, framed, status-washed */
+  position: relative; overflow: hidden;
   border: 1px solid color-mix(in srgb, var(--accent, var(--border)) 30%, var(--border));
   border-left: 5px solid var(--accent, var(--border));
   background: color-mix(in srgb, var(--accent, var(--border)) 6%, var(--card));
   border-radius: 4px 10px 10px 4px;
   padding: 10px 14px; margin: 12px 0;
 }
+.check::after { /* the severity tag riveted to the corner */
+  position: absolute; top: 0; right: 0; padding: 3px 12px 3px 16px;
+  font-size: 0.6rem; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--card); background: var(--accent, var(--muted));
+  clip-path: polygon(9px 0, 100% 0, 100% 100%, 0 100%);
+}
+.check.crit::after { content: "critical"; }
+.check.warn::after { content: "warning"; }
+.check.unk::after { content: "unknown"; }
+.check .name { padding-right: 90px; }
 .check .name { font-weight: 650; }
 .check .summary { margin: 2px 0; }
 .check .action { color: var(--muted); font-size: 0.9rem; }
 .check details { margin-top: 6px; }
 .check summary { cursor: pointer; color: var(--muted); font-size: 0.85rem; }
-.check pre {
-  background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
-  padding: 10px; overflow-x: auto; font-size: 0.8rem;
+.check pre { /* evidence reads as a terminal, in both themes */
+  background: #0b0f15; color: #b8c4d6; border: 1px solid #212b39;
+  border-radius: 8px; padding: 10px 12px; overflow-x: auto; font-size: 0.8rem;
+  box-shadow: inset 0 0 22px rgba(0, 0, 0, 0.35);
 }
 .crit { --accent: var(--critical); } .warn { --accent: var(--warning); }
 .unk { --accent: var(--unknown); } .okc { --accent: var(--ok); }
@@ -272,7 +320,12 @@ ul.changes li::before {
   border-radius: 50%; background: var(--card); border: 2px solid var(--brand);
 }
 .briefing p { margin: 9px 0; font-family: Georgia, "Times New Roman", serif; font-size: 1.02rem; }
-.card.briefing { border-left: 3px solid var(--brand); }
+.card.briefing { border-left: 3px solid var(--brand); overflow: hidden; }
+.card.briefing::after { /* the guardian's sigil watermarks the report */
+  content: "\\2694"; position: absolute; right: -6px; bottom: -26px;
+  font-size: 108px; line-height: 1; opacity: 0.055; pointer-events: none;
+  color: var(--brand); transform: rotate(-12deg);
+}
 .card.acked summary { cursor: pointer; list-style: revert; }
 .card.acked summary h2 { display: inline; }
 .ackhint { color: var(--muted); font-size: 0.88rem; }
@@ -309,6 +362,16 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px soli
     50% { filter: drop-shadow(0 0 30px color-mix(in srgb, var(--accent) 60%, transparent)); } }
   details.tile, .card { transition: transform 0.16s ease, box-shadow 0.16s ease; }
   details.tile:hover { transform: translateY(-2px); box-shadow: 0 12px 28px -20px rgba(16, 20, 26, 0.55); }
+  h1.logotype { position: relative; overflow: hidden; }
+  h1.logotype::after { /* a cold light sweeps the carved letters, rarely */
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(105deg, transparent 42%, rgba(215, 232, 255, 0.13) 50%, transparent 58%);
+    transform: translateX(-130%); animation: glint 12s ease-in-out infinite;
+    pointer-events: none;
+  }
+  @keyframes glint { 0%, 82% { transform: translateX(-130%); } 96%, 100% { transform: translateX(130%); } }
+  .stat b { transition: transform 0.15s ease; }
+  .stat:hover b { transform: scale(1.08); }
 }
 h2.sectionhead { margin: 22px 2px 10px; font-size: 1.02rem; }
 .settings-row {
@@ -355,22 +418,29 @@ button.save:hover { transform: translateY(-1px); box-shadow: 0 10px 22px -12px c
 }
 .rform { margin-top: 10px; display: flex; gap: 10px; }
 button.deny {
-  background: var(--bg); color: var(--critical); border: 1px solid var(--critical);
-  border-radius: 8px; padding: 8px 18px; font-size: 0.95rem; font-weight: 650; cursor: pointer;
+  background: transparent; color: var(--critical); border: 1px solid var(--critical);
+  border-radius: 8px; padding: 9px 20px; font-size: 0.85rem; font-weight: 700; cursor: pointer;
+  text-transform: uppercase; letter-spacing: 0.07em;
+  transition: background 0.15s ease, transform 0.15s ease;
 }
+button.deny:hover { background: color-mix(in srgb, var(--critical) 10%, transparent); transform: translateY(-1px); }
 .banner { border-radius: 10px; padding: 10px 14px; margin-bottom: 14px;
   background: var(--card); border: 1px solid var(--border); }
 .banner.ok { border-left: 5px solid var(--ok); }
 .banner.err { border-left: 5px solid var(--critical); }
 .notice { color: var(--muted); }
-details.group {
-  background: var(--card); border: 1px solid var(--border);
-  border-left: 8px solid var(--accent, var(--border)); border-radius: 12px;
-  margin-bottom: 14px;
+details.group { /* a problem group is a war banner: chamfered, edge-lit */
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--accent, var(--border)) 9%, var(--card)), var(--card) 56px);
+  border: 1px solid color-mix(in srgb, var(--accent, var(--border)) 35%, var(--border));
+  border-left: 8px solid var(--accent, var(--border));
+  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
+  border-radius: 3px; margin-bottom: 14px;
 }
 details.group > summary {
   cursor: pointer; list-style: none; padding: 14px 20px;
   display: flex; align-items: center; gap: 10px; font-weight: 650; font-size: 1.02rem;
+  text-shadow: 0 1px 0 var(--plate-hi);
 }
 details.group > summary::-webkit-details-marker { display: none; }
 details.group > summary::after {
@@ -719,12 +789,13 @@ def render_scan_page(
         footer_mark = ""
 
     pills = "".join(
-        f'<span class="pill {_STATUS_CLASS[s]}">{STATUS_META[s][0]} <b>{counts[s]}</b> {STATUS_META[s][1].lower()}</span>'
+        f'<div class="stat {_STATUS_CLASS[s]}"><b>{counts[s]}</b>'
+        f'<span class="stat-label">{STATUS_META[s][0]} {STATUS_META[s][1]}</span></div>'
         for s in STATUS_ORDER
     )
     acked_count = sum(1 for c in checks if c.acknowledged)
     if acked_count:
-        pills += f'<span class="pill">🔕 <b>{acked_count}</b> acknowledged</span>'
+        pills += f'<div class="stat"><b>{acked_count}</b><span class="stat-label">🔕 Acknowledged</span></div>'
     refresh = f'<meta http-equiv="refresh" content="{int(refresh_seconds)}">' if refresh_seconds else ""
 
     return f"""<!doctype html>

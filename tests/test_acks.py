@@ -80,5 +80,5 @@ def test_web_page_shows_acked_section_and_pill():
     page = render_scan_page((1, "2026-06-13T00:00:00+00:00", snapshot), ScanDiff(), [], refresh_seconds=0)
     assert "OK" in page
     assert "Acknowledged — muted known issues (1)" in page
-    assert "acknowledged</span>" in page
+    assert "Acknowledged</span>" in page  # the command-strip stat plate
     assert "guardian unack" in page
