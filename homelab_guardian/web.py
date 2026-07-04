@@ -144,7 +144,11 @@ body::before { /* stone grain over the whole watch room */
   background: repeating-linear-gradient(115deg, rgba(255, 255, 255, 0.02) 0 2px, transparent 2px 8px);
 }
 .rail > * { position: relative; }
-.rail-logo { display: block; position: relative; margin: 2px auto 0; }
+.rail-logo { /* the carved nameplate on a back-lit plinth */
+  display: block; position: relative; margin: 0 -6px; padding: 10px 8px 12px;
+  background: radial-gradient(85% 130% at 50% 0%, rgba(210, 226, 248, 0.08), transparent 72%);
+  border-bottom: 1px solid #222b38;
+}
 .rail-logo img { width: 100%; height: auto; display: block; filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.6)); }
 .rail-logo-text {
   text-align: center; font-family: Georgia, serif; text-transform: uppercase;
@@ -178,9 +182,20 @@ body::before { /* stone grain over the whole watch room */
   -webkit-mask: radial-gradient(circle, transparent 55%, #000 57%);
   mask: radial-gradient(circle, transparent 55%, #000 57%);
 }
-.sigil-icon {
-  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-  font-size: 2rem; filter: drop-shadow(0 0 12px color-mix(in srgb, var(--accent, #55617a) 60%, transparent));
+.sigil-gem { /* a faceted signal gem at the radar's heart */
+  position: absolute; left: 50%; top: 50%; width: 38px; height: 38px;
+  transform: translate(-50%, -50%);
+  background: linear-gradient(135deg,
+    color-mix(in srgb, var(--accent, #55617a) 55%, #fff) 0%,
+    var(--accent, #55617a) 48%,
+    color-mix(in srgb, var(--accent, #55617a) 55%, #000) 100%);
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  filter: drop-shadow(0 0 14px color-mix(in srgb, var(--accent, #55617a) 70%, transparent));
+}
+.sigil-gem::after { /* inner facet */
+  content: ""; position: absolute; inset: 8px;
+  background: linear-gradient(315deg, rgba(255, 255, 255, 0.35), transparent 60%);
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
 }
 /* count ranks: small forged tallies under the sigil */
 .ranks { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
@@ -195,6 +210,15 @@ body::before { /* stone grain over the whole watch room */
   font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.09em;
   color: #8b97a8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+/* status marks: notched steel chips with terminal glyphs — the emoji are gone */
+.mark {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 17px; height: 17px; flex: none; vertical-align: -3px;
+  font: 800 11px/1 var(--mono); color: var(--card);
+  background: var(--accent, var(--muted));
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 5px), calc(100% - 5px) 100%, 0 100%);
+}
+.mark.mute { background: var(--muted); opacity: 0.75; }
 .field { padding: 22px 30px 60px; max-width: 1220px; min-width: 0; }
 .field-grid { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 18px; align-items: start; }
 .fside { position: sticky; top: 18px; }
@@ -207,7 +231,8 @@ body::before { /* stone grain over the whole watch room */
   .rail-link { width: auto; border-radius: 8px; border-left-width: 1px; }
   .rail-art { display: none; }
   .sigil { width: 62px; height: 62px; margin: 0; }
-  .sigil-icon { font-size: 1.2rem; }
+  .sigil-gem { width: 22px; height: 22px; }
+  .sigil-gem::after { inset: 5px; }
   .ranks { display: flex; flex-wrap: wrap; }
   .field { padding: 16px 14px 50px; }
 }
@@ -378,6 +403,11 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px soli
   @keyframes breathe { 0%, 100% { opacity: 0.18; } 50% { opacity: 0.36; } }
   .sigil-ring { animation: sweep 7s linear infinite; }
   @keyframes sweep { to { transform: rotate(360deg); } }
+  .sigil.crit .sigil-gem { animation: gempulse 1.6s ease-in-out infinite; }
+  @keyframes gempulse {
+    0%, 100% { filter: drop-shadow(0 0 10px color-mix(in srgb, var(--accent) 55%, transparent)); }
+    50% { filter: drop-shadow(0 0 26px color-mix(in srgb, var(--accent) 95%, transparent)); }
+  }
   .banner.crit { box-shadow: 0 0 36px -14px var(--critical); }
   details.tile, .card { transition: transform 0.16s ease, box-shadow 0.16s ease; }
   details.tile:hover { transform: translateY(-2px); box-shadow: 0 12px 28px -20px rgba(16, 20, 26, 0.55); }
@@ -480,6 +510,18 @@ details.group[open] > summary { border-bottom: 1px solid var(--border); }
 """
 
 _STATUS_CLASS = {"critical": "crit", "warning": "warn", "unknown": "unk", "ok": "okc"}
+
+# Themed status marks: cold terminal glyphs in notched steel chips. The web
+# surface never uses emoji — reports and Telegram keep them (text channels).
+_MARK_GLYPHS = {"critical": "✕", "warning": "!", "unknown": "?", "ok": "✓"}
+
+
+def _mark(status: str, glyph: str | None = None) -> str:
+    cls = _STATUS_CLASS.get(status, "unk")
+    return f'<span class="mark {cls}">{glyph or _MARK_GLYPHS.get(status, "·")}</span>'
+
+
+_MUTE_MARK = '<span class="mark mute">⊘</span>'
 
 _CATEGORY_PREFIXES = [
     ("http_", "Web services"),
@@ -585,7 +627,7 @@ def _render_acknowledged(acked: list[HealthCheck]) -> str:
         icon, _ = STATUS_META.get(check.status, ("•", check.status))
         note = f' <span class="acknote">— {html.escape(check.ack_note)}</span>' if check.ack_note else ""
         items.append(
-            f"<li>🔕 {icon} <b>{html.escape(check.name)}</b> (currently {check.status}): "
+            f"<li>{_MUTE_MARK}{_mark(check.status)} <b>{html.escape(check.name)}</b> (currently {check.status}): "
             f"{html.escape(check.summary)}{note}</li>"
         )
     return (
@@ -601,7 +643,7 @@ def _render_check(check: HealthCheck) -> str:
     icon, _ = STATUS_META.get(check.status, ("•", check.status))
     return (
         f'<div class="check {_STATUS_CLASS.get(check.status, "unk")}">'
-        f'<div class="name">{icon} {html.escape(check.name)}</div>'
+        f'<div class="name">{_mark(check.status)} {html.escape(check.name)}</div>'
         f'<div class="summary">{html.escape(check.summary)}</div>'
         f'<div class="action">Safest next step: {html.escape(check.recommended_action)}</div>'
         f"<details><summary>Evidence</summary><pre>{evidence}</pre></details>"
@@ -621,19 +663,19 @@ def _render_changes(diff: ScanDiff) -> str:
     items: list[str] = []
     for change in diff.regressions:
         items.append(
-            f"<li>📉 <b>{html.escape(change['name'])}</b>: {change['previous_status']} → "
+            f"<li>{_mark(change['current_status'], '▼')} <b>{html.escape(change['name'])}</b>: {change['previous_status']} → "
             f"<b>{change['current_status']}</b> — {html.escape(change['summary'])}</li>"
         )
     for change in diff.improvements:
         items.append(
-            f"<li>📈 <b>{html.escape(change['name'])}</b>: {change['previous_status']} → "
+            f"<li>{_mark('ok', '▲')} <b>{html.escape(change['name'])}</b>: {change['previous_status']} → "
             f"<b>{change['current_status']}</b></li>"
         )
     for check in diff.new_checks:
         icon, _ = STATUS_META.get(check["status"], ("•", ""))
-        items.append(f"<li>🆕 {icon} <b>{html.escape(check['name'])}</b>: new check, currently {check['status']}</li>")
+        items.append(f"<li>{_mark(check['status'], '+')} <b>{html.escape(check['name'])}</b>: new check, currently {check['status']}</li>")
     for check in diff.removed_checks:
-        items.append(f"<li>➖ <b>{html.escape(check['name'])}</b>: no longer checked</li>")
+        items.append(f"<li>{_MUTE_MARK} <b>{html.escape(check['name'])}</b>: no longer checked</li>")
     unchanged = (
         f"<p>{diff.unchanged_count} other checks unchanged (vs scan #{diff.previous_scan_id}).</p>"
         if diff.unchanged_count
@@ -699,12 +741,12 @@ def _render_groups(checks: list[HealthCheck]) -> str:
         body = "".join(_render_check(check) for check in problems)
         if healthy:
             items = "".join(
-                f'<li title="{html.escape(c.summary)}">✅ {html.escape(c.name)}</li>' for c in healthy
+                f'<li title="{html.escape(c.summary)}">{_mark("ok")} {html.escape(c.name)}</li>' for c in healthy
             )
             body += f'<ul class="oklist">{items}</ul>'
         sections.append(
             f'<details class="group {_STATUS_CLASS.get(worst, "unk")}" open>'
-            f'<summary>{icon} {html.escape(name)}'
+            f'<summary>{_mark(worst)} {html.escape(name)}'
             f'<span class="gcount">{summary_counts}</span></summary>'
             f'<div class="gbody">{body}</div></details>'
         )
@@ -725,7 +767,7 @@ def _render_groups(checks: list[HealthCheck]) -> str:
                 for c in sorted(members, key=lambda c: c.name.lower())
             )
             tiles.append(
-                f'<details class="tile okc" data-tile="{html.escape(name)}"><summary>✅ {html.escape(name)}'
+                f'<details class="tile okc" data-tile="{html.escape(name)}"><summary>{_mark("ok")} {html.escape(name)}'
                 f'<span class="tcount">({len(members)})</span></summary>'
                 f'<ul>{items}</ul></details>'
             )
@@ -751,7 +793,7 @@ def _history_row(scan: tuple[int, str, dict[str, Any]], current_id: int | None) 
     current = ' class="current"' if scan_id == current_id else ""
     return (
         f"<tr{current}><td><a href=\"/scan/{scan_id}\">#{scan_id}</a></td>"
-        f"<td>{_fmt_time(created_at)}</td><td>{icon} {label}</td>"
+        f"<td>{_fmt_time(created_at)}</td><td>{_mark(overall)} {label}</td>"
         f"<td>{counts['critical']} / {counts['warning']} / {counts['unknown']} / {counts['ok']}</td></tr>"
     )
 
@@ -778,7 +820,7 @@ def _repairs_link(repairs_pending: int | None) -> str:
     if repairs_pending is None:
         return ""
     badge = f'<span class="rbadge">{repairs_pending}</span>' if repairs_pending else ""
-    return f'<a class="rail-link" href="/repairs" title="Repairs">🔧 Repairs{badge}</a>'
+    return f'<a class="rail-link" href="/repairs" title="Repairs">⚒&#xFE0E; Repairs{badge}</a>'
 
 
 # The wall has a voice: the overall status as the watch would call it.
@@ -805,10 +847,10 @@ def _rail(brand: dict[str, str], *, active: str = "/", sigil: str = "",
         return f'<a class="{cls}" href="{href}">{label}</a>'
 
     nav = (
-        link("/", "🗼 The Watch")
+        link("/", "⌖ The Watch")
         + _repairs_link(repairs_pending)
-        + link("/settings", "⚙ Settings")
-        + '<button class="rail-link theme-toggle" onclick="toggleTheme()" title="Toggle light/dark theme">🌓 Theme</button>'
+        + link("/settings", "⚙&#xFE0E; Settings")
+        + '<button class="rail-link theme-toggle" onclick="toggleTheme()" title="Toggle light/dark theme">◐ Theme</button>'
     )
     return (
         f'<aside class="rail">{mark}{sigil}{ranks}'
@@ -837,8 +879,7 @@ def render_scan_page(
 
     sigil = (
         f'<div class="sigil {status_class}" title="{label}">'
-        '<span class="sigil-ring"></span><span class="sigil-icon">'
-        f"{icon}</span></div>"
+        '<span class="sigil-ring"></span><span class="sigil-gem"></span></div>'
     )
     ranks = "".join(
         f'<div class="rank {_STATUS_CLASS[s]}"><b>{counts[s]}</b>'
@@ -847,7 +888,7 @@ def render_scan_page(
     )
     acked_count = sum(1 for c in checks if c.acknowledged)
     if acked_count:
-        ranks += f'<div class="rank"><b>{acked_count}</b><span class="rank-label">🔕 Acknowledged</span></div>'
+        ranks += f'<div class="rank"><b>{acked_count}</b><span class="rank-label">⊘ Acknowledged</span></div>'
     ranks = f'<div class="ranks">{ranks}</div>'
 
     flavor = _FLAVOR.get(overall, label)
@@ -855,7 +896,7 @@ def render_scan_page(
     banner = (
         f'<header class="banner {status_class}">'
         f'<div class="banner-title">{flavor}</div>'
-        f'<div class="banner-sub">{icon} {label.upper()} · {len(checks)} checks · '
+        f'<div class="banner-sub">{_mark(overall)} {label.upper()} · {len(checks)} checks · '
         f"Scan #{scan_id} · {_fmt_time(created_at)}{refresh_note}</div>"
         "</header>"
     )
@@ -991,7 +1032,7 @@ def render_settings_page(
 <main class="field">
 <header class="banner okc">
 <div class="banner-title">The Armory</div>
-<div class="banner-sub">⚙ SETTINGS · collectors and thresholds, saved straight into config.yaml</div>
+<div class="banner-sub">⚙&#xFE0E; SETTINGS · collectors and thresholds, saved straight into config.yaml</div>
 </header>
 {banner}
 {body}
@@ -1087,7 +1128,7 @@ def render_repairs_page(
 <main class="field">
 <header class="banner okc">
 <div class="banner-title">The Forge</div>
-<div class="banner-sub">🔧 REPAIRS · approve or deny proposals — execution stays with the CLI and MCP</div>
+<div class="banner-sub">⚒&#xFE0E; REPAIRS · approve or deny proposals — execution stays with the CLI and MCP</div>
 </header>
 {banner}
 {body}
