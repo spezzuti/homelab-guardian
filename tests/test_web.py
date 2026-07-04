@@ -40,12 +40,14 @@ def test_overall_of():
 def test_page_contains_status_briefing_and_history():
     scan = _scan(7, _check("svc", "critical", "it broke"), narrative="One thing is broken.\n\nCheck the logs.")
     diff = ScanDiff(previous_scan_id=6, previous_created_at="t")
-    page = render_scan_page(scan, diff, history=[scan], refresh_seconds=60)
+    older = _scan(6, _check("svc", "ok"))
+    page = render_scan_page(scan, diff, history=[scan, older], refresh_seconds=60)
     assert "CRITICAL" in page
     assert "Scan #7" in page
     assert "One thing is broken." in page
     assert "Scan history" in page
-    assert 'href="/scan/7"' in page
+    assert 'href="/scan/6"' in page  # older scans link; the current one is highlighted
+    assert ">#7</span>" in page
     assert 'http-equiv="refresh"' in page
 
 
@@ -71,72 +73,66 @@ def test_empty_page_mentions_first_scan():
     assert "No scans yet" in page
 
 
-def test_history_collapses_after_visible_rows():
+def test_history_strip_links_every_scan():
     scans = [_scan(i, _check("a")) for i in range(20, 0, -1)]
     page = render_scan_page(scans[0], ScanDiff(), history=scans, refresh_seconds=0)
-    assert "Show 15 older scans" in page
-    assert 'href="/scan/20"' in page
+    assert "Scan history" in page
+    assert 'href="/scan/19"' in page
     assert 'href="/scan/1"' in page
+    # the current scan is highlighted, not linked
+    assert 'href="/scan/20"' not in page and ">#20</span>" in page
 
 
-def test_healthy_groups_render_as_collapsible_tiles():
-    # All-ok groups render as collapsible tiles in the multi-column grid —
-    # dense, and each can be rolled up.
+def test_groups_render_as_panels_with_tallies():
     checks = [
         HealthCheck("http_a", "Web A", "ok", "answers 200", group="Core services"),
         HealthCheck("tls_a", "Web A cert", "ok", "valid 80 days", group="Core services"),
     ]
     page = render_scan_page(_scan(1, *checks), ScanDiff(), history=[], refresh_seconds=0)
-    assert "tilegrid" in page
-    # collapsed by default, with a stable key for client-side state persistence
-    assert '<details class="tile okc" data-tile="Core services">' in page
-    assert "guardian-tile:" in page  # persistence script present
-    assert 'title="answers 200"' in page
+    assert 'data-group="Core services"' in page
+    assert "2/2 OK" in page
+    assert "answers 200" in page
 
 
-def test_problem_group_card_renders_before_healthy_tiles():
-    # A group with a problem becomes a full-width open card and sorts above the
-    # healthy tile grid.
+def test_problem_group_sorts_before_healthy_groups():
     checks = [
         HealthCheck("disk_root", "Root disk", "ok", "26% full", group="Storage"),
         HealthCheck("firewall_host", "Host firewall", "critical", "no firewall", group="Security"),
     ]
     page = render_scan_page(_scan(1, *checks), ScanDiff(), history=[], refresh_seconds=0)
-    assert '<details class="group crit" open>' in page
-    # healthy Storage group is now a tile in the grid, below the problem card
-    assert "Storage" in page
-    assert page.index('class="group crit"') < page.index('<div class="tilegrid">')
+    assert page.index('data-group="Security"') < page.index('data-group="Storage"')
+    assert ">CRIT<" in page  # the failing check carries a CRIT chip
+    assert "0/1 OK" in page and "1/1 OK" in page
 
 
 def test_group_worst_of_children_uses_explicit_group_over_id():
-    # One warning child makes the whole group a warning, and an explicit group
-    # overrides the id-derived fallback.
     checks = [
         HealthCheck("http_a", "Web A", "ok", "ok", group="Core services"),
         HealthCheck("http_b", "Web B", "warning", "degraded", group="Core services"),
     ]
     page = render_scan_page(_scan(1, *checks), ScanDiff(), history=[], refresh_seconds=0)
-    assert '<details class="group warn" open>' in page
-    # the single heading rolls both up; the id-fallback "Web services" is unused
-    assert "Web services" not in page
+    assert 'data-group="Core services"' in page
+    assert "1/2 OK" in page
+    # the id-fallback "Web services" is unused when an explicit group exists
+    assert 'data-group="Web services"' not in page
 
 
 def test_group_falls_back_to_category_for_ungrouped_checks():
     checks = [HealthCheck("disk_root", "Root disk", "ok", "26% full")]
     page = render_scan_page(_scan(1, *checks), ScanDiff(), history=[], refresh_seconds=0)
-    assert "Disks" in page
-    assert 'title="26% full"' in page
+    assert 'data-group="Storage"' in page
+    assert "26% full" in page
 
 
-def test_rail_portrait_only_when_brand_assets_present():
+def test_hero_uses_brand_art_with_text_fallback():
     scan = _scan(1, _check("a"))
     page = render_scan_page(scan, ScanDiff(), history=[], refresh_seconds=0)
-    assert 'class="rail-portrait' not in page
-    assert "rail-logo-text" in page  # text fallback when no logotype art
-    assert 'class="sigil' in page  # the sigil stands alone without art
+    assert 'class="hero-art"' not in page
+    assert "hero-logo-text" in page  # text nameplate when no logotype art
+    assert 'class="ochip"' in page  # the status chip is always present
     branded = render_scan_page(scan, ScanDiff(), history=[], refresh_seconds=0,
-                               brand={"hero": "/brand/hero.png", "logotype": "/brand/logotype.png"})
-    assert '<div class="rail-portrait has-sigil"><img src="/brand/hero.png"' in branded
-    assert 'class="rail-logo"' in branded and "/brand/logotype.png" in branded
-    # the war room shell is present regardless of art
-    assert 'class="shell"' in branded and 'class="sigil' in branded
+                               brand={"hero": "/brand/hero.webp",
+                                      "logotype-cut": "/brand/logotype-cut.png"})
+    assert '<img class="hero-art" src="/brand/hero.webp"' in branded
+    assert '<img class="hero-logo" src="/brand/logotype-cut.png"' in branded
+    assert 'class="shell-card"' in branded and 'class="tabs"' in branded
