@@ -128,14 +128,15 @@ def test_group_falls_back_to_category_for_ungrouped_checks():
     assert 'title="26% full"' in page
 
 
-def test_rail_art_only_when_brand_assets_present():
+def test_rail_portrait_only_when_brand_assets_present():
     scan = _scan(1, _check("a"))
     page = render_scan_page(scan, ScanDiff(), history=[], refresh_seconds=0)
-    assert 'class="rail-art"' not in page
+    assert 'class="rail-portrait' not in page
     assert "rail-logo-text" in page  # text fallback when no logotype art
+    assert 'class="sigil' in page  # the sigil stands alone without art
     branded = render_scan_page(scan, ScanDiff(), history=[], refresh_seconds=0,
                                brand={"hero": "/brand/hero.png", "logotype": "/brand/logotype.png"})
-    assert '<div class="rail-art"><img src="/brand/hero.png"' in branded
+    assert '<div class="rail-portrait has-sigil"><img src="/brand/hero.png"' in branded
     assert 'class="rail-logo"' in branded and "/brand/logotype.png" in branded
     # the war room shell is present regardless of art
     assert 'class="shell"' in branded and 'class="sigil' in branded
