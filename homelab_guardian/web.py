@@ -347,6 +347,12 @@ main { max-width: 1280px; margin: 0 auto; padding: 28px 20px 64px; }
 .audit-row .by { flex: 1; color: var(--mut2); }
 .audit-row .res { font: 12px var(--mono); }
 
+.muted-panel > summary { cursor: pointer; list-style: none; }
+.muted-panel > summary::-webkit-details-marker { display: none; }
+.muted-panel > summary .ptitle { margin: 0; display: inline-flex; align-items: baseline; gap: 8px; }
+.muted-panel > summary::after { content: "▸"; color: var(--dim); margin-left: 8px; }
+.muted-panel[open] > summary::after { content: "▾"; }
+.muted-panel[open] > summary .ptitle { margin-bottom: 12px; }
 .banner-flash { border-radius: 10px; padding: 10px 14px; background: var(--panel); border: 1px solid var(--bd); }
 .banner-flash.ok { border-left: 4px solid var(--ok); }
 .banner-flash.err { border-left: 4px solid var(--crit); color: var(--crit-t); }
@@ -743,8 +749,10 @@ def _render_muted(checks: list[HealthCheck]) -> str:
             f'ACK · {ink["chip"]}</div></div>'
             f'<div class="summary">{html.escape(check.summary)} {note}</div></div></div>'
         )
-    return (f'<div class="panel"><h2 class="ptitle">Muted outages — acknowledged, still down</h2>'
-            f'{"".join(rows)}</div>')
+    return (f'<details class="panel muted-panel" data-group="__muted">'
+            f'<summary><h2 class="ptitle">Muted outages — acknowledged, still down '
+            f'<span class="gtally" style="color:var(--unk-t)">({len(muted)})</span></h2></summary>'
+            f'{"".join(rows)}</details>')
 
 
 def _render_briefing(narrative: str) -> str:
@@ -849,8 +857,8 @@ def render_scan_page(
         _render_network_strip(checks),
         f'<div class="duo">{_render_changes(diff)}{_render_counts(counts, acked, _count_series(history))}</div>',
         _render_briefing(narrative) if narrative else "",
-        _render_muted(checks),
         _render_groups(checks),
+        _render_muted(checks),
         _render_history(history, scan_id),
     ])
     label = STATUS_META.get(overall, ("", overall))[1]
