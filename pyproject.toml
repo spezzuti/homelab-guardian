@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "homelab-guardian"
-version = "0.3.5"
+version = "0.4.0"
 description = "Local-first homelab health monitoring with optional AI-agent integration and approval-gated repair"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -46,7 +46,7 @@ guardian = "homelab_guardian.main:main"
 include = ["homelab_guardian*"]
 
 [tool.setuptools.package-data]
-homelab_guardian = ["assets/*"]
+homelab_guardian = ["assets/*", "assets/fonts/*"]
 
 [tool.bandit]
 # Skips are checks that flag this project's deliberate design, not defects:
