@@ -120,7 +120,7 @@ PAGE_STYLE = _FONT_FACES + """
   --inner: #141a28; --code: #10141c;
   --bd: #2b3547; --bd-in: #262f42; --row: #232b3a;
   --t1: #e2e7f0; --t2: #d6dce8; --t3: #c7cfdd; --mut: #8f9db3; --mut2: #7d8aa0;
-  --dim: #5d6a80; --dim2: #6b788f;
+  --dim: #6b7a92; --dim2: #74829a;
   --acc: #63a4d8; --link: #8ec3ea;
   --ok: #4cb572; --ok-t: #7fd6a0; --crit: #d9584a; --crit-t: #f0897d;
   --warn: #d9a13b; --warn-t: #e8bf6e; --unk: #7d8aa0; --unk-t: #a9b6c9;
@@ -129,7 +129,11 @@ PAGE_STYLE = _FONT_FACES + """
   --mono: 'IBM Plex Mono', ui-monospace, Consolas, monospace;
 }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--t3); font: 14px/1.5 var(--sans); }
+body {
+  margin: 0; background: var(--bg); color: var(--t3); font: 14px/1.5 var(--sans);
+  font-variant-numeric: tabular-nums; touch-action: manipulation;
+  overscroll-behavior-y: none;
+}
 a { color: var(--link); text-decoration: none; }
 a:hover { text-decoration: underline; }
 ::selection { background: rgba(99, 164, 216, 0.3); }
@@ -138,7 +142,11 @@ main { max-width: 1280px; margin: 0 auto; padding: 28px 20px 64px; }
 @keyframes hgGlow { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
 
 /* --- the stronghold shell -------------------------------------------- */
-.shell-card { background: var(--shell); border: 1px solid var(--bd); border-radius: 14px; overflow: hidden; }
+.shell-card {
+  background: var(--shell); border: 1px solid rgba(82, 100, 130, 0.32); border-radius: 14px; overflow: hidden;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 6px 16px -8px rgba(0, 0, 0, 0.5), 0 28px 60px -36px rgba(0, 0, 0, 0.65);
+}
 .hero { position: relative; height: 290px; background: var(--hero); }
 .hero-art {
   position: absolute; right: 0; top: 0; height: 100%; width: 560px;
@@ -167,7 +175,9 @@ main { max-width: 1280px; margin: 0 auto; padding: 28px 20px 64px; }
   display: flex; align-items: center; gap: 7px; margin-top: 12px;
   color: var(--dim); font: 12px var(--mono);
 }
-.pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); animation: hgPulse 2.4s infinite; }
+.pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); animation: hgPulse 2.4s infinite; flex: none; }
+.pulse.stale { background: var(--warn); }
+.pulse.dead { background: var(--crit); animation-duration: 1.2s; }
 
 /* folder tabs riding the hero's bottom edge */
 .tabs { position: absolute; left: 32px; bottom: 0; display: flex; gap: 4px; }
@@ -184,10 +194,14 @@ main { max-width: 1280px; margin: 0 auto; padding: 28px 20px 64px; }
   background: var(--crit); color: #fff; font: 600 10px var(--mono);
   padding: 1px 6px; border-radius: 8px;
 }
-.deck { padding: 28px 32px; display: flex; flex-direction: column; gap: 22px; border-top: 1px solid var(--bd); }
+.deck { padding: 22px 26px 26px; display: flex; flex-direction: column; gap: 16px; border-top: 1px solid var(--bd); }
 
 /* --- panels ------------------------------------------------------------ */
-.panel { background: var(--panel); border: 1px solid var(--bd); border-radius: 12px; padding: 18px 24px; }
+.panel {
+  background: var(--panel); border: 1px solid rgba(78, 96, 126, 0.3); border-radius: 12px;
+  padding: 14px 20px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035), 0 3px 10px -6px rgba(0, 0, 0, 0.45);
+}
 .ptitle {
   font: 500 13px var(--oswald); letter-spacing: 2px; color: var(--mut2);
   text-transform: uppercase; margin: 0 0 14px;
@@ -206,6 +220,8 @@ main { max-width: 1280px; margin: 0 auto; padding: 28px 20px 64px; }
 .net-box {
   width: 44px; height: 44px; border-radius: 10px; border: 2px solid var(--nb, var(--ok));
   background: var(--shell); margin: 0 auto;
+  display: flex; align-items: center; justify-content: center;
+  font: 700 15px var(--mono);
 }
 .host-grid { display: grid; grid-template-columns: repeat(3, minmax(150px, 1fr)); gap: 14px; flex: 1; min-width: 0; }
 .host-card { background: var(--inner); border: 1px solid var(--bd-in); border-radius: 12px; padding: 12px 16px; min-width: 0; }
@@ -223,6 +239,7 @@ main { max-width: 1280px; margin: 0 auto; padding: 28px 20px 64px; }
 .count { border-radius: 12px; padding: 12px 16px; display: flex; align-items: center; gap: 12px; background: var(--cbg, var(--inner)); }
 .count b { font: 500 26px var(--oswald); color: var(--ctx, var(--t2)); }
 .count span { font: 10.5px var(--mono); letter-spacing: 1px; color: var(--ctx, var(--mut)); opacity: 0.8; }
+.count .spark { margin-left: auto; color: var(--ctx, var(--mut)); opacity: 0.7; flex: none; }
 .changes { display: flex; flex-direction: column; gap: 9px; }
 .chg { display: flex; align-items: baseline; gap: 10px; font-size: 13.5px; }
 .chg .arrow { font-family: var(--mono); width: 12px; flex: none; }
@@ -438,17 +455,35 @@ def _fmt_time(created_at: str) -> str:
         return str(created_at)
 
 
-def _ago(created_at: str) -> str:
+def _age_seconds(created_at: str) -> int | None:
     try:
         stamp = datetime.fromisoformat(created_at)
-        seconds = max(0, int((datetime.now(stamp.tzinfo) - stamp).total_seconds()))
+        return max(0, int((datetime.now(stamp.tzinfo) - stamp).total_seconds()))
     except (TypeError, ValueError):
+        return None
+
+
+def _ago(created_at: str) -> str:
+    seconds = _age_seconds(created_at)
+    if seconds is None:
         return "?"
     if seconds < 90:
-        return f"{seconds}s"
+        return f"{seconds} s"
     if seconds < 5400:
-        return f"{seconds // 60} min"
-    return f"{seconds // 3600} h"
+        return f"{seconds // 60} min"
+    return f"{seconds // 3600} h"
+
+
+def _pulse_state(created_at: str) -> str:
+    """The heartbeat's own status: green while scans are fresh, amber past
+    ~40 min (a 30-min interval missed once), red past ~90 min — the scanner
+    itself being down is a status, independent of what the checks say."""
+    seconds = _age_seconds(created_at)
+    if seconds is None or seconds > 5400:
+        return "dead"
+    if seconds > 2400:
+        return "stale"
+    return "ok"
 
 
 def _repairs_link(repairs_pending: int | None) -> str:  # kept for callers
@@ -473,7 +508,7 @@ def _tabs(active: str, repairs_pending: int | None) -> str:
 
 
 def _hero(brand: dict[str, str], *, overall: str, msg: str, meta: str,
-          active: str, repairs_pending: int | None) -> str:
+          active: str, repairs_pending: int | None, pulse: str = "ok") -> str:
     ink = _INK.get(overall, _INK["unknown"])
     art = f'<img class="hero-art" src="{brand["hero"]}" alt="">' if "hero" in brand else ""
     if "logotype-cut" in brand:
@@ -490,15 +525,61 @@ def _hero(brand: dict[str, str], *, overall: str, msg: str, meta: str,
         f'<div class="hero-body">{logo}'
         f'<div class="hero-row"><span class="ochip" style="--oc:{ink["tx"]};--ocbg:{ink["bg"]}">{label}</span>'
         f'<span class="omsg">{html.escape(msg)}</span></div>'
-        f'<div class="hero-meta"><span class="pulse"></span>{meta}</div>'
+        f'<div class="hero-meta"><span class="pulse{" " + pulse if pulse != "ok" else ""}" '
+        f'title="scan freshness: {pulse}"></span>{meta}</div>'
         f"</div>{_tabs(active, repairs_pending)}</div>"
     )
 
 
-def _shell(head_title: str, hero_html: str, deck_html: str, *, refresh: str = "") -> str:
+# Live refresh: fetch the page and swap the shell in place — no reload flash,
+# scroll preserved, open <details> re-opened, paused while the tab is hidden.
+# <noscript> keeps the classic meta-refresh for JS-less clients.
+_REFRESH_SCRIPT = """<script>
+(function () {
+  var every = %d * 1000;
+  if (!every) return;
+  var timer = null;
+  function schedule(ms) { clearTimeout(timer); timer = setTimeout(tick, ms || every); }
+  function keysOf(root) {
+    var keys = [];
+    root.querySelectorAll("details[open]").forEach(function (d, i) {
+      keys.push(d.getAttribute("data-group") || "i" + i);
+    });
+    return keys;
+  }
+  function tick() {
+    if (document.hidden) { schedule(5000); return; }
+    fetch(window.location.href, { cache: "no-store" }).then(function (r) {
+      if (!r.ok) { throw new Error(r.status); }
+      return r.text();
+    }).then(function (html) {
+      var doc = new DOMParser().parseFromString(html, "text/html");
+      var fresh = doc.querySelector(".shell-card");
+      var cur = document.querySelector(".shell-card");
+      if (fresh && cur) {
+        var open = keysOf(cur);
+        fresh.querySelectorAll("details").forEach(function (d, i) {
+          if (open.indexOf(d.getAttribute("data-group") || "i" + i) !== -1) d.setAttribute("open", "");
+        });
+        cur.replaceWith(fresh);
+      }
+      schedule();
+    }).catch(function () { schedule(); });
+  }
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) schedule(500); });
+  schedule();
+})();
+</script>"""
+
+
+def _shell(head_title: str, hero_html: str, deck_html: str, *, refresh_seconds: int = 0) -> str:
+    refresh = (f'<noscript><meta http-equiv="refresh" content="{int(refresh_seconds)}"></noscript>'
+               if refresh_seconds else "")
+    script = (_REFRESH_SCRIPT % int(refresh_seconds)) if refresh_seconds else ""
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">{refresh}
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0b0e14">{refresh}
 <title>{head_title}</title>{favicon_link()}<style>{PAGE_STYLE}</style></head>
 <body><main>
 <div class="shell-card">
@@ -508,7 +589,7 @@ def _shell(head_title: str, hero_html: str, deck_html: str, *, refresh: str = ""
 </div>
 </div>
 <footer>Homelab Guardian — deterministic watch · approval-gated hands · never raw shell</footer>
-</main></body></html>"""
+</main>{script}</body></html>"""
 
 
 # --- overview panels -------------------------------------------------------
@@ -537,9 +618,11 @@ def _render_network_strip(checks: list[HealthCheck]) -> str:
         worst = overall_of(matched)
         ink = _INK.get(worst, _INK["unknown"])
         summary = "; ".join(c.summary for c in matched[:2])
+        # status is never color-alone: the box carries a glyph too
+        glyph = {"ok": "✓", "warning": "!", "critical": "✕", "unknown": "?"}.get(worst, "?")
         chain_nodes.append(
             f'<div class="net-node" title="{html.escape(summary)}">'
-            f'<div class="net-box" style="--nb:{ink["solid"]}"></div>'
+            f'<div class="net-box" style="--nb:{ink["solid"]};color:{ink["tx"]}">{glyph}</div>'
             f'<div class="net-name">{label}</div></div>'
         )
     # Hosts: the Infrastructure group's remaining targets as sentinel cards.
@@ -592,17 +675,63 @@ def _render_changes(diff: ScanDiff) -> str:
     return f'<div class="panel"><h2 class="ptitle">What changed</h2><div class="changes">{"".join(rows)}</div></div>'
 
 
-def _render_counts(counts: dict[str, int], acked: int) -> str:
+def _sparkline(values: list[int]) -> str:
+    """A tiny inline trend, oldest → newest, colored by the tile's own ink."""
+    if len(values) < 2:
+        return ""
+    peak = max(max(values), 1)
+    step = 58 / (len(values) - 1)
+    points = " ".join(f"{3 + i * step:.1f},{19 - (v / peak) * 14:.1f}" for i, v in enumerate(values))
+    return (
+        '<svg class="spark" viewBox="0 0 64 22" width="64" height="22" aria-hidden="true">'
+        f'<polyline points="{points}" fill="none" stroke="currentColor" '
+        'stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/></svg>'
+    )
+
+
+def _count_series(history: list[tuple[int, str, dict[str, Any]]]) -> dict[str, list[int]]:
+    """Per-status counts across recent scans, oldest first."""
+    series: dict[str, list[int]] = {status: [] for status in STATUS_ORDER}
+    for _, _, snapshot in reversed(history[:20]):
+        counts = _counts(checks_from_snapshot(snapshot))
+        for status in STATUS_ORDER:
+            series[status].append(counts.get(status, 0))
+    return series
+
+
+def _render_counts(counts: dict[str, int], acked: int,
+                   series: dict[str, list[int]] | None = None) -> str:
     tiles = []
     for status in STATUS_ORDER:
+        spark = _sparkline((series or {}).get(status, []))
         ink = _INK[status]
         tiles.append(
             f'<div class="count" style="--cbg:{ink["bg"]};--ctx:{ink["tx"]}">'
-            f'<b>{counts.get(status, 0)}</b><span>{STATUS_META[status][1].upper()}</span></div>'
+            f'<b>{counts.get(status, 0)}</b><span>{STATUS_META[status][1].upper()}</span>{spark}</div>'
         )
     if acked:
         tiles.append(f'<div class="count"><b>{acked}</b><span>ACKNOWLEDGED</span></div>')
     return f'<div class="counts">{"".join(tiles)}</div>'
+
+
+def _render_muted(checks: list[HealthCheck]) -> str:
+    """Acknowledged problems stay visible — deliberately quiet, never hidden."""
+    muted = [c for c in checks if c.acknowledged and c.status != "ok"]
+    if not muted:
+        return ""
+    rows = []
+    for check in sorted(muted, key=lambda c: (_SEVERITY.get(c.status, 3), c.name.lower())):
+        ink = _INK.get(check.status, _INK["unknown"])
+        note = f'<span class="acknote">{html.escape(check.ack_note)}</span>' if check.ack_note else ""
+        rows.append(
+            f'<div class="grow"><div class="gdot" style="--gd:{ink["solid"]};opacity:.45"></div>'
+            f'<div class="body"><div class="top"><div class="name">{html.escape(check.name)}</div>'
+            f'<div class="chip" style="--chbg:rgba(125,138,160,.14);--chtx:var(--unk-t)">'
+            f'ACK · {ink["chip"]}</div></div>'
+            f'<div class="summary">{html.escape(check.summary)} {note}</div></div></div>'
+        )
+    return (f'<div class="panel"><h2 class="ptitle">Muted outages — acknowledged, still down</h2>'
+            f'{"".join(rows)}</div>')
 
 
 def _render_briefing(narrative: str) -> str:
@@ -697,19 +826,20 @@ def render_scan_page(
     brand = brand or {}
 
     meta = (f"last scan {_ago(created_at)} ago · Scan #{scan_id} · {len(checks)} checks · read-only"
-            + (f" · refreshes every {refresh_seconds}s" if refresh_seconds else ""))
+            + (f" · live-updates every {refresh_seconds} s" if refresh_seconds else ""))
     hero = _hero(brand, overall=overall, msg=_HERO_MSG.get(overall, ""), meta=meta,
-                 active="/", repairs_pending=repairs_pending)
+                 active="/", repairs_pending=repairs_pending,
+                 pulse=_pulse_state(created_at) if refresh_seconds else "ok")
     deck = "".join([
         _render_network_strip(checks),
-        f'<div class="duo">{_render_changes(diff)}{_render_counts(counts, acked)}</div>',
+        f'<div class="duo">{_render_changes(diff)}{_render_counts(counts, acked, _count_series(history))}</div>',
+        _render_muted(checks),
         _render_briefing(narrative) if narrative else "",
         _render_groups(checks),
         _render_history(history, scan_id),
     ])
-    refresh = f'<meta http-equiv="refresh" content="{int(refresh_seconds)}">' if refresh_seconds else ""
     label = STATUS_META.get(overall, ("", overall))[1]
-    return _shell(f"{app_name} — {label}", hero, deck, refresh=refresh)
+    return _shell(f"{app_name} — {label}", hero, deck, refresh_seconds=refresh_seconds)
 
 
 def render_empty_page() -> str:
@@ -808,7 +938,7 @@ def render_settings_page(
             f'<form method="post" action="/settings">'
             f'<input type="hidden" name="csrf" value="{html.escape(csrf_token)}">'
             f'<div style="display:flex;flex-direction:column;gap:22px">{collectors_panel}{thresholds_panel}'
-            f'<div class="savebar"><button class="btn-go" type="submit">Save</button>'
+            f'<div class="savebar"><button class="btn-go" type="submit">Save Settings</button>'
             f'<span class="notice">{who}{logout}</span></div></div></form>'
         )
     else:
@@ -888,8 +1018,8 @@ def _render_proposal(p: dict[str, Any], *, editable: bool, csrf_token: str) -> s
                 f'<form method="post" action="/repairs" style="display:flex;flex-direction:column;gap:10px">'
                 f'<input type="hidden" name="csrf" value="{html.escape(csrf_token)}">'
                 f'<input type="hidden" name="proposal_id" value="{p.get("id")}">'
-                '<button class="btn-go" name="decision" value="approve" type="submit">Approve</button>'
-                '<button class="btn-no" name="decision" value="deny" type="submit">Deny</button>'
+                '<button class="btn-go" name="decision" value="approve" type="submit">Approve Repair</button>'
+                '<button class="btn-no" name="decision" value="deny" type="submit">Deny Repair</button>'
                 '<div class="notice" style="text-align:center">Approval is human-only. The agent can propose — never authorize.</div>'
                 "</form>"
             )

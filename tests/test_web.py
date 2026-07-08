@@ -136,3 +136,24 @@ def test_hero_uses_brand_art_with_text_fallback():
     assert '<img class="hero-art" src="/brand/hero.webp"' in branded
     assert '<img class="hero-logo" src="/brand/logotype-cut.png"' in branded
     assert 'class="shell-card"' in branded and 'class="tabs"' in branded
+
+
+def test_live_refresh_ships_script_with_noscript_fallback():
+    scan = _scan(1, _check("a"))
+    live = render_scan_page(scan, ScanDiff(), history=[], refresh_seconds=60)
+    assert "<noscript><meta http-equiv=" in live  # JS-less clients still refresh
+    assert "replaceWith(fresh)" in live  # everyone else gets in-place swaps
+    static = render_scan_page(scan, ScanDiff(), history=[], refresh_seconds=0)
+    assert "http-equiv" not in static and "replaceWith" not in static
+
+
+def test_muted_outages_stay_visible_and_counts_carry_sparklines():
+    down = HealthCheck("tcp_x", "X host", "critical", "down", group="Infra")
+    down.acknowledged = True
+    down.ack_note = "known"
+    scan = _scan(3, down, _check("a"))
+    history = [scan, _scan(2, down, _check("a")), _scan(1, _check("a"))]
+    page = render_scan_page(scan, ScanDiff(), history=history, refresh_seconds=0)
+    assert "Muted outages" in page  # acked problems are quiet, never invisible
+    assert "ACK" in page and "known" in page
+    assert '<svg class="spark"' in page  # count tiles trend across history
