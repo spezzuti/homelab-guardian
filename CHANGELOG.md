@@ -2,7 +2,41 @@
 
 ## Unreleased
 
+## v0.4.0 — 2026-07-08
+
+The release where Guardian got its face.
+
 ### Added
+
+- **The Stronghold dashboard** — the web view is a designed product now,
+  implemented from the maintainer's own Claude Design project: a single
+  dark-theme shell with a hero banner (AI-generated guardian character art,
+  carved stone logotype, animated status glow), folder-tab navigation
+  (Overview / Repairs / Settings), a network topology strip that renders the
+  real modem/switch/Pi-hole chain plus infrastructure host cards, two-column
+  masonry group panels, an AI-briefing panel, and a compact scan-history
+  strip. Typography (Oswald / IBM Plex Sans / IBM Plex Mono) is vendored as
+  woff2 and served locally — the dashboard never calls a font CDN.
+- **Brand asset pipeline**: `homelab_guardian/assets/` ships the character
+  art, logotype, and a favicon cropped from the art, served from a fixed
+  allowlist at `/brand/` with caching; absent files degrade to a clean
+  text-only fallback. `assets/README.md` documents specs and regeneration
+  prompts.
+- **Live refresh**: the dashboard updates in place (fetch + shell swap,
+  scroll preserved, open panels stay open, paused in hidden tabs) instead of
+  a full-page meta refresh; JS-less clients keep the classic refresh via
+  `<noscript>`.
+- **Trend sparklines** on the status count tiles, drawn from the last 20
+  stored scans as dependency-free inline SVG.
+- **Muted outages panel**: acknowledged problems stay visible-but-quiet in a
+  collapsible panel below the group cards — never invisible.
+- **Scan-freshness heartbeat**: the hero pulse turns amber when the last scan
+  is ~40 minutes old and red past ~90 — the scanner being down is a status
+  of its own.
+- Repairs page shows blast radius / reversibility / exact argv / verify for
+  every proposal, with an audit log; Settings shows the security posture
+  (MCP writes, repairs, agent mode, auth) read-only — arming stays in
+  config.yaml, never on a network surface.
 
 - Split-horizon DNS validation: `dns_checks` entries take an optional
   `server:` (query that resolver directly — dependency-free A-record client,
