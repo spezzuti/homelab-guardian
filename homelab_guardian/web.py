@@ -236,17 +236,26 @@ main { max-width: 1280px; margin: 0 auto; padding: 28px 20px 64px; }
 /* counts + changed */
 .duo { display: grid; grid-template-columns: 1fr 340px; gap: 22px; align-items: start; }
 .counts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.count { border-radius: 12px; padding: 12px 16px; display: flex; align-items: center; gap: 12px; background: var(--cbg, var(--inner)); }
-.count b { font: 500 26px var(--oswald); color: var(--ctx, var(--t2)); }
-.count span { font: 10.5px var(--mono); letter-spacing: 1px; color: var(--ctx, var(--mut)); opacity: 0.8; }
-.count .spark { margin-left: auto; color: var(--ctx, var(--mut)); opacity: 0.7; flex: none; }
+.count {
+  border-radius: 12px; padding: 10px 14px; min-width: 0; overflow: hidden;
+  display: flex; flex-direction: column; gap: 3px; background: var(--cbg, var(--inner));
+}
+.count-top { display: flex; align-items: baseline; gap: 9px; min-width: 0; }
+.count b { font: 500 25px/1.05 var(--oswald); color: var(--ctx, var(--t2)); flex: none; }
+.count span {
+  font: 10.5px var(--mono); letter-spacing: 1px; color: var(--ctx, var(--mut)); opacity: 0.8;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.count .spark { display: block; color: var(--ctx, var(--mut)); opacity: 0.65; }
 .changes { display: flex; flex-direction: column; gap: 9px; }
 .chg { display: flex; align-items: baseline; gap: 10px; font-size: 13.5px; }
 .chg .arrow { font-family: var(--mono); width: 12px; flex: none; }
 .chg .meta { color: var(--dim); font-size: 11.5px; font-family: var(--mono); }
 
-/* group cards */
-.groups { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; align-items: start; }
+/* group cards: masonry columns so ragged heights pack without dead space */
+.groups { columns: 2; column-gap: 16px; }
+.groups .gcard { break-inside: avoid; margin-bottom: 16px; }
+@media (max-width: 1080px) { .groups { columns: 1; } }
 .gtally { font: 11px var(--mono); }
 .grow { display: flex; align-items: flex-start; gap: 12px; padding: 9px 0; border-top: 1px solid var(--row); }
 .gdot { width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; background: var(--gd, var(--ok)); }
@@ -707,10 +716,14 @@ def _render_counts(counts: dict[str, int], acked: int,
         ink = _INK[status]
         tiles.append(
             f'<div class="count" style="--cbg:{ink["bg"]};--ctx:{ink["tx"]}">'
-            f'<b>{counts.get(status, 0)}</b><span>{STATUS_META[status][1].upper()}</span>{spark}</div>'
+            f'<div class="count-top"><b>{counts.get(status, 0)}</b>'
+            f'<span>{STATUS_META[status][1].upper()}</span></div>{spark}</div>'
         )
     if acked:
-        tiles.append(f'<div class="count"><b>{acked}</b><span>ACKNOWLEDGED</span></div>')
+        tiles.append(
+            '<div class="count" style="--cbg:rgba(125,138,160,.12);--ctx:var(--unk-t)">'
+            f'<div class="count-top"><b>{acked}</b><span>ACKNOWLEDGED</span></div></div>'
+        )
     return f'<div class="counts">{"".join(tiles)}</div>'
 
 
@@ -769,10 +782,12 @@ def _render_groups(checks: list[HealthCheck]) -> str:
     for check in checks:
         grouped.setdefault(effective_group(check), []).append(check)
 
-    def group_key(item: tuple[str, list[HealthCheck]]) -> tuple[int, str]:
+    def group_key(item: tuple[str, list[HealthCheck]]) -> tuple[int, int, str]:
         name, members = item
         worst = min((_SEVERITY.get(c.status, 3) for c in members if not c.acknowledged), default=3)
-        return (worst, name.lower())
+        # severity first, then SIZE — big groups lead so the masonry columns
+        # pack tight instead of a small card hoarding top space over a void
+        return (worst, -len(members), name.lower())
 
     cards = []
     for name, members in sorted(grouped.items(), key=group_key):
@@ -833,8 +848,8 @@ def render_scan_page(
     deck = "".join([
         _render_network_strip(checks),
         f'<div class="duo">{_render_changes(diff)}{_render_counts(counts, acked, _count_series(history))}</div>',
-        _render_muted(checks),
         _render_briefing(narrative) if narrative else "",
+        _render_muted(checks),
         _render_groups(checks),
         _render_history(history, scan_id),
     ])
