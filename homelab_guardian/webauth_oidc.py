@@ -186,7 +186,18 @@ class OidcAuth(Authenticator):
         try:
             authorize = self._discover()["authorization_endpoint"]
         except Exception as exc:  # discovery/network failure
-            handler._send(f"OIDC discovery failed: {exc}", status=502, content_type="text/plain; charset=utf-8")
+            from homelab_guardian.web import render_auth_page  # lazy: avoids web↔auth cycle
+
+            handler._send(
+                render_auth_page(
+                    "Sign-in unavailable",
+                    "Guardian could not reach the identity provider "
+                    f"({html.escape(str(exc))}). Check that it is up and that "
+                    "<code>web.auth.issuer</code> in config.yaml points at it.",
+                    link_href="/auth/login", link_label="Try Again",
+                ),
+                status=502,
+            )
             return
         state = secrets_mod.token_urlsafe(24)
         nonce = secrets_mod.token_urlsafe(24)
@@ -223,7 +234,17 @@ class OidcAuth(Authenticator):
             pending = self._pending.pop(state, None)
         state_ok = bool(state and cookie_state and hmac.compare_digest(cookie_state, state))
         if not code or pending is None or not state_ok:
-            handler._send("Login failed or expired. <a href=\"/auth/login\">Try again</a>.", status=400)
+            from homelab_guardian.web import render_auth_page
+
+            handler._send(
+                render_auth_page(
+                    "Sign-in expired",
+                    "The sign-in attempt expired or did not match this browser — "
+                    "this happens when the login page sits open too long.",
+                    link_href="/auth/login", link_label="Sign In Again",
+                ),
+                status=400,
+            )
             return
         nonce, verifier, _ = pending
         try:
@@ -245,15 +266,31 @@ class OidcAuth(Authenticator):
             claims = decode_jwt_payload(id_token)
             validate_claims(claims, self.client_id, self.issuer, nonce)
         except Exception as exc:
+            from homelab_guardian.web import render_auth_page
+
             handler._send(
-                f"Login failed: {html.escape(str(exc))}. <a href=\"/auth/login\">Try again</a>.",
+                render_auth_page(
+                    "Sign-in failed",
+                    f"The identity provider rejected the sign-in: {html.escape(str(exc))}.",
+                    link_href="/auth/login", link_label="Try Again",
+                ),
                 status=400,
             )
             return
 
         groups = tuple(claims.get("groups", []) or [])
         if self.required_groups and not (self.required_groups & set(groups)):
-            handler._send("Your account is not in an allowed group.", status=403, content_type="text/plain; charset=utf-8")
+            from homelab_guardian.web import render_auth_page
+
+            handler._send(
+                render_auth_page(
+                    "Not allowed",
+                    "Your account is not in a group this dashboard allows. "
+                    "Add it to an allowed group in the identity provider, then sign in again.",
+                    link_href="/auth/login", link_label="Sign In Again",
+                ),
+                status=403,
+            )
             return
 
         identity = Identity(

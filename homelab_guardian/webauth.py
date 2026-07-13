@@ -60,10 +60,12 @@ class Authenticator:
         raise NotImplementedError
 
     def challenge(self, handler: Any) -> None:
+        from homelab_guardian.web import render_auth_page  # lazy: avoids web↔auth cycle
+
         handler._send(
-            "Authentication required.",
+            render_auth_page("Sign-in required",
+                             "This dashboard requires authentication."),
             status=401,
-            content_type="text/plain; charset=utf-8",
         )
 
 
@@ -112,10 +114,14 @@ class BasicAuth(Authenticator):
         return None
 
     def challenge(self, handler: Any) -> None:
+        from homelab_guardian.web import render_auth_page
+
         handler._send(
-            "Authentication required.",
+            render_auth_page("Sign-in required",
+                             "Enter the dashboard username and password when the "
+                             "browser asks. Credentials live in config.yaml under "
+                             "<code>web.auth</code>."),
             status=401,
-            content_type="text/plain; charset=utf-8",
             extra_headers=[("WWW-Authenticate", f'Basic realm="{self.realm}"')],
         )
 
@@ -176,10 +182,13 @@ class ForwardAuth(Authenticator):
         return Identity(user=user, email=handler.headers.get(self.email_header, "").strip(), groups=groups)
 
     def challenge(self, handler: Any) -> None:
+        from homelab_guardian.web import render_auth_page
+
         handler._send(
-            "Authentication required — reach this dashboard through your authenticating proxy.",
+            render_auth_page("Sign-in required",
+                             "Reach this dashboard through your authenticating "
+                             "proxy — direct requests carry no identity."),
             status=401,
-            content_type="text/plain; charset=utf-8",
         )
 
 

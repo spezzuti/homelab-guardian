@@ -124,6 +124,12 @@ PAGE_STYLE = _FONT_FACES + """
   --acc: #63a4d8; --link: #8ec3ea;
   --ok: #4cb572; --ok-t: #7fd6a0; --crit: #d9584a; --crit-t: #f0897d;
   --warn: #d9a13b; --warn-t: #e8bf6e; --unk: #7d8aa0; --unk-t: #a9b6c9;
+  --on-crit: #ffffff;
+  /* action green: deliberately its own token — a button is an intent, not a status */
+  --act: #2e7d4f; --on-act: #eaf6ee;
+  --bd-strong: #3a465c; --knob: #e8edf6;
+  /* one alpha overlay per interaction state, composites over any surface */
+  --hov: rgba(226, 231, 240, 0.07); --press: rgba(226, 231, 240, 0.12);
   --oswald: 'Oswald', system-ui, sans-serif;
   --sans: 'IBM Plex Sans', system-ui, sans-serif;
   --mono: 'IBM Plex Mono', ui-monospace, Consolas, monospace;
@@ -136,7 +142,7 @@ body {
 }
 a { color: var(--link); text-decoration: none; }
 a:hover { text-decoration: underline; }
-::selection { background: rgba(99, 164, 216, 0.3); }
+::selection { background: color-mix(in srgb, var(--acc) 30%, transparent); }
 main { max-width: 1280px; margin: 0 auto; padding: 28px 20px 64px; }
 @keyframes hgPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 @keyframes hgGlow { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
@@ -167,7 +173,7 @@ main { max-width: 1280px; margin: 0 auto; padding: 28px 20px 64px; }
 .hero-row { display: flex; align-items: center; gap: 14px; margin-top: 20px; flex-wrap: wrap; }
 .ochip {
   border: 1px solid var(--oc, var(--ok-t)); color: var(--oc, var(--ok-t));
-  background: var(--ocbg, rgba(76, 181, 114, 0.14));
+  background: var(--ocbg, color-mix(in srgb, var(--ok) 14%, transparent));
   font: 600 13px var(--mono); letter-spacing: 2px; padding: 7px 16px; border-radius: 6px;
 }
 .omsg { color: var(--mut); font-size: 13.5px; }
@@ -191,7 +197,7 @@ main { max-width: 1280px; margin: 0 auto; padding: 28px 20px 64px; }
 .tab:hover { color: var(--t2); text-decoration: none; }
 .tab.active { color: var(--t2); background: var(--shell); border-color: var(--bd); position: relative; z-index: 1; }
 .rbadge {
-  background: var(--crit); color: #fff; font: 600 10px var(--mono);
+  background: var(--crit); color: var(--on-crit); font: 600 10px var(--mono);
   padding: 1px 6px; border-radius: 8px;
 }
 .deck { padding: 22px 26px 26px; display: flex; flex-direction: column; gap: 16px; border-top: 1px solid var(--bd); }
@@ -213,7 +219,7 @@ main { max-width: 1280px; margin: 0 auto; padding: 28px 20px 64px; }
 .net { display: flex; align-items: flex-start; gap: 0; overflow-x: auto; padding-bottom: 4px; }
 .net-node { text-align: center; flex: none; }
 .net-wan {
-  width: 44px; height: 44px; border-radius: 50%; border: 2px solid #3a465c; background: var(--shell);
+  width: 44px; height: 44px; border-radius: 50%; border: 2px solid var(--bd-strong); background: var(--shell);
   margin: 0 auto; display: flex; align-items: center; justify-content: center;
   color: var(--mut2); font: 600 9px var(--mono);
 }
@@ -292,9 +298,9 @@ main { max-width: 1280px; margin: 0 auto; padding: 28px 20px 64px; }
 .switch .track { position: absolute; inset: 0; border-radius: 11px; background: var(--bd); transition: background 0.2s; }
 .switch .knob {
   position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%;
-  background: #e8edf6; transition: left 0.2s;
+  background: var(--knob); transition: left 0.2s;
 }
-.switch input:checked ~ .track { background: #2e7d4f; }
+.switch input:checked ~ .track { background: var(--act); }
 .switch input:checked ~ .knob { left: 20px; }
 .switch input:disabled ~ .track { opacity: 0.55; }
 .setrow input.num {
@@ -302,24 +308,29 @@ main { max-width: 1280px; margin: 0 auto; padding: 28px 20px 64px; }
   background: var(--code); color: var(--t2); font: 12.5px var(--mono); flex-shrink: 0;
 }
 .setrow input.num:focus { outline: 1px solid var(--acc); border-color: var(--acc); }
-.postpill { font: 10px var(--mono); letter-spacing: 1px; padding: 4px 10px; border-radius: 4px; flex: none; }
+.postpill { font: 10px var(--mono); letter-spacing: 1px; padding: 4px 10px; border-radius: 4px; flex: none; background: var(--chbg); color: var(--chtx); }
 .warncard {
-  background: rgba(217, 161, 59, 0.07); border: 1px solid rgba(217, 161, 59, 0.25);
-  border-radius: 12px; padding: 16px 20px; color: #c9a869; font-size: 12.5px;
+  background: color-mix(in srgb, var(--warn) 7%, transparent);
+  border: 1px solid color-mix(in srgb, var(--warn) 25%, transparent);
+  border-radius: 12px; padding: 16px 20px; color: var(--warn-t); font-size: 12.5px;
 }
 .savebar { display: flex; align-items: center; gap: 14px; }
 .btn-go {
-  cursor: pointer; background: #2e7d4f; color: #eaf6ee; border: none;
+  cursor: pointer; background: var(--act); color: var(--on-act); border: none;
   font: 500 15px var(--oswald); letter-spacing: 2px; text-transform: uppercase;
   text-align: center; padding: 12px 26px; border-radius: 8px;
+  transition: box-shadow 150ms ease, transform 150ms ease;
 }
-.btn-go:hover { background: #35935c; }
+.btn-go:hover { box-shadow: inset 0 0 0 999px var(--hov); }
+.btn-go:active { box-shadow: inset 0 0 0 999px var(--press); transform: scale(0.98); }
 .btn-no {
-  cursor: pointer; background: transparent; border: 1px solid #3a465c; color: var(--mut);
+  cursor: pointer; background: transparent; border: 1px solid var(--bd-strong); color: var(--mut);
   font: 500 15px var(--oswald); letter-spacing: 2px; text-transform: uppercase;
   text-align: center; padding: 11px 26px; border-radius: 8px;
+  transition: box-shadow 150ms ease, transform 150ms ease;
 }
 .btn-no:hover { border-color: var(--crit); color: var(--crit-t); }
+.btn-no:active { box-shadow: inset 0 0 0 999px var(--press); transform: scale(0.98); }
 .notice { color: var(--dim); font-size: 12px; }
 
 /* repairs */
@@ -373,23 +384,45 @@ button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid 
   .deck { padding: 18px 16px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .hero-glow, .pulse { animation: none; }
+  /* total collapse — covers every animation/transition, present and future */
+  *, *::before, *::after { animation: none !important; transition: none !important; }
 }
 """
 
 _STATUS_CLASS = {"critical": "crit", "warning": "warn", "unknown": "unk", "ok": "okc"}
 
+def _tint(token: str, pct: int) -> str:
+    """A background tint derived from a :root token — tints always follow
+    their token, so a palette change can never orphan a background."""
+    return f"color-mix(in srgb, var(--{token}) {pct}%, transparent)"
+
+
 # Status ink for design 2A: solid dot color, chip text/background, hero glow.
+# Every status surface renders MUTED (tint bg + status text + glyph) except
+# the single loudest element per page, which may render inverted.
 _INK = {
     "critical": {"chip": "CRIT", "tx": "var(--crit-t)", "solid": "var(--crit)",
-                 "bg": "rgba(217,88,74,.14)", "glow": "rgba(217,88,74,.22)"},
+                 "bg": _tint("crit", 14), "glow": _tint("crit", 22)},
     "warning": {"chip": "WARN", "tx": "var(--warn-t)", "solid": "var(--warn)",
-                "bg": "rgba(217,161,59,.14)", "glow": "rgba(217,161,59,.20)"},
+                "bg": _tint("warn", 14), "glow": _tint("warn", 20)},
     "unknown": {"chip": "UNK", "tx": "var(--unk-t)", "solid": "var(--unk)",
-                "bg": "rgba(125,138,160,.14)", "glow": "rgba(125,138,160,.16)"},
+                "bg": _tint("unk", 14), "glow": _tint("unk", 16)},
     "ok": {"chip": "OK", "tx": "var(--ok-t)", "solid": "var(--ok)",
-           "bg": "rgba(76,181,114,.14)", "glow": "rgba(76,181,114,.16)"},
+           "bg": _tint("ok", 14), "glow": _tint("ok", 16)},
+    # not check statuses, but they render with the same grammar:
+    "ack": {"chip": "ACK", "tx": "var(--unk-t)", "solid": "var(--unk)",
+            "bg": _tint("unk", 14), "glow": _tint("unk", 16)},
+    "info": {"chip": "INFO", "tx": "var(--acc)", "solid": "var(--acc)",
+             "bg": _tint("acc", 14), "glow": _tint("acc", 16)},
 }
+
+
+def _chip(status: str, *, cls: str = "chip", label: str | None = None) -> str:
+    """THE status chip. Every chip-shaped element on every page goes through
+    here so identical semantics always render identically (muted mode)."""
+    ink = _INK.get(status, _INK["unknown"])
+    return (f'<span class="{cls}" style="--chbg:{ink["bg"]};--chtx:{ink["tx"]}">'
+            f'{html.escape(label) if label else ink["chip"]}</span>')
 
 _HERO_MSG = {
     "ok": "The wall holds. Nothing needs you.",
@@ -607,6 +640,42 @@ def _shell(head_title: str, hero_html: str, deck_html: str, *, refresh_seconds: 
 </main>{script}</body></html>"""
 
 
+# --- auth shell -------------------------------------------------------------
+
+_AUTH_STYLE = """
+.auth-main { max-width: 460px; margin: 0 auto; padding: 12vh 20px 64px; }
+.auth-card { padding: 28px 32px; }
+.auth-card .hero-logo-text { font-size: 22px; letter-spacing: 3px; }
+.auth-title { font: 500 15px var(--oswald); letter-spacing: 2px; text-transform: uppercase; color: var(--t2); margin: 18px 0 0; }
+.auth-msg { color: var(--mut); font-size: 13.5px; margin: 8px 0 0; line-height: 1.55; }
+.auth-card .btn-go { display: inline-block; margin-top: 18px; text-decoration: none; }
+"""
+
+
+def render_auth_page(title: str, message_html: str, *,
+                     link_href: str = "", link_label: str = "") -> str:
+    """The auth shell: everything an unauthenticated or errored visitor sees
+    wears the same dark stronghold as the dashboard — never a bare browser
+    page. Deliberately claims nothing about system status (no hero, no ink).
+    `message_html` is trusted markup: callers escape their interpolations."""
+    link = (f'<a class="btn-go" href="{link_href}">{html.escape(link_label)}</a>'
+            if link_href else "")
+    return f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0b0e14">
+<title>{html.escape(title)} — Homelab Guardian</title>{favicon_link()}<style>{PAGE_STYLE}{_AUTH_STYLE}</style></head>
+<body><main class="auth-main">
+<div class="shell-card auth-card">
+<div class="hero-logo-text">Homelab Guardian</div>
+<h1 class="auth-title">{html.escape(title)}</h1>
+<p class="auth-msg">{message_html}</p>
+{link}
+</div>
+<footer>Homelab Guardian — deterministic watch · approval-gated hands · never raw shell</footer>
+</main></body></html>"""
+
+
 # --- overview panels -------------------------------------------------------
 
 
@@ -646,7 +715,7 @@ def _render_network_strip(checks: list[HealthCheck]) -> str:
     host_cards = []
     for check in hosts[:6]:
         ink = _INK.get(check.status, _INK["unknown"])
-        ack = ' <span class="chip" style="--chbg:rgba(125,138,160,.14);--chtx:var(--unk-t)">ACK</span>' if check.acknowledged else ""
+        ack = " " + _chip("ack") if check.acknowledged else ""
         host_cards.append(
             f'<div class="host-card"><div class="host-top">'
             f'<span class="host-name">{html.escape(check.name[:30])}</span>'
@@ -727,7 +796,7 @@ def _render_counts(counts: dict[str, int], acked: int,
         )
     if acked:
         tiles.append(
-            '<div class="count" style="--cbg:rgba(125,138,160,.12);--ctx:var(--unk-t)">'
+            f'<div class="count" style="--cbg:{_tint("unk", 12)};--ctx:var(--unk-t)">'
             f'<div class="count-top"><b>{acked}</b><span>ACKNOWLEDGED</span></div></div>'
         )
     return f'<div class="counts">{"".join(tiles)}</div>'
@@ -742,11 +811,11 @@ def _render_muted(checks: list[HealthCheck]) -> str:
     for check in sorted(muted, key=lambda c: (_SEVERITY.get(c.status, 3), c.name.lower())):
         ink = _INK.get(check.status, _INK["unknown"])
         note = f'<span class="acknote">{html.escape(check.ack_note)}</span>' if check.ack_note else ""
+        ack_chip = _chip("ack", label="ACK · " + ink["chip"])
         rows.append(
             f'<div class="grow"><div class="gdot" style="--gd:{ink["solid"]};opacity:.45"></div>'
             f'<div class="body"><div class="top"><div class="name">{html.escape(check.name)}</div>'
-            f'<div class="chip" style="--chbg:rgba(125,138,160,.14);--chtx:var(--unk-t)">'
-            f'ACK · {ink["chip"]}</div></div>'
+            f"{ack_chip}</div>"
             f'<div class="summary">{html.escape(check.summary)} {note}</div></div></div>'
         )
     return (f'<details class="panel muted-panel" data-group="__muted">'
@@ -762,16 +831,13 @@ def _render_briefing(narrative: str) -> str:
 
 def _render_check_row(check: HealthCheck) -> str:
     ink = _INK.get(check.status, _INK["unknown"])
-    if check.acknowledged:
-        chip_label, chip_bg, chip_tx = "ACK", "rgba(125,138,160,.14)", "var(--unk-t)"
-    else:
-        chip_label, chip_bg, chip_tx = ink["chip"], ink["bg"], ink["tx"]
+    chip = _chip("ack") if check.acknowledged else _chip(check.status)
     name_col = ink["tx"] if check.status != "ok" and not check.acknowledged else "var(--t3)"
     parts = [
         f'<div class="grow"><div class="gdot" style="--gd:{ink["solid"]};'
         f'{"opacity:.45;" if check.acknowledged else ""}"></div><div class="body">',
         f'<div class="top"><div class="name" style="color:{name_col}">{html.escape(check.name)}</div>',
-        f'<div class="chip" style="--chbg:{chip_bg};--chtx:{chip_tx}">{chip_label}</div></div>',
+        f"{chip}</div>",
         f'<div class="summary">{html.escape(check.summary)}</div>',
     ]
     if check.status != "ok" and not check.acknowledged and check.recommended_action:
@@ -935,8 +1001,7 @@ def render_settings_page(
     posture_rows = []
     for p in posture or []:
         on = p.get("on")
-        pill = ('<span class="postpill" style="background:rgba(76,181,114,.14);color:var(--ok-t)">ON</span>'
-                if on else '<span class="postpill" style="background:rgba(125,138,160,.14);color:var(--unk-t)">OFF</span>')
+        pill = _chip("ok", cls="postpill", label="ON") if on else _chip("ack", cls="postpill", label="OFF")
         posture_rows.append(
             f'<div class="setrow"><span style="flex:1"><span class="sname" style="width:auto;display:block">{html.escape(p["name"])}</span>'
             f'<span class="sdesc" style="display:block;margin-top:2px">{html.escape(p["desc"])}</span></span>{pill}</div>'
@@ -988,13 +1053,15 @@ def render_settings_page(
 
 # --- repairs ----------------------------------------------------------------
 
+# Repair lifecycle states wear the same ink grammar as check statuses:
+# (chip label, _INK status key). RUNNING is info-blue — activity, not a verdict.
 _PROP_INK = {
-    "proposed": ("PENDING", "rgba(217,161,59,.14)", "var(--warn-t)"),
-    "approved": ("APPROVED", "rgba(76,181,114,.14)", "var(--ok-t)"),
-    "denied": ("DENIED", "rgba(217,88,74,.14)", "var(--crit-t)"),
-    "executed": ("EXECUTED", "rgba(76,181,114,.14)", "var(--ok-t)"),
-    "failed": ("FAILED", "rgba(217,88,74,.14)", "var(--crit-t)"),
-    "running": ("RUNNING", "rgba(99,164,216,.14)", "var(--acc)"),
+    "proposed": ("PENDING", "warning"),
+    "approved": ("APPROVED", "ok"),
+    "denied": ("DENIED", "critical"),
+    "executed": ("EXECUTED", "ok"),
+    "failed": ("FAILED", "critical"),
+    "running": ("RUNNING", "info"),
 }
 
 
@@ -1003,7 +1070,7 @@ def _render_proposal(p: dict[str, Any], *, editable: bool, csrf_token: str) -> s
     plan: dict[str, Any] = plan_raw if isinstance(plan_raw, dict) else {}
     argv = " ".join(p.get("argv") or plan.get("argv") or [])
     status = str(p.get("status", "proposed"))
-    chip_label, chip_bg, chip_tx = _PROP_INK.get(status, ("?", "rgba(125,138,160,.14)", "var(--unk-t)"))
+    chip_label, ink_key = _PROP_INK.get(status, ("?", "unknown"))
     action = html.escape(str(p.get("action", "")).replace("_", " "))
     target = html.escape(str(p.get("check_id", "")))
 
@@ -1059,7 +1126,7 @@ def _render_proposal(p: dict[str, Any], *, editable: bool, csrf_token: str) -> s
     return (
         f'<div class="prop"><div>'
         f'<div class="prop-title">{action.capitalize()} <code>{target.split("_")[-1]}</code>'
-        f'<span class="pstat" style="--chbg:{chip_bg};--chtx:{chip_tx}">{chip_label}</span></div>'
+        f'{_chip(ink_key, cls="pstat", label=chip_label)}</div>'
         f'<div class="prop-meta">{meta}</div>'
         f'<div class="prop-grid">{"".join(grid)}</div>'
         f'</div><div class="prop-side">{side}</div></div>'
@@ -1097,7 +1164,8 @@ def render_repairs_page(
             parts.append('<h2 class="ptitle-lg" style="margin-top:6px">Audit log</h2>')
             rows = []
             for p in done[:50]:
-                _, chip_bg, chip_tx = _PROP_INK.get(str(p.get("status")), ("?", "", "var(--unk-t)"))
+                _, ink_key = _PROP_INK.get(str(p.get("status")), ("?", "unknown"))
+                chip_tx = _INK[ink_key]["tx"]
                 rows.append(
                     f'<div class="audit-row"><div class="when">{html.escape(str(p.get("proposed_at") or ""))[:16]}</div>'
                     f'<div class="act">{html.escape(str(p.get("action", "")))}</div>'
