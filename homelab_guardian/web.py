@@ -128,8 +128,15 @@ PAGE_STYLE = _FONT_FACES + """
   /* action green: deliberately its own token — a button is an intent, not a status */
   --act: #2e7d4f; --on-act: #eaf6ee;
   --bd-strong: #3a465c; --knob: #e8edf6;
+  /* structural depth borders (the depth-on-dark recipe) */
+  --bd-hi: rgba(82, 100, 130, 0.32); --bd-panel: rgba(78, 96, 126, 0.3);
   /* one alpha overlay per interaction state, composites over any surface */
   --hov: rgba(226, 231, 240, 0.07); --press: rgba(226, 231, 240, 0.12);
+  /* spacing: 4px grid, half-steps only at the small end */
+  --sp-05: 2px; --sp-1: 4px; --sp-15: 6px; --sp-2: 8px; --sp-3: 12px;
+  --sp-4: 16px; --sp-5: 20px; --sp-6: 24px; --sp-7: 28px; --sp-8: 32px;
+  /* radii: role-named, never size-named; children stay <= parents */
+  --r-card: 14px; --r-panel: 12px; --r-el: 8px; --r-in: 6px; --r-chip: 4px; --r-full: 999px;
   --oswald: 'Oswald', system-ui, sans-serif;
   --sans: 'IBM Plex Sans', system-ui, sans-serif;
   --mono: 'IBM Plex Mono', ui-monospace, Consolas, monospace;
@@ -143,13 +150,17 @@ body {
 a { color: var(--link); text-decoration: none; }
 a:hover { text-decoration: underline; }
 ::selection { background: color-mix(in srgb, var(--acc) 30%, transparent); }
-main { max-width: 1280px; margin: 0 auto; padding: 28px 20px 64px; }
+main { max-width: 1280px; margin: 0 auto; padding: var(--sp-7) var(--sp-5) 64px; }
+.sr-only {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
 @keyframes hgPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 @keyframes hgGlow { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
 
 /* --- the stronghold shell -------------------------------------------- */
 .shell-card {
-  background: var(--shell); border: 1px solid rgba(82, 100, 130, 0.32); border-radius: 14px; overflow: hidden;
+  background: var(--shell); border: 1px solid var(--bd-hi); border-radius: var(--r-card); overflow: hidden;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04),
     0 6px 16px -8px rgba(0, 0, 0, 0.5), 0 28px 60px -36px rgba(0, 0, 0, 0.65);
 }
@@ -160,25 +171,27 @@ main { max-width: 1280px; margin: 0 auto; padding: 28px 20px 64px; }
 }
 .hero-wash {
   position: absolute; inset: 0;
-  background: linear-gradient(90deg, var(--shell) 42%, rgba(21, 27, 38, 0.55) 68%, rgba(21, 27, 38, 0) 100%);
+  background: linear-gradient(90deg, var(--shell) 42%,
+    color-mix(in srgb, var(--shell) 55%, transparent) 68%, transparent 100%);
 }
 .hero-glow {
   position: absolute; left: 2px; top: -11px; width: 520px; height: 160px;
-  background: radial-gradient(ellipse 50% 46% at 50% 50%, var(--glow, rgba(76, 181, 114, 0.16)) 0%, transparent 70%);
+  background: radial-gradient(ellipse 50% 46% at 50% 50%,
+    var(--glow, color-mix(in srgb, var(--ok) 16%, transparent)) 0%, transparent 70%);
   animation: hgGlow 5.5s ease-in-out infinite; pointer-events: none;
 }
 .hero-body { position: absolute; left: 32px; top: 30px; right: 480px; }
 .hero-logo { width: 460px; max-width: 100%; display: block; position: relative; }
 .hero-logo-text { font: 600 34px var(--oswald); letter-spacing: 4px; color: var(--t2); text-transform: uppercase; }
-.hero-row { display: flex; align-items: center; gap: 14px; margin-top: 20px; flex-wrap: wrap; }
+.hero-row { display: flex; align-items: center; gap: var(--sp-4); margin-top: var(--sp-5); flex-wrap: wrap; }
 .ochip {
   border: 1px solid var(--oc, var(--ok-t)); color: var(--oc, var(--ok-t));
   background: var(--ocbg, color-mix(in srgb, var(--ok) 14%, transparent));
-  font: 600 13px var(--mono); letter-spacing: 2px; padding: 7px 16px; border-radius: 6px;
+  font: 600 13px var(--mono); letter-spacing: 2px; padding: var(--sp-2) var(--sp-4); border-radius: var(--r-in);
 }
 .omsg { color: var(--mut); font-size: 13.5px; }
 .hero-meta {
-  display: flex; align-items: center; gap: 7px; margin-top: 12px;
+  display: flex; align-items: center; gap: var(--sp-2); margin-top: var(--sp-3);
   color: var(--dim); font: 12px var(--mono);
 }
 .pulse { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); animation: hgPulse 2.4s infinite; flex: none; }
@@ -186,37 +199,37 @@ main { max-width: 1280px; margin: 0 auto; padding: 28px 20px 64px; }
 .pulse.dead { background: var(--crit); animation-duration: 1.2s; }
 
 /* folder tabs riding the hero's bottom edge */
-.tabs { position: absolute; left: 32px; bottom: 0; display: flex; gap: 4px; }
+.tabs { position: absolute; left: var(--sp-8); bottom: 0; display: flex; gap: var(--sp-1); }
 .tab {
-  display: flex; align-items: center; gap: 8px; cursor: pointer;
+  display: flex; align-items: center; gap: var(--sp-2); cursor: pointer;
   font: 500 14px var(--oswald); letter-spacing: 2px; text-transform: uppercase;
-  padding: 11px 22px; border-radius: 8px 8px 0 0; text-decoration: none;
-  color: var(--mut2); background: rgba(11, 14, 20, 0.55);
+  padding: var(--sp-3) var(--sp-6); border-radius: var(--r-el) var(--r-el) 0 0; text-decoration: none;
+  color: var(--mut2); background: color-mix(in srgb, var(--bg) 55%, transparent);
   border: 1px solid var(--row); border-bottom: none;
 }
 .tab:hover { color: var(--t2); text-decoration: none; }
 .tab.active { color: var(--t2); background: var(--shell); border-color: var(--bd); position: relative; z-index: 1; }
 .rbadge {
   background: var(--crit); color: var(--on-crit); font: 600 10px var(--mono);
-  padding: 1px 6px; border-radius: 8px;
+  padding: var(--sp-05) var(--sp-15); border-radius: var(--r-el);
 }
-.deck { padding: 22px 26px 26px; display: flex; flex-direction: column; gap: 16px; border-top: 1px solid var(--bd); }
+.deck { padding: var(--sp-6); display: flex; flex-direction: column; gap: var(--sp-4); border-top: 1px solid var(--bd); }
 
 /* --- panels ------------------------------------------------------------ */
 .panel {
-  background: var(--panel); border: 1px solid rgba(78, 96, 126, 0.3); border-radius: 12px;
-  padding: 14px 20px;
+  background: var(--panel); border: 1px solid var(--bd-panel); border-radius: var(--r-panel);
+  padding: var(--sp-4) var(--sp-5);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035), 0 3px 10px -6px rgba(0, 0, 0, 0.45);
 }
 .ptitle {
   font: 500 13px var(--oswald); letter-spacing: 2px; color: var(--mut2);
-  text-transform: uppercase; margin: 0 0 14px;
+  text-transform: uppercase; margin: 0 0 var(--sp-3);
 }
 .ptitle-lg { font: 500 15px var(--oswald); letter-spacing: 2px; color: var(--t2); text-transform: uppercase; margin: 0; }
-.pnote { color: var(--dim); font-size: 12px; margin: -6px 0 10px; }
+.pnote { color: var(--dim); font-size: 12px; margin: -6px 0 var(--sp-2); }
 
 /* network strip */
-.net { display: flex; align-items: flex-start; gap: 0; overflow-x: auto; padding-bottom: 4px; }
+.net { display: flex; align-items: flex-start; gap: 0; overflow-x: auto; padding-bottom: var(--sp-1); }
 .net-node { text-align: center; flex: none; }
 .net-wan {
   width: 44px; height: 44px; border-radius: 50%; border: 2px solid var(--bd-strong); background: var(--shell);
@@ -224,78 +237,80 @@ main { max-width: 1280px; margin: 0 auto; padding: 28px 20px 64px; }
   color: var(--mut2); font: 600 9px var(--mono);
 }
 .net-box {
-  width: 44px; height: 44px; border-radius: 10px; border: 2px solid var(--nb, var(--ok));
+  width: 44px; height: 44px; border-radius: var(--r-el); border: 2px solid var(--nb, var(--ok));
   background: var(--shell); margin: 0 auto;
   display: flex; align-items: center; justify-content: center;
   font: 700 15px var(--mono);
 }
-.host-grid { display: grid; grid-template-columns: repeat(3, minmax(150px, 1fr)); gap: 14px; flex: 1; min-width: 0; }
-.host-card { background: var(--inner); border: 1px solid var(--bd-in); border-radius: 12px; padding: 12px 16px; min-width: 0; }
-.host-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.host-grid { display: grid; grid-template-columns: repeat(3, minmax(150px, 1fr)); gap: var(--sp-3); flex: 1; min-width: 0; }
+.host-card { background: var(--inner); border: 1px solid var(--bd-in); border-radius: var(--r-panel); padding: var(--sp-3) var(--sp-4); min-width: 0; }
+.host-top { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-2); }
 .host-name { color: var(--t1); font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .host-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--gd, var(--ok)); flex: none; }
-.host-sub { color: var(--dim2); font-size: 11.5px; margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.host-sub { color: var(--dim2); font-size: 11.5px; margin-top: var(--sp-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (max-width: 900px) { .host-grid { grid-template-columns: 1fr 1fr; } }
-.net-name { color: var(--mut); font-size: 12px; margin-top: 7px; max-width: 86px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.net-name { color: var(--mut); font-size: 12px; margin-top: var(--sp-2); max-width: 86px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .net-link { width: 40px; height: 2px; background: var(--bd); margin-top: 22px; flex: none; }
 
 /* counts + changed */
-.duo { display: grid; grid-template-columns: 1fr 340px; gap: 22px; align-items: start; }
-.counts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.duo { display: grid; grid-template-columns: 1fr 340px; gap: var(--sp-6); align-items: start; }
+.counts { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); }
 .count {
-  border-radius: 12px; padding: 10px 14px; min-width: 0; overflow: hidden;
-  display: flex; flex-direction: column; gap: 3px; background: var(--cbg, var(--inner));
+  border-radius: var(--r-panel); padding: var(--sp-2) var(--sp-3); min-width: 0; overflow: hidden;
+  display: flex; flex-direction: column; gap: var(--sp-1); background: var(--cbg, var(--inner));
 }
-.count-top { display: flex; align-items: baseline; gap: 9px; min-width: 0; }
+.count-top { display: flex; align-items: baseline; gap: var(--sp-2); min-width: 0; }
 .count b { font: 500 25px/1.05 var(--oswald); color: var(--ctx, var(--t2)); flex: none; }
 .count span {
   font: 10.5px var(--mono); letter-spacing: 1px; color: var(--ctx, var(--mut)); opacity: 0.8;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .count .spark { display: block; color: var(--ctx, var(--mut)); opacity: 0.65; }
-.changes { display: flex; flex-direction: column; gap: 9px; }
-.chg { display: flex; align-items: baseline; gap: 10px; font-size: 13.5px; }
+.changes { display: flex; flex-direction: column; gap: var(--sp-2); }
+.chg { display: flex; align-items: baseline; gap: var(--sp-2); font-size: 13.5px; }
 .chg .arrow { font-family: var(--mono); width: 12px; flex: none; }
 .chg .meta { color: var(--dim); font-size: 11.5px; font-family: var(--mono); }
 
 /* group cards: masonry columns so ragged heights pack without dead space */
-.groups { columns: 2; column-gap: 16px; }
-.groups .gcard { break-inside: avoid; margin-bottom: 16px; }
+.groups { columns: 2; column-gap: var(--sp-4); }
+.groups .gcard { break-inside: avoid; margin-bottom: var(--sp-4); }
 @media (max-width: 1080px) { .groups { columns: 1; } }
 .gtally { font: 11px var(--mono); }
-.grow { display: flex; align-items: flex-start; gap: 12px; padding: 9px 0; border-top: 1px solid var(--row); }
-.gdot { width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; background: var(--gd, var(--ok)); }
+.stack { display: flex; flex-direction: column; gap: var(--sp-6); }
+.phead { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--sp-3); }
+.grow { display: flex; align-items: flex-start; gap: var(--sp-3); padding: var(--sp-2) 0; border-top: 1px solid var(--row); }
+.gdot { width: 8px; height: 8px; border-radius: 50%; margin-top: var(--sp-1); flex-shrink: 0; background: var(--gd, var(--ok)); }
 .grow .body { flex: 1; min-width: 0; }
-.grow .top { display: flex; justify-content: space-between; gap: 10px; }
+.grow .top { display: flex; justify-content: space-between; gap: var(--sp-2); }
 .grow .name { color: var(--t3); font-size: 13.5px; font-weight: 500; }
 .grow .chip {
-  font: 9.5px var(--mono); letter-spacing: 1px; padding: 3px 8px; border-radius: 4px;
+  font: 9.5px var(--mono); letter-spacing: 1px; padding: var(--sp-1) var(--sp-2); border-radius: var(--r-chip);
   height: fit-content; flex: none; background: var(--chbg); color: var(--chtx);
 }
-.grow .summary { color: var(--mut2); font-size: 12.5px; margin-top: 2px; }
-.grow .action { color: var(--acc); font-size: 12px; margin-top: 3px; }
-.grow .acknote { color: var(--dim); font-size: 11.5px; margin-top: 3px; font-style: italic; }
-.grow details { margin-top: 4px; }
+.grow .summary { color: var(--mut2); font-size: 12.5px; margin-top: var(--sp-05); }
+.grow .action { color: var(--acc); font-size: 12px; margin-top: var(--sp-1); }
+.grow .acknote { color: var(--dim); font-size: 11.5px; margin-top: var(--sp-1); font-style: italic; }
+.grow details { margin-top: var(--sp-1); }
 .grow summary { cursor: pointer; color: var(--dim); font-size: 11.5px; }
 .grow pre {
   background: var(--code); border: 1px solid var(--bd); color: var(--link);
-  border-radius: 6px; padding: 8px 10px; overflow-x: auto; font: 12px var(--mono); margin: 6px 0 0;
+  border-radius: var(--r-in); padding: var(--sp-2) var(--sp-3); overflow-x: auto; font: 12px var(--mono); margin: var(--sp-15) 0 0;
 }
 
 /* briefing + history */
-.briefing p { margin: 8px 0; color: var(--t3); font-size: 13.5px; }
-.histrip { display: flex; flex-wrap: wrap; gap: 8px 14px; font: 12px var(--mono); color: var(--dim); }
+.briefing p { margin: var(--sp-2) 0; color: var(--t3); font-size: 13.5px; }
+.histrip { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); font: 12px var(--mono); color: var(--dim); }
 .histrip a { color: var(--mut); }
 .histrip .cur { color: var(--t2); font-weight: 600; }
 
 /* settings */
-.setgrid { display: grid; grid-template-columns: 1fr 400px; gap: 22px; align-items: start; }
-.setrow { display: flex; align-items: center; gap: 14px; padding: 11px 0; border-top: 1px solid var(--row); }
+.setgrid { display: grid; grid-template-columns: 1fr 400px; gap: var(--sp-6); align-items: start; }
+.setrow { display: flex; align-items: center; gap: var(--sp-4); padding: var(--sp-3) 0; border-top: 1px solid var(--row); }
 .setrow .sname { width: 160px; color: var(--t2); font-size: 13.5px; font-weight: 500; flex-shrink: 0; }
 .setrow .sdesc { flex: 1; color: var(--mut2); font-size: 12.5px; }
 .switch { position: relative; width: 40px; height: 22px; flex-shrink: 0; cursor: pointer; }
 .switch input { position: absolute; opacity: 0; inset: 0; margin: 0; cursor: pointer; }
-.switch .track { position: absolute; inset: 0; border-radius: 11px; background: var(--bd); transition: background 0.2s; }
+.switch .track { position: absolute; inset: 0; border-radius: var(--r-full); background: var(--bd); transition: background 0.2s; }
 .switch .knob {
   position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%;
   background: var(--knob); transition: left 0.2s;
@@ -304,21 +319,21 @@ main { max-width: 1280px; margin: 0 auto; padding: 28px 20px 64px; }
 .switch input:checked ~ .knob { left: 20px; }
 .switch input:disabled ~ .track { opacity: 0.55; }
 .setrow input.num {
-  width: 96px; padding: 5px 8px; border: 1px solid var(--bd); border-radius: 6px;
+  width: 96px; padding: var(--sp-1) var(--sp-2); border: 1px solid var(--bd); border-radius: var(--r-in);
   background: var(--code); color: var(--t2); font: 12.5px var(--mono); flex-shrink: 0;
 }
 .setrow input.num:focus { outline: 1px solid var(--acc); border-color: var(--acc); }
-.postpill { font: 10px var(--mono); letter-spacing: 1px; padding: 4px 10px; border-radius: 4px; flex: none; background: var(--chbg); color: var(--chtx); }
+.postpill { font: 10px var(--mono); letter-spacing: 1px; padding: var(--sp-1) var(--sp-2); border-radius: var(--r-chip); flex: none; background: var(--chbg); color: var(--chtx); }
 .warncard {
   background: color-mix(in srgb, var(--warn) 7%, transparent);
   border: 1px solid color-mix(in srgb, var(--warn) 25%, transparent);
-  border-radius: 12px; padding: 16px 20px; color: var(--warn-t); font-size: 12.5px;
+  border-radius: var(--r-panel); padding: var(--sp-4) var(--sp-5); color: var(--warn-t); font-size: 12.5px;
 }
-.savebar { display: flex; align-items: center; gap: 14px; }
+.savebar { display: flex; align-items: center; gap: var(--sp-4); }
 .btn-go {
   cursor: pointer; background: var(--act); color: var(--on-act); border: none;
   font: 500 15px var(--oswald); letter-spacing: 2px; text-transform: uppercase;
-  text-align: center; padding: 12px 26px; border-radius: 8px;
+  text-align: center; padding: var(--sp-3) var(--sp-6); border-radius: var(--r-el);
   transition: box-shadow 150ms ease, transform 150ms ease;
 }
 .btn-go:hover { box-shadow: inset 0 0 0 999px var(--hov); }
@@ -326,31 +341,33 @@ main { max-width: 1280px; margin: 0 auto; padding: 28px 20px 64px; }
 .btn-no {
   cursor: pointer; background: transparent; border: 1px solid var(--bd-strong); color: var(--mut);
   font: 500 15px var(--oswald); letter-spacing: 2px; text-transform: uppercase;
-  text-align: center; padding: 11px 26px; border-radius: 8px;
+  /* vertical padding is one border-width shy of .btn-go so both render the same height */
+  text-align: center; padding: calc(var(--sp-3) - 1px) var(--sp-6); border-radius: var(--r-el);
   transition: box-shadow 150ms ease, transform 150ms ease;
 }
 .btn-no:hover { border-color: var(--crit); color: var(--crit-t); }
 .btn-no:active { box-shadow: inset 0 0 0 999px var(--press); transform: scale(0.98); }
+button[aria-busy="true"] { cursor: progress; box-shadow: inset 0 0 0 999px var(--press); }
 .notice { color: var(--dim); font-size: 12px; }
 
 /* repairs */
-.prop { background: var(--panel); border: 1px solid var(--bd); border-radius: 12px; padding: 24px; display: grid; grid-template-columns: 1fr 300px; gap: 24px; }
-.prop-title { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; color: var(--t2); font-size: 17px; font-weight: 600; }
+.prop { background: var(--panel); border: 1px solid var(--bd); border-radius: var(--r-panel); padding: var(--sp-6); display: grid; grid-template-columns: 1fr 300px; gap: var(--sp-6); }
+.prop-title { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap; color: var(--t2); font-size: 17px; font-weight: 600; }
 .prop-title code { font-family: var(--mono); color: var(--acc); font-size: 15px; }
-.pstat { font: 10px var(--mono); letter-spacing: 1px; padding: 4px 10px; border-radius: 4px; background: var(--chbg); color: var(--chtx); }
-.prop-meta { color: var(--mut2); font-size: 12.5px; margin-top: 6px; }
+.pstat { font: 10px var(--mono); letter-spacing: 1px; padding: var(--sp-1) var(--sp-2); border-radius: var(--r-chip); background: var(--chbg); color: var(--chtx); }
+.prop-meta { color: var(--mut2); font-size: 12.5px; margin-top: var(--sp-15); }
 .prop-meta code { font-family: var(--mono); }
-.prop-grid { display: grid; grid-template-columns: 120px 1fr; gap: 9px 16px; margin-top: 18px; font-size: 13px; }
+.prop-grid { display: grid; grid-template-columns: 120px 1fr; gap: var(--sp-2) var(--sp-4); margin-top: var(--sp-4); font-size: 13px; }
 .prop-grid .k { color: var(--dim); }
 .prop-grid .v { color: var(--t3); }
 .prop-grid code {
   background: var(--code); border: 1px solid var(--bd); color: var(--link);
-  padding: 3px 8px; border-radius: 4px; font: 12.5px var(--mono);
+  padding: var(--sp-1) var(--sp-2); border-radius: var(--r-chip); font: 12.5px var(--mono);
 }
-.prop-side { border-left: 1px solid var(--bd); padding-left: 24px; display: flex; flex-direction: column; justify-content: center; gap: 10px; }
-.prop-empty { background: var(--panel); border: 1px dashed var(--bd); border-radius: 12px; padding: 28px; text-align: center; color: var(--dim); font-size: 13.5px; }
-.audit { background: var(--panel); border: 1px solid var(--bd); border-radius: 12px; overflow: hidden; }
-.audit-row { display: flex; align-items: center; gap: 18px; padding: 13px 22px; border-bottom: 1px solid var(--row); font-size: 13px; }
+.prop-side { border-left: 1px solid var(--bd); padding-left: var(--sp-6); display: flex; flex-direction: column; justify-content: center; gap: var(--sp-2); }
+.prop-empty { background: var(--panel); border: 1px dashed var(--bd); border-radius: var(--r-panel); padding: var(--sp-7); text-align: center; color: var(--dim); font-size: 13.5px; }
+.audit { background: var(--panel); border: 1px solid var(--bd); border-radius: var(--r-panel); overflow: hidden; }
+.audit-row { display: flex; align-items: center; gap: var(--sp-4); padding: var(--sp-3) var(--sp-6); border-bottom: 1px solid var(--row); font-size: 13px; }
 .audit-row:last-child { border-bottom: none; }
 .audit-row .when { width: 95px; color: var(--dim); font: 12px var(--mono); flex-shrink: 0; }
 .audit-row .act { width: 205px; color: var(--link); font: 12px var(--mono); flex-shrink: 0; }
@@ -360,28 +377,28 @@ main { max-width: 1280px; margin: 0 auto; padding: 28px 20px 64px; }
 
 .muted-panel > summary { cursor: pointer; list-style: none; }
 .muted-panel > summary::-webkit-details-marker { display: none; }
-.muted-panel > summary .ptitle { margin: 0; display: inline-flex; align-items: baseline; gap: 8px; }
-.muted-panel > summary::after { content: "▸"; color: var(--dim); margin-left: 8px; }
+.muted-panel > summary .ptitle { margin: 0; display: inline-flex; align-items: baseline; gap: var(--sp-2); }
+.muted-panel > summary::after { content: "▸"; color: var(--dim); margin-left: var(--sp-2); }
 .muted-panel[open] > summary::after { content: "▾"; }
-.muted-panel[open] > summary .ptitle { margin-bottom: 12px; }
-.banner-flash { border-radius: 10px; padding: 10px 14px; background: var(--panel); border: 1px solid var(--bd); }
+.muted-panel[open] > summary .ptitle { margin-bottom: var(--sp-3); }
+.banner-flash { border-radius: var(--r-panel); padding: var(--sp-2) var(--sp-4); background: var(--panel); border: 1px solid var(--bd); }
 .banner-flash.ok { border-left: 4px solid var(--ok); }
 .banner-flash.err { border-left: 4px solid var(--crit); color: var(--crit-t); }
-footer { color: var(--dim); font-size: 12px; margin-top: 22px; text-align: center; }
+footer { color: var(--dim); font-size: 12px; margin-top: var(--sp-6); text-align: center; }
 button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
 
 @media (max-width: 1080px) {
   .duo, .groups, .setgrid { grid-template-columns: 1fr; }
   .prop { grid-template-columns: 1fr; }
-  .prop-side { border-left: none; padding-left: 0; border-top: 1px solid var(--bd); padding-top: 18px; }
+  .prop-side { border-left: none; padding-left: 0; border-top: 1px solid var(--bd); padding-top: var(--sp-4); }
 }
 @media (max-width: 900px) {
   .hero { height: auto; min-height: 250px; }
   .hero-art { opacity: 0.35; width: 100%; }
-  .hero-body { right: 32px; position: relative; left: 0; top: 0; padding: 26px 32px 58px; }
+  .hero-body { right: var(--sp-8); position: relative; left: 0; top: 0; padding: var(--sp-6) var(--sp-8) 56px; }
   .hero-logo { width: 100%; }
-  .tabs { left: 16px; right: 16px; overflow-x: auto; }
-  .deck { padding: 18px 16px; }
+  .tabs { left: var(--sp-4); right: var(--sp-4); overflow-x: auto; }
+  .deck { padding: var(--sp-4); }
 }
 @media (prefers-reduced-motion: reduce) {
   /* total collapse — covers every animation/transition, present and future */
@@ -552,7 +569,7 @@ def _tabs(active: str, repairs_pending: int | None) -> str:
             badge = f' <span class="rbadge">{repairs_pending}</span>'
         cls = "tab active" if href == active else "tab"
         out.append(f'<a class="{cls}" href="{href}">{label}{badge}</a>')
-    return f'<nav class="tabs">{"".join(out)}</nav>'
+    return f'<nav class="tabs" aria-label="Guardian pages">{"".join(out)}</nav>'
 
 
 def _hero(brand: dict[str, str], *, overall: str, msg: str, meta: str,
@@ -574,7 +591,7 @@ def _hero(brand: dict[str, str], *, overall: str, msg: str, meta: str,
         f'<div class="hero-row"><span class="ochip" style="--oc:{ink["tx"]};--ocbg:{ink["bg"]}">{label}</span>'
         f'<span class="omsg">{html.escape(msg)}</span></div>'
         f'<div class="hero-meta"><span class="pulse{" " + pulse if pulse != "ok" else ""}" '
-        f'title="scan freshness: {pulse}"></span>{meta}</div>'
+        f'title="scan freshness: {pulse}" role="img" aria-label="scan freshness: {pulse}"></span>{meta}</div>'
         f"</div>{_tabs(active, repairs_pending)}</div>"
     )
 
@@ -620,10 +637,15 @@ _REFRESH_SCRIPT = """<script>
 </script>"""
 
 
-def _shell(head_title: str, hero_html: str, deck_html: str, *, refresh_seconds: int = 0) -> str:
+def _shell(head_title: str, hero_html: str, deck_html: str, *,
+           refresh_seconds: int = 0, live_status: str = "") -> str:
     refresh = (f'<noscript><meta http-equiv="refresh" content="{int(refresh_seconds)}"></noscript>'
                if refresh_seconds else "")
     script = (_REFRESH_SCRIPT % int(refresh_seconds)) if refresh_seconds else ""
+    # The live region announces only the OVERALL status, so screen readers hear
+    # a change of state — never the routine scan-refresh churn.
+    live = (f'<div class="sr-only" aria-live="polite">Overall status: {html.escape(live_status)}</div>'
+            if live_status else "")
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -631,7 +653,7 @@ def _shell(head_title: str, hero_html: str, deck_html: str, *, refresh_seconds: 
 <title>{head_title}</title>{favicon_link()}<style>{PAGE_STYLE}</style></head>
 <body><main>
 <div class="shell-card">
-{hero_html}
+{live}{hero_html}
 <div class="deck">
 {deck_html}
 </div>
@@ -643,12 +665,12 @@ def _shell(head_title: str, hero_html: str, deck_html: str, *, refresh_seconds: 
 # --- auth shell -------------------------------------------------------------
 
 _AUTH_STYLE = """
-.auth-main { max-width: 460px; margin: 0 auto; padding: 12vh 20px 64px; }
-.auth-card { padding: 28px 32px; }
+.auth-main { max-width: 460px; margin: 0 auto; padding: 12vh var(--sp-5) 64px; }
+.auth-card { padding: var(--sp-7) var(--sp-8); }
 .auth-card .hero-logo-text { font-size: 22px; letter-spacing: 3px; }
-.auth-title { font: 500 15px var(--oswald); letter-spacing: 2px; text-transform: uppercase; color: var(--t2); margin: 18px 0 0; }
-.auth-msg { color: var(--mut); font-size: 13.5px; margin: 8px 0 0; line-height: 1.55; }
-.auth-card .btn-go { display: inline-block; margin-top: 18px; text-decoration: none; }
+.auth-title { font: 500 15px var(--oswald); letter-spacing: 2px; text-transform: uppercase; color: var(--t2); margin: var(--sp-4) 0 0; }
+.auth-msg { color: var(--mut); font-size: 13.5px; margin: var(--sp-2) 0 0; line-height: 1.55; }
+.auth-card .btn-go { display: inline-block; margin-top: var(--sp-4); text-decoration: none; }
 """
 
 
@@ -706,7 +728,8 @@ def _render_network_strip(checks: list[HealthCheck]) -> str:
         glyph = {"ok": "✓", "warning": "!", "critical": "✕", "unknown": "?"}.get(worst, "?")
         chain_nodes.append(
             f'<div class="net-node" title="{html.escape(summary)}">'
-            f'<div class="net-box" style="--nb:{ink["solid"]};color:{ink["tx"]}">{glyph}</div>'
+            f'<div class="net-box" style="--nb:{ink["solid"]};color:{ink["tx"]}" '
+            f'role="img" aria-label="{label}: {worst}">{glyph}</div>'
             f'<div class="net-name">{label}</div></div>'
         )
     # Hosts: the Infrastructure group's remaining targets as sentinel cards.
@@ -719,7 +742,8 @@ def _render_network_strip(checks: list[HealthCheck]) -> str:
         host_cards.append(
             f'<div class="host-card"><div class="host-top">'
             f'<span class="host-name">{html.escape(check.name[:30])}</span>'
-            f'<span class="host-dot" style="--gd:{ink["solid"]}"></span></div>'
+            f'<span class="host-dot" style="--gd:{ink["solid"]}" role="img" '
+            f'aria-label="{check.status}"></span></div>'
             f'<div class="host-sub">{html.escape(check.summary[:60])}{ack}</div></div>'
         )
     if not chain_nodes and not host_cards:
@@ -728,7 +752,7 @@ def _render_network_strip(checks: list[HealthCheck]) -> str:
     for node in chain_nodes:
         strip += '<div class="net-link"></div>' + node
     grid = f'<div class="net-link"></div><div class="host-grid">{"".join(host_cards)}</div>' if host_cards else ""
-    more = f'<div class="pnote" style="margin:8px 0 0">+ {len(hosts) - 6} more in Infrastructure below</div>' if len(hosts) > 6 else ""
+    more = f'<div class="pnote" style="margin:var(--sp-2) 0 0">+ {len(hosts) - 6} more in Infrastructure below</div>' if len(hosts) > 6 else ""
     return (f'<div class="panel"><h2 class="ptitle">Network</h2>'
             f'<div class="net">{strip}{grid}</div>{more}</div>')
 
@@ -872,7 +896,7 @@ def _render_groups(checks: list[HealthCheck]) -> str:
         rows = "".join(_render_check_row(c) for c in members)
         cards.append(
             f'<div class="panel gcard" data-group="{html.escape(name)}">'
-            f'<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px">'
+            f'<div class="phead">'
             f'<h2 class="ptitle-lg">{html.escape(name)}</h2>'
             f'<span class="gtally" style="color:{tally_color}">{ok_count}/{len(members)} OK</span></div>'
             f"{rows}</div>"
@@ -928,7 +952,8 @@ def render_scan_page(
         _render_history(history, scan_id),
     ])
     label = STATUS_META.get(overall, ("", overall))[1]
-    return _shell(f"{app_name} — {label}", hero, deck, refresh_seconds=refresh_seconds)
+    return _shell(f"{app_name} — {label}", hero, deck,
+                  refresh_seconds=refresh_seconds, live_status=label)
 
 
 def render_empty_page() -> str:
@@ -950,10 +975,10 @@ def _render_setting_inputs(settings: list[dict[str, Any]], editable: bool) -> st
     groups: dict[str, list[dict[str, Any]]] = {}
     for entry in settings:
         groups.setdefault(entry["group"], []).append(entry)
-    parts = ['<div class="panel"><h2 class="ptitle-lg" style="margin-bottom:8px">Thresholds &amp; timing</h2>',
+    parts = ['<div class="panel"><h2 class="ptitle-lg" style="margin-bottom:var(--sp-2)">Thresholds &amp; timing</h2>',
              '<div class="pnote">Numeric limits for the enabled checks. Out-of-range values reject the whole save.</div>']
     for group, entries in groups.items():
-        parts.append(f'<div class="pnote" style="margin-top:12px;color:var(--mut2)">{html.escape(group)}</div>')
+        parts.append(f'<div class="pnote" style="margin-top:var(--sp-3);color:var(--mut2)">{html.escape(group)}</div>')
         for entry in entries:
             ctx = f'<span style="font-family:var(--mono);color:var(--dim)">{html.escape(entry["context"])}</span> · ' if entry.get("context") else ""
             step = "1" if entry["kind"] == "int" else "any"
@@ -992,7 +1017,7 @@ def render_settings_page(
             '<span class="track"></span><span class="knob"></span></label></div>'
         )
     collectors_panel = (
-        '<div class="panel"><h2 class="ptitle-lg" style="margin-bottom:8px">Collectors</h2>'
+        '<div class="panel"><h2 class="ptitle-lg" style="margin-bottom:var(--sp-2)">Collectors</h2>'
         '<div class="pnote">Read-only against your infrastructure. Every one optional; every one degrades gracefully.</div>'
         + "".join(rows) + "</div>"
     )
@@ -1004,10 +1029,10 @@ def render_settings_page(
         pill = _chip("ok", cls="postpill", label="ON") if on else _chip("ack", cls="postpill", label="OFF")
         posture_rows.append(
             f'<div class="setrow"><span style="flex:1"><span class="sname" style="width:auto;display:block">{html.escape(p["name"])}</span>'
-            f'<span class="sdesc" style="display:block;margin-top:2px">{html.escape(p["desc"])}</span></span>{pill}</div>'
+            f'<span class="sdesc" style="display:block;margin-top:var(--sp-05)">{html.escape(p["desc"])}</span></span>{pill}</div>'
         )
     posture_panel = (
-        '<div class="panel"><h2 class="ptitle-lg" style="margin-bottom:8px">Integrations &amp; repair</h2>'
+        '<div class="panel"><h2 class="ptitle-lg" style="margin-bottom:var(--sp-2)">Integrations &amp; repair</h2>'
         '<div class="pnote">Security posture is read-only here — armed and disarmed only in config.yaml.</div>'
         + "".join(posture_rows) + "</div>"
     ) if posture_rows else ""
@@ -1025,7 +1050,7 @@ def render_settings_page(
         left = (
             f'<form method="post" action="/settings">'
             f'<input type="hidden" name="csrf" value="{html.escape(csrf_token)}">'
-            f'<div style="display:flex;flex-direction:column;gap:22px">{collectors_panel}{thresholds_panel}'
+            f'<div class="stack">{collectors_panel}{thresholds_panel}'
             f'<div class="savebar"><button class="btn-go" type="submit">Save Settings</button>'
             f'<span class="notice">{who}{logout}</span></div></div></form>'
         )
@@ -1033,11 +1058,11 @@ def render_settings_page(
         left = (
             '<div class="banner-flash err">Authentication is off — settings are read-only here. '
             "Set <code>web.auth.mode</code> in config.yaml (basic / forward_auth / oidc), then reload.</div>"
-            f'<div style="display:flex;flex-direction:column;gap:22px;margin-top:14px">{collectors_panel}{thresholds_panel}</div>'
+            f'<div class="stack" style="margin-top:var(--sp-4)">{collectors_panel}{thresholds_panel}</div>'
         )
 
     right = (
-        f'<div style="display:flex;flex-direction:column;gap:22px">{posture_panel}'
+        f'<div class="stack">{posture_panel}'
         '<div class="warncard">Destructive actions (anything that deletes) always require a human — '
         "auto-approve is ignored for them, by construction.</div></div>"
     )
@@ -1105,7 +1130,7 @@ def _render_proposal(p: dict[str, Any], *, editable: bool, csrf_token: str) -> s
     if status == "proposed":
         if editable:
             side = (
-                f'<form method="post" action="/repairs" style="display:flex;flex-direction:column;gap:10px">'
+                f'<form method="post" action="/repairs" class="stack" style="gap:var(--sp-2)">'
                 f'<input type="hidden" name="csrf" value="{html.escape(csrf_token)}">'
                 f'<input type="hidden" name="proposal_id" value="{p.get("id")}">'
                 '<button class="btn-go" name="decision" value="approve" type="submit">Approve Repair</button>'
@@ -1161,7 +1186,7 @@ def render_repairs_page(
             parts.append('<div class="prop-empty">No pending proposals. Guardian only proposes whitelisted, '
                          "parameterized actions — never raw shell.</div>")
         if done:
-            parts.append('<h2 class="ptitle-lg" style="margin-top:6px">Audit log</h2>')
+            parts.append('<h2 class="ptitle-lg" style="margin-top:var(--sp-15)">Audit log</h2>')
             rows = []
             for p in done[:50]:
                 _, ink_key = _PROP_INK.get(str(p.get("status")), ("?", "unknown"))
@@ -1181,6 +1206,18 @@ def render_repairs_page(
                  msg=ctx.get("msg", "Approve or deny proposals — execution stays with the CLI and MCP."),
                  meta=ctx.get("meta", "repairs · approval-gated · never raw shell"),
                  active="/repairs", repairs_pending=ctx.get("repairs_pending"))
+    # Busy, not disabled: a submitting button keeps focus and its label, announces
+    # aria-busy, and the guard stops the double-submit — the repair stays approvable
+    # by keyboard users even mid-flight elsewhere.
+    deck += """<script>
+document.querySelectorAll(".prop form").forEach(function (f) {
+  f.addEventListener("submit", function (e) {
+    if (f.dataset.busy) { e.preventDefault(); return; }
+    f.dataset.busy = "1";
+    if (e.submitter) { e.submitter.setAttribute("aria-busy", "true"); }
+  });
+});
+</script>"""
     return _shell("Homelab Guardian — Repairs", hero, deck)
 
 
