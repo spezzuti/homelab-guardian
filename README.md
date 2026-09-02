@@ -1,40 +1,82 @@
 # Homelab Guardian
 
 [![PyPI](https://img.shields.io/pypi/v/homelab-guardian.svg)](https://pypi.org/project/homelab-guardian/)
+[![CI](https://github.com/spezzuti/homelab-guardian/actions/workflows/ci.yml/badge.svg)](https://github.com/spezzuti/homelab-guardian/actions/workflows/ci.yml)
+[![License: AGPL v3](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/pypi/pyversions/homelab-guardian.svg)](https://pypi.org/project/homelab-guardian/)
 
-**Security:** Guardian can act on your systems, so its safety story is documented up front — see the [threat model](docs/threat-model.md) (what a compromised AI agent can and cannot do) and [SECURITY.md](SECURITY.md) for reporting.
+**The safety layer between an AI agent and root.**
 
-Homelab Guardian is a local-first homelab operations assistant built around
-read-only infrastructure collectors and local reports.
+Giving an AI agent SSH access to your homelab works right up until it doesn't.
+The usual answers are to trust the model's judgment, or to wrap dangerous
+operations in a `confirm: true` argument that the model itself fills in. Neither
+is a safety boundary. Both put a language model on the authority path to your
+infrastructure.
 
-It is not another dashboard. It generates plain-English health reports that explain:
+Guardian is the boundary. It gives any [MCP](https://modelcontextprotocol.io)-capable
+agent **eyes** — verified, structured health state it doesn't have to re-derive —
+and **hands** — approval-gated, allowlisted, audited repairs — and never a shell.
 
-- what is broken
-- what changed
-- what matters
-- what the safest next step is
+## The actuation contract
 
-Guardian started as a read-only "Daily Homelab Doctor" and has grown into a
-**safe actuator** for your homelab. The full arc, all opt-in:
+Four rules hold everywhere Guardian can touch a system. They are the product;
+the monitoring is the substrate that makes them possible.
 
-1. **Monitor** — optional read-only collectors (Docker, Home Assistant, network
-   and TLS, disks, mounts, systemd, plus host-hardening checks: firewall, SSH,
-   exposed services, pending updates, backup health) feed a structured
+1. **Never raw shell, never an AI-generated command.** Every action is a named,
+   whitelisted, parameterized `argv` list. Targets come from validated check
+   evidence or an admin allowlist. There is no generic "run this" playbook, and
+   there never will be — it's an explicit [non-goal](ROADMAP.md).
+2. **The model is never the authority.** An agent may *propose* a repair and may
+   *execute* an approved one. Approval is human-only — `guardian repair approve`
+   or the dashboard's `/repairs` page. Destructive actions can never
+   auto-approve, by any path.
+3. **Read-only until you say otherwise.** MCP write tools are *not registered*
+   when `mcp.allow_writes` is false, which is the default. An agent attached to
+   a default Guardian cannot mutate state — not "is asked not to," cannot.
+4. **Everything is evidence, and everything is audited.** Every check emits
+   `status / summary / evidence / recommended_action`. Every proposal, approval,
+   execution, and verification lands in an append-only audit log, loop-guarded
+   and interlocked against running backups.
+
+The loop those rules produce:
+
+```
+detect  →  agent diagnoses and narrates  →  human approves  →
+Guardian executes named argv  →  Guardian verifies recovery  →  audit
+        ^                                                  |
+        |__________________ still broken? escalate ________|
+```
+
+Guardian is the deterministic half. The agent narrates, reasons, and handles the
+judgment-heavy fixes Guardian deliberately won't attempt.
+
+**Security:** the safety story is documented up front, not in an appendix — see
+the [threat model](docs/threat-model.md) for exactly what a *compromised* agent
+can and cannot do through Guardian, and [SECURITY.md](SECURITY.md) for reporting.
+
+## How you get there
+
+Guardian started as a read-only "Daily Homelab Doctor" and grew into a safe
+actuator. Every step is opt-in and off until you turn it on; each one degrades
+gracefully. Start at 1 and go as far as you trust it.
+
+1. **Monitor** — read-only collectors (Docker, Home Assistant, network and TLS,
+   disks, mounts, systemd, plus host-hardening checks: firewall, SSH, exposed
+   services, pending updates, backup health) feed the
    `status / summary / evidence / recommended_action` contract.
 2. **Report** — local Markdown reports and a read-only web dashboard, each
    leading with *what changed* since the last scan; optional flap-damped
    Telegram notifications; an optional bring-your-own-model AI briefing.
-3. **Attach an agent** — an [MCP](https://modelcontextprotocol.io) server
-   (`guardian mcp`) lets any AI agent read Guardian's *verified* state instead
-   of re-deriving it; agent-delivery mode makes the agent the single voice with
-   a deterministic Telegram critical-fallback.
-4. **Self-heal (carefully)** — approval-gated repair (`guardian repair`) can
-   *propose* a whitelisted, parameterized fix, execute it **only after a human
-   approves**, then verify recovery — never raw shell, fully audited, with an
-   opt-in auto-approve tier for vetted, non-destructive actions.
+3. **Attach an agent** — `guardian mcp` serves Guardian's *verified* state over
+   MCP; agent-delivery mode makes the agent the single voice, with a
+   deterministic Telegram fallback for criticals the agent never acknowledges.
+4. **Self-heal, carefully** — `guardian repair` proposes a whitelisted fix,
+   executes it **only after a human approves**, then verifies recovery. An
+   opt-in auto-approve tier exists for vetted, non-destructive reflexes.
 
-Every step degrades gracefully and is off until you turn it on. Start at step 1
-and go as far as you trust it.
+It is also useful with no agent at all. Plenty of tools can tell you a service
+is down; Guardian tells you what changed, what it means, and what the safest
+next step is — in plain English.
 
 **Install:** `pip install homelab-guardian` (add `[mcp]` for the agent server,
 `[docker]` for the Docker collector's SDK).
@@ -42,18 +84,15 @@ New here? See **[the getting-started walkthrough](docs/getting-started.md)**.
 
 ## Core principles
 
-- Local-first
-- Read-only against homelab infrastructure by default
+- **Never raw shell, never an AI-generated command** — named, parameterized argv
+  only; the model is never the authority
 - Any action is opt-in, whitelisted, reversible-minded, and **human-approved** —
-  Guardian proposes; a person approves; Guardian verifies. (See *Approval-gated
-  repair*.)
-- **Never raw shell, never an AI-generated command** — actions are named,
-  parameterized argv only; the model is never the authority
-- No cloud dependency required
-- Useful without AI
+  Guardian proposes; a person approves; Guardian verifies
+- Local-first; read-only against homelab infrastructure by default
+- No cloud dependency required, and useful without AI
 - Secrets stay local
-- Every integration is optional
-- Collectors degrade gracefully when unavailable or unconfigured
+- Every integration is optional; collectors degrade gracefully when unavailable
+  or unconfigured
 
 Guardian does write its own local runtime state: Markdown reports, SQLite scan
 snapshots, acknowledgments, alert state, and retention cleanup. Optional
