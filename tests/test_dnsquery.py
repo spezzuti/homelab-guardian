@@ -38,8 +38,8 @@ def test_parse_collects_a_records_and_skips_cname():
     cname_rdata = b"\x05other\x07example\x03lan\x00"
     data = _response(q[:2], "port.example.lan", [
         (5, cname_rdata),                       # CNAME — skipped
-        (1, bytes([192, 168, 0, 87])),          # A
-        (1, bytes([192, 168, 0, 88])),          # A
+        (1, bytes([192, 168, 50, 20])),          # A
+        (1, bytes([192, 168, 50, 21])),          # A
     ])
     assert dnsquery.parse_a_records(data, q[:2]) == ["192.168.50.20", "192.168.50.21"]
 
