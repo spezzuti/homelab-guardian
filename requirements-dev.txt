@@ -1,4 +1,7 @@
 -r requirements.txt
 pytest>=8.0.0
-ruff
-mypy
+# Linters are pinned: an unpinned ruff/mypy means CI can fail with no code
+# change when upstream shifts its default rule set (it did — a new ruff turned
+# on import sorting by default and broke a green build).
+ruff==0.15.5
+mypy==2.1.0

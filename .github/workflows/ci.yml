@@ -14,7 +14,9 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-      - run: pip install ruff mypy
+      # Same pinned versions the tests use, so lint can't break on an
+      # upstream release with no change to this repo.
+      - run: pip install -r requirements-dev.txt
       - run: ruff check homelab_guardian tests
       - run: mypy homelab_guardian
 

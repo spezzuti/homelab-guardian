@@ -31,7 +31,7 @@ Repository = "https://github.com/spezzuti/homelab-guardian"
 Changelog = "https://github.com/spezzuti/homelab-guardian/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0.0", "ruff", "mypy"]
+dev = ["pytest>=8.0.0", "ruff==0.15.5", "mypy==2.1.0"]
 # Expose Guardian as an MCP server (`guardian mcp`) so any agent can read its
 # structured health data. Optional so the core stays dependency-light.
 mcp = ["mcp>=1.2.0"]
@@ -64,6 +64,12 @@ skips = ["B404", "B603", "B607", "B105", "B107"]
 
 [tool.ruff]
 target-version = "py310"
+
+[tool.ruff.lint]
+# Declared explicitly rather than inherited: ruff's default selection has
+# changed across releases, and CI must enforce what this project chose, not
+# whatever the newest ruff happens to default to.
+select = ["E4", "E7", "E9", "F"]
 
 [tool.ruff.lint.per-file-ignores]
 # Inline lambda runners and mid-file import sections are deliberate test idiom.
