@@ -49,6 +49,8 @@ Trust artifacts before new features:
   no-framework dashboard is deliberate and stays)
 - Public landing page (GitHub Pages) + a recorded demo of the real incident
   loop: detect → agent narrates → "go ahead" → gated repair → verify
+  (shot list and publishing steps: `docs/demo.md` — needs recording on real
+  hardware)
 - Launch sequence: MCP directory listings → r/selfhosted → Show HN, in that
   order, only once the trust artifacts are live
 - **Multi-host via agentless SSH** — a `hosts:` block, collectors run over

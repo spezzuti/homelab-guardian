@@ -20,6 +20,9 @@
 
 ### Changed
 
+- `docs/demo.md`: a beat-by-beat shot list for the incident-loop recording,
+  including the refusal beat (telling the agent to run it anyway, and Guardian
+  refusing) and a pre-publish scrub checklist.
 - The README leads with the actuation contract — what Guardian is and the four
   rules that hold everywhere it can touch a system — rather than opening with a
   feature tour that reached the safety model at step 4.
