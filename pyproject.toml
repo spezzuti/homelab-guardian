@@ -46,7 +46,7 @@ guardian = "homelab_guardian.main:main"
 include = ["homelab_guardian*"]
 
 [tool.setuptools.package-data]
-homelab_guardian = ["assets/*", "assets/fonts/*"]
+homelab_guardian = ["assets/*", "assets/fonts/*", "drills/catalog/*.yaml"]
 
 [tool.bandit]
 # Skips are checks that flag this project's deliberate design, not defects:

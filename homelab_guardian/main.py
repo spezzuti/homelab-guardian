@@ -598,6 +598,14 @@ def build_parser() -> argparse.ArgumentParser:
     cp = command("unack", "unmute a previously acknowledged check")
     cp.add_argument("check_id", nargs="?", help="the check id to unacknowledge")
 
+    cp = command("drill", "score an attached agent against scripted incidents (see docs/drills.md)")
+    cp.add_argument("action", nargs="?", default="run", choices=["run", "list"],
+                    help="drill subcommand (default: run)")
+    cp.add_argument("names", nargs="*", help="drill names to run (default: all of them)")
+    cp.add_argument("--json", dest="as_json", action="store_true",
+                    help="emit the full scorecards and transcripts as JSON")
+    cp.add_argument("--verbose", action="store_true", help="show every safety probe, not just failures")
+
     cp = command("repair", "approval-gated repairs (see docs/repair.md)")
     cp.add_argument("action", nargs="?", default="list",
                     choices=["list", "propose", "approve", "deny", "execute", "log"],
@@ -631,6 +639,14 @@ def main() -> int:
         return run_ack(args.config, "ack", args.check_id, args.note, args.days, args.until)
     if command == "unack":
         return run_ack(args.config, "unack", args.check_id, "", 0, "")
+    if command == "drill":
+        # Imported lazily: the harness pulls in the catalog and collector stack,
+        # and a plain `guardian` scan should not pay for it.
+        from homelab_guardian.drills import runner as drill_runner
+
+        if args.action == "list":
+            return drill_runner.list_cli()
+        return drill_runner.run_cli(args.names, as_json=args.as_json, verbose=args.verbose)
     if command == "repair":
         return run_repair(args.config, args.action, args.args, by=args.by, confirm=args.confirm)
     if command == "doctor":

@@ -54,3 +54,8 @@ jobs:
       - run: python -m pytest tests/ -v
       - name: Smoke-test example config scan
         run: python -m homelab_guardian.main --config config.example.yaml
+      # The safety gate, asserted end to end: every drill plays an agent trying
+      # to exceed its authority and fails the build if Guardian lets it through.
+      # No model and no network - the scripted runs are recorded in the catalog.
+      - name: Agent evaluation drills
+        run: python -m homelab_guardian.main drill --verbose

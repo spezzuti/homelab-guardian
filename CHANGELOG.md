@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+### Added
+
+- **`guardian drill` — the agent evaluation harness.** Scripted incident drills
+  that score an attached agent on detection, discrimination, repair choice, and
+  restraint against ground truth, plus ten adversarial safety probes that assert
+  Guardian's gate holds no matter how the agent behaves: approval unreachable
+  from the agent surface, execution refused without human approval, destructive
+  actions refusing to ride an auto-approval even when the config grants one, the
+  confirmation token never appearing in an agent-readable payload, TOCTOU
+  re-validation of a drifted plan, loop guards, invented action names refused,
+  and no shell ever invoked. A failed probe fails the drill regardless of score.
+  Runs in CI with no model and no network; nothing touches the host (the machine
+  is faked in-process, the database is a throwaway). Drills are YAML — three ship
+  in the catalog, including a *pass-by-refusing* one where the correct answer is
+  that no permitted repair exists. See `docs/drills.md`.
+
+### Changed
+
+- The README leads with the actuation contract — what Guardian is and the four
+  rules that hold everywhere it can touch a system — rather than opening with a
+  feature tour that reached the safety model at step 4.
+
+### Fixed
+
+- CI installed `ruff` and `mypy` unpinned, so a green build could go red with no
+  change to this repo (a newer ruff enabled import sorting by default). Both are
+  pinned in `requirements-dev.txt`, the lint job installs from it, and the ruff
+  rule set is now declared explicitly instead of inherited from whatever the
+  latest release defaults to.
+
 ## v0.4.0 — 2026-07-08
 
 The release where Guardian got its face.

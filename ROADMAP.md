@@ -25,6 +25,11 @@ homelab:
   sudoers, loop guards, backup interlocks, append-only audit, opt-in
   auto-repair for non-destructive reflexes, and reflex→specialist→human
   escalation.
+- **Prove it** — `guardian drill`: scripted incident drills that score an
+  attached agent's detect→diagnose→repair against ground truth, and ten
+  adversarial safety probes that assert the gate holds regardless of how the
+  agent behaves. Runs in CI with no model; the probes are themselves tested
+  for their ability to fail.
 
 ## Now — the solid base
 
@@ -54,12 +59,12 @@ Trust artifacts before new features:
   timeline (repairs, approvals, agent actions) and a richer repair-approval
   view
 - More demo-worthy playbooks: restic unlock, service rollback, cert renew
+- More drills: a flapping unit, a mount that will not remount, an agent handed
+  a check whose evidence has been tampered with
 - MCP prompts/resources so any client is good at Guardian on first connect
 
 ## Later
 
-- Agent evaluation harness: scripted incident drills that score an attached
-  agent's detect→diagnose→repair performance against ground truth
 - Prometheus `/metrics` exporter (coexist with Grafana stacks)
 - ntfy + generic webhook notifiers
 - Entry-points plugin API for third-party collectors (after multi-host
